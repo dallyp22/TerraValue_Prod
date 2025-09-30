@@ -1,0 +1,149 @@
+Below is a modular architecture and implementation guide that leverages:
+
+Vector Store for County-Level Base Pricing
+
+User Input Parsing and Preprocessing
+
+RAG-enabled Valuation Reasoning (GPT-4o-mini)
+
+Web Search for Market Sentiment
+
+Final GPT-4o-based Valuation Synthesis
+
+🧠 LandIQ App Architecture Overview
+plaintext
+Copy
+Edit
+[ User Inputs ] 
+     │
+     ▼
+[ Input Preprocessor ]
+     │
+     ▼
+[ Vector Store Lookup (vs_6858949b51d48191a2edaee8b4e2b211) ]
+     │                └── [Base $/acre for selected land type]
+     ▼
+[ GPT-4o-mini: Reasoned Valuation Engine ]
+     │
+     └── Uses:
+         ├─ County base value from vector store
+         ├─ Additional user-provided property details
+     ▼
+[ Web Search Tool (GPT-4o + WebSearch Plugin) ]
+     │
+     └── Gets:
+         ├─ Market conditions
+         ├─ Regional pricing trends, weather impacts, commodity prices
+     ▼
+[ Final GPT-4o Valuation Synthesis ]
+     └── Combines:
+         ├─ Reasoned value
+         ├─ Market-adjusted modifier
+         └─ Confidence level + commentary
+🔧 Implementation (using OpenAI SDK with Python)
+1. Setup
+python
+Copy
+Edit
+from openai import OpenAI
+client = OpenAI(api_key="YOUR_API_KEY")
+
+VECTOR_STORE_ID = "vs_6858949b51d48191a2edaee8b4e2b211"
+2. Collect User Inputs
+python
+Copy
+Edit
+user_input = {
+    "address": "123 County Rd, Hall County, Nebraska",
+    "county": "Hall",
+    "state": "Nebraska",
+    "land_type": "Irrigated",
+    "acreage": 160,
+    "additional_details": "Center-pivot system in place. Flat terrain. Access to paved road."
+}
+3. Run File Search on Vector Store
+python
+Copy
+Edit
+vector_response = client.responses.create(
+    model="gpt-4o-mini",
+    input=f"What is the average value per acre for {user_input['land_type']} land in {user_input['county']} County, {user_input['state']}?",
+    tools=[{
+        "type": "file_search",
+        "vector_store_ids": [VECTOR_STORE_ID]
+    }],
+    include=["file_search_call.results"]
+)
+
+# Extract $/acre base value from output text
+base_value_response = vector_response.output[1].content[0]["text"]
+4. Reasoned Valuation Using GPT-4o-Mini
+python
+Copy
+Edit
+reasoned_input = f"""
+Using the county base value: {base_value_response},
+analyze this parcel:
+
+Acreage: {user_input['acreage']}
+Land Type: {user_input['land_type']}
+Location: {user_input['county']} County, {user_input['state']}
+Details: {user_input['additional_details']}
+
+What is the likely value of this parcel?
+"""
+
+valuation_reasoning = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": reasoned_input}]
+)
+reasoned_valuation = valuation_reasoning.choices[0].message.content
+5. Web Search-Based Market Trend Analysis
+python
+Copy
+Edit
+market_search_input = f"Current land values, trends, and economic conditions in {user_input['county']} County, {user_input['state']} for {user_input['land_type']} farmland in {2025}"
+
+market_val = client.chat.completions.create(
+    model="gpt-4o-search-preview",
+    messages=[{"role": "user", "content": market_search_input}]
+)
+market_summary = market_val.choices[0].message.content
+6. Final Valuation + Commentary
+python
+Copy
+Edit
+final_valuation_input = f"""
+Given the following:
+- Base $/acre: {base_value_response}
+- Reasoned valuation: {reasoned_valuation}
+- Market summary: {market_summary}
+
+Please produce:
+1. Final per acre value
+2. Total estimated value
+3. Market-adjusted commentary
+4. Confidence score (1–10)
+"""
+
+final_output = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": final_valuation_input}]
+)
+final_valuation = final_output.choices[0].message.content
+print(final_valuation)
+📈 Output Format (Example)
+markdown
+Copy
+Edit
+**Final Valuation Summary**
+
+- **County Base Value (Irrigated):** $3,700/acre  
+- **Adjusted Value (Condition + Improvements):** $4,100/acre  
+- **Market Adjustment:** +5% based on recent trend  
+- **Final Value:** $4,305/acre × 160 acres = **$688,800**  
+
+**Market Insight:**  
+Regional irrigation demand is up due to drought risk in western counties. Commodity prices (corn/soy) are stable, supporting valuations.  
+
+**Confidence Score:** 8.5/10  

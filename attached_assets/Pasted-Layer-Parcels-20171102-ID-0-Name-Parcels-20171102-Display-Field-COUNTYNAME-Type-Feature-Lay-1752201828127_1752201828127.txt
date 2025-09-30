@@ -1,0 +1,85 @@
+Layer: Parcels_20171102 (ID:0)
+
+Name: Parcels_20171102
+
+Display Field: COUNTYNAME
+
+Type: Feature Layer
+
+Geometry Type: esriGeometryPolygon
+
+Description:
+
+Copyright Text:
+
+Min. Scale: 0
+
+Max. Scale: 0
+
+Default Visibility: true
+
+Max Record Count: 2000
+
+Supported query Formats: JSON, geoJSON, PBF
+
+Use Standardized Queries: True
+
+Extent:
+XMin: -10757871.8697
+YMin: 4920677.3017
+XMax: -10034656.8637
+YMax: 5388559.1717
+Spatial Reference: 102100 (3857)
+
+Drawing Info:
+{"renderer":{"type":"simple","symbol":{"type":"esriSFS","style":"esriSFSSolid","color":[252,201,217,255],"outline":{"type":"esriSLS","style":"esriSLSSolid","color":[110,110,110,255],"width":0.7}}},"scaleSymbols":true,"transparency":0,"labelingInfo":null}
+
+HasZ: false
+
+HasM: false
+
+Has Attachments: false
+
+Has Geometry Properties: true
+
+HTML Popup Type: esriServerHTMLPopupTypeAsHTMLText
+
+Object ID Field: OBJECTID
+
+Unique ID Field:
+Name : OBJECTID
+IsSystemMaintained : True
+
+Global ID Field:
+
+Type ID Field:
+
+Fields:
+OBJECTID (type: esriFieldTypeOID, alias: OBJECTID, SQL Type: sqlTypeOther, length: 0, nullable: false, editable: false)
+COUNTYNAME (type: esriFieldTypeString, alias: County Name, SQL Type: sqlTypeOther, length: 50, nullable: true, editable: true)
+STATEPARID (type: esriFieldTypeString, alias: State Parcel ID, SQL Type: sqlTypeOther, length: 50, nullable: true, editable: true)
+UNPARCELID (type: esriFieldTypeString, alias: Unique Parcel Identifier, SQL Type: sqlTypeOther, length: 50, nullable: true, editable: true)
+PARCELNUMB (type: esriFieldTypeString, alias: Parcel Number, SQL Type: sqlTypeOther, length: 50, nullable: true, editable: true)
+PARCELCLAS (type: esriFieldTypeString, alias: Conformed Parcel Classification, SQL Type: sqlTypeOther, length: 50, nullable: true, editable: true)
+DEEDHOLDER (type: esriFieldTypeString, alias: Deed Holder Name, SQL Type: sqlTypeOther, length: 255, nullable: true, editable: true)
+Shape__Area (type: esriFieldTypeDouble, alias: Shape__Area, SQL Type: sqlTypeDouble, nullable: true, editable: false)
+Shape__Length (type: esriFieldTypeDouble, alias: Shape__Length, SQL Type: sqlTypeDouble, nullable: true, editable: false)
+
+Templates:
+Name: Parcels_20171102
+Description:
+Drawing Tool: esriFeatureEditToolPolygon
+Prototype:
+Attributes:
+
+Is Data Versioned: false
+
+Has Contingent Values: false
+
+Supports Rollback On Failure Parameter: true
+
+Last Edit Date: 5/10/2024 4:25:21 PM
+
+Schema Last Edit Date: 5/10/2024 4:25:21 PM
+
+Data Last Edit Date: 5/10/2024 4:25:21 PM

@@ -1,0 +1,231 @@
+Below is a **single, copy-pastable implementation guide** you can drop into TerraValue’s Replit repo (e.g. `docs/CSR2_Map_Module.md`).
+It stitches **all prior snippets into one turnkey set-up** so a dev can go from a clean branch to a fully working **“Select parcel → see Mean CSR2”** flow in a day.
+
+---
+
+# 🚜  TerraValue – Parcel-Pick + Mean CSR2 Integration
+
+> **Goal** Users type an address (or paste lat/lon) → map zooms → they click a field polygon → TerraValue fetches mean CSR2 from the authoritative Iowa raster and pipes it straight into the valuation pipeline, surfacing it in the UI and storing it in Postgres.
+
+---
+
+## 0.  Pre-requisites
+
+| Tool               | Version                                   |
+| ------------------ | ----------------------------------------- |
+| Node               | ≥ 18                                      |
+| Postgres + PostGIS | Postgres 15 / PostGIS 3.3                 |
+| Replit **Secrets** | `MAPBOX_TOKEN` (if using Mapbox geocoder) |
+
+---
+
+## 1.  Ingest Iowa ACPF Field Boundaries (one-off)
+
+### 1.1  Download & load to PostGIS
+
+```bash
+# Replit shell
+curl -LO https://figshare.com/ndownloader/files/45043751 -o IA_ACPFfields2019.zip
+unzip IA_ACPFfields2019.zip
+
+# Load Shapefile → PostGIS (EPSG:4326)
+shp2pgsql -I -s 4326 IA_ACPFfields2019.shp public.acpf_fields | psql $DB_URL
+```
+
+### 1.2  OPTIONAL - build vector tiles (faster map)
+
+```bash
+npm i -g tippecanoe
+tippecanoe -o ia_acpf.mbtiles -zg -l fields -pk IA_ACPFfields2019.shp
+# Upload ia_acpf.mbtiles to S3/Cloudflare R2 & generate tiles URL <TILES_URL>
+```
+
+---
+
+## 2.  CSR2 Service (backend)
+
+### 2.1  Install deps
+
+```bash
+npm i axios geotiff geotiff-geokeys p-limit node-cache
+npm i gdal-next --save-optional           # (optional native perf)
+```
+
+### 2.2  `/src/services/csr2Service.ts`
+
+```ts
+// CSR2 raster endpoint
+const CSR2 = "https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer";
+
+export async function csr2PolygonStats(wkt: string) {
+  /* → {mean,min,max,count}   (full code from prior snippet) */
+}
+```
+
+### 2.3  Routes
+
+```ts
+// src/routes/csr2.ts
+import { Router } from "express";
+import { csr2PolygonStats } from "../services/csr2Service";
+export const csr2Router = Router();
+
+csr2Router.post("/polygon", async (req, res) => {
+  const { wkt } = req.body;
+  res.json(await csr2PolygonStats(wkt));
+});
+```
+
+Mount in `app.ts`:
+
+```ts
+app.use("/api/csr2", csr2Router);
+```
+
+---
+
+## 3.  Field lookup API (backend)
+
+```ts
+// src/routes/fields.ts
+import { Router } from "express";
+import pg from "../db";                        // your pg-promise wrapper
+
+export const fieldsRouter = Router();
+
+fieldsRouter.get("/:id", async (req, res) => {
+  const { id } = req.params;
+  const field = await pg.oneOrNone(
+    "SELECT field_id, acres, ST_AsText(geom) AS wkt FROM acpf_fields WHERE field_id = $1",
+    [id]
+  );
+  if (!field) return res.status(404).send("Not found");
+  res.json(field);
+});
+
+app.use("/api/fields", fieldsRouter);
+```
+
+---
+
+## 4.  React Map Component
+
+```tsx
+// src/components/MapParcelPicker.tsx
+/* Full code from earlier snippet – MapLibre GL JS + MapboxDraw.
+   Key emissions:
+   - onParcelSelected({ fieldId, wkt })
+   - onCsr2Ready({ mean, min, max })
+*/
+```
+
+Usage inside the **Property Form** page:
+
+```tsx
+<MapParcelPicker
+  onParcelSelected={async ({ fieldId, wkt }) => {
+    setBusy(true);
+    const csr2 = await fetch("/api/csr2/polygon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wkt })
+    }).then((r) => r.json());
+    setFieldData({ fieldId, wkt, ...csr2 });
+    setBusy(false);
+  }}
+  onCsr2Ready={(stats) => setCsr2(stats.mean)}
+/>
+```
+
+Show a badge:
+
+```tsx
+{csr2 && (
+  <Badge
+    color={
+      csr2 >= 80 ? "green" : csr2 >= 60 ? "amber" : "red"
+    }
+  >Avg CSR2 {csr2.toFixed(1)}</Badge>
+)}
+```
+
+---
+
+## 5.  Pipe CSR2 into valuation pipeline
+
+```ts
+// pipelines/valuation.ts
+stage("Soil Productivity", async (ctx) => {
+  ctx.features.csr2Mean = ctx.field.csr2_mean;         // from step 4
+  ctx.prompt += `\nThe parcel's mean Iowa CSR2 is ${ctx.features.csr2Mean}.`;
+});
+```
+
+---
+
+## 6.  Database patch
+
+```sql
+ALTER TABLE parcels
+  ADD COLUMN field_id TEXT,
+  ADD COLUMN csr2_mean FLOAT,
+  ADD COLUMN csr2_min  SMALLINT,
+  ADD COLUMN csr2_max  SMALLINT;
+```
+
+Persist after successful fetch:
+
+```ts
+await pg.none(
+  `UPDATE parcels SET field_id=$2, csr2_mean=$3, csr2_min=$4, csr2_max=$5 WHERE id=$1`,
+  [parcelId, fieldId, csr2.mean, csr2.min, csr2.max]
+);
+```
+
+---
+
+## 7.  Geocoder helper (address → map)
+
+```tsx
+import mbxGeocode from "@mapbox/mapbox-sdk/services/geocoding";
+const geocoder = mbxGeocode({ accessToken: process.env.MAPBOX_TOKEN });
+
+async function gotoAddress(q: string) {
+  const { body } = await geocoder.forwardGeocode({ query: q, limit: 1 }).send();
+  const [lon, lat] = body.features[0].center;
+  mapRef.current?.flyTo({ center: [lon, lat], zoom: 15 });
+}
+```
+
+---
+
+## 8.  CORS & CSP
+
+```ts
+import cors from "cors";
+app.use(cors({ origin: ["https://<YOUR_REPL>.repl.co"] }));
+// CSP header: frame-src https://widgets.figshare.com;
+```
+
+---
+
+## 9.  QA Checklist
+
+1. **CSV test** – field `F102400020607_276` → mean CSR2 ≈ 81.85.
+2. **Fallback** – draw a custom polygon; CSR2 returns within 2 s.
+3. **Mobile touch** – long tap selects parcel; confirm badge updates.
+4. **Pipeline** – valuation PDF shows CSR2 in "Soil Overview" section.
+
+---
+
+## 10.  Deployment notes
+
+* Replit’s free file-system is ephemeral; keep the ACPF Shapefile in Postgres or S3.
+* For production, point MapLibre to CloudFront-hosted vector tiles for < 100 ms tile loads.
+* Add `pnpm run build && pnpm start` to `.replit` for proper start-up.
+
+---
+
+### Done!
+
+Merge this guide, assign the story, and TerraValue will give every user a visual, trustworthy CSR2 validation step with zero mock data and minimal latency.

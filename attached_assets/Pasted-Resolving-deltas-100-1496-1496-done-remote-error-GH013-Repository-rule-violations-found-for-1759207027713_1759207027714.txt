@@ -1,0 +1,52 @@
+Resolving deltas: 100% (1496/1496), done.
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: 
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote: 
+remote:     - Push cannot contain secrets
+remote: 
+remote:     
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:     
+remote:     
+remote:       —— OpenAI API Key ————————————————————————————————————
+remote:        locations:
+remote:          - commit: 72023c3920c5fa8a661ffcca3afb7d9e550ead1f
+remote:            path: server/services/openai.ts:5
+remote:          - commit: f896fbf5cab8bc5594a732fe68b17b24fccd134a
+remote:            path: server/services/openai.ts:5
+remote:          - commit: aabc0bf71388eccd82c6b1c2f4fa16cb7ff457a0
+remote:            path: server/services/openai.ts:5
+remote:          - commit: 5e59e1b7e4e9c8ebd3fa294e6b43f297f50f962c
+remote:            path: server/services/openai.ts:5
+remote:          - commit: 635c70a9e06ebefebda76687fb7a866748554a4b
+remote:            path: server/services/openai.ts:5
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/dallyp22/TerraValue2/security/secret-scanning/unblock-secret/33P2PfAGoec78P0tmDRy2J5OtPB
+remote:     
+remote:     
+remote:       —— OpenAI API Key ————————————————————————————————————
+remote:        locations:
+remote:          - commit: 46f8f45053f069d3ae428ca248392a6d6b6eefbe
+remote:            path: CODEBASE_EVALUATION.md:44
+remote:          - commit: a80da166f20b2921d4b4bbb3c908f5b2b9e34a53
+remote:            path: server/services/openai.ts:5
+remote:          - commit: 71e40418a9fbc5080eb99cbf0a609c2c60cc8f0c
+remote:            path: server/services/openai.ts:5
+remote:          - commit: e2db6ee414adc6b7a94365626f9893a70573abb1
+remote:            path: server/services/openai.ts:5
+remote:          - commit: ff63b88db3ef19d64dd9be2a0daa75c063cac8d9
+remote:            path: server/services/openai.ts:5
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/dallyp22/TerraValue2/security/secret-scanning/unblock-secret/33P2PgGRQ13mR0HkTEOClob6lzr
+remote:     
+remote: 
+remote: 
+To https://github.com/dallyp22/TerraValue2.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/dallyp22/TerraValue2.git'

@@ -1,0 +1,86 @@
+Below are purely visual-layer adjustments that keep the same three-column “comparison” pattern yet give the module a more polished, data-centric feel. None of these touch your calculation logic or component structure—only the styling and micro-interactions.
+
+1. Strengthen the Visual Hierarchy
+Element	Current	Adjustment	Why
+Section title (“Valuation Approaches Comparison”)	Same size weight as card titles	Bump to text-lg font-semibold and add a subtle divider line under it	Anchors the eye before scanning the three cards
+Per-Acre Value vs. Total Property Value	Similar color/size, competes	Keep Per-Acre light-weight (text-sm font-medium text-muted-foreground), but push Total to text-2xl font-bold with a deeper brand color	Reinforces which number matters most
+
+2. Unify Card Anatomy
+Padding & Radius
+
+Move to a consistent p-6 (desktop) / p-4 (mobile) with rounded-2xl.
+
+Add a soft ring-1 ring-border/15 around each card to separate them gently from the white canvas.
+
+Iconography
+
+Swap the generic emojis for outline icons from lucide-react (e.g., Activity, TrendingUp, Bot).
+
+Place inside a w-9 h-9 rounded-full bg-muted flex items-center justify-center halo to keep weights consistent.
+
+Stateful Colors
+
+CSR2 (soil) → brand-green
+
+Income → brand-blue
+
+AI Market-Adj → brand-purple
+
+Use these only on the icons and the Total value chip to avoid rainbow overload.
+
+3. Micro-interactions
+Interaction	Detail	Effect
+Hover Elevation	hover:shadow-lg hover:-translate-y-0.5 transition	Adds depth without changing layout
+Tooltip on Total Value	Explain calculation basis (“Acre × Parcel Acres”)	Educates users in-context
+Confidence Score	Replace the “8.0/10” pill with a thin progress bar (w-full h-2 rounded bg-muted) filled to 80 % in brand-indigo	Visual cognition beats reading numbers
+
+4. Typography & Spacing Tweaks
+diff
+Copy
+Edit
+- $13,276/acre
++ <span class="text-xl font-semibold">$13,276</span>
++ <span class="text-sm text-muted-foreground">per acre</span>
+Tighten vertical gaps to space-y-3 inside cards.
+
+Ensure numbers align on the same baseline across columns; it prevents micro-jitters when users scan left-to-right.
+
+5. Subtle Motion on Load
+Use framer-motion to fade-in cards with a 40 ms stagger:
+
+tsx
+Copy
+Edit
+<motion.div
+  initial={{ opacity: 0, y: 8 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ duration: .35, delay: i * .04 }}
+>
+  {/* Card content */}
+</motion.div>
+Creates perceived performance and polish.
+
+6. Optional Dark-Mode Readiness
+Base all colors on Tailwind’s semantic tokens (bg-card, text-primary, etc.).
+
+Provide dark:bg-card/70 and dark:ring-border/25 to keep contrast ratios in black themes.
+
+7. Quick Tailwind Skeleton (illustrative)
+jsx
+Copy
+Edit
+<Card className="flex flex-col gap-4 p-6 rounded-2xl ring-1 ring-border/15 hover:shadow-lg transition">
+  <div className="flex items-center gap-3">
+    <Icon className="w-9 h-9 p-2 bg-green-100 text-green-600 rounded-full" />
+    <h3 className="text-base font-medium">CSR2 Quantitative</h3>
+  </div>
+
+  <div className="space-y-1">
+    <div className="text-xl font-semibold">$13,276 <span className="text-sm font-medium text-muted-foreground">/acre</span></div>
+    <Chip color="green">$3,053,526</Chip>
+  </div>
+
+  <p className="text-xs text-muted-foreground">Based on soil productivity</p>
+</Card>
+Final Thought
+These refinements keep the “three cards + confidence score” concept intact but give each metric clearer prominence, build brand consistency, and add just enough delight to feel enterprise-ready. Let me know if you’d like the full React/Tailwind component refactored or a quick Figma mockup to plug into your design system.

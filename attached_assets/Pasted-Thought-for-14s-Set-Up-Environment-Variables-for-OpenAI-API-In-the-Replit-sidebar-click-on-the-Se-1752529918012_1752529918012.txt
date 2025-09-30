@@ -1,0 +1,206 @@
+Thought for 14s
+Set Up Environment Variables for OpenAI API:
+In the Replit sidebar, click on the "Secrets" tab (lock icon) under Tools.
+Add or update a secret: Key = OPENAI_API_KEY, Value = [paste your actual OpenAI API key here, obtained from platform.openai.com/account/api-keys]. This ensures secure access to the Assistants API and vector stores.
+Install Required Packages:
+Open the Shell panel at the bottom of Replit.
+Copy and paste the following command into the Shell and press Enter:
+text
+
+Collapse
+
+Wrap
+
+Copy
+npm install openai typescript @types/node ts-node
+If your project uses yarn, use:
+text
+
+Collapse
+
+Wrap
+
+Copy
+yarn add openai typescript @types/node ts-node
+Ensure your package.json has scripts for running TypeScript, e.g., add to package.json (open package.json and paste in "scripts"):
+text
+
+Collapse
+
+Wrap
+
+Copy
+"scripts": {
+  "start": "ts-node server.ts"  // Adjust to your main file, e.g., server.ts or app.ts
+}
+Update Backend Code:
+Open your main backend file (e.g., server.ts or app.ts) in the editor. Ensure it's TypeScript (.ts extension).
+At the top of the file, add the following imports (copy and paste below any existing imports):
+text
+
+Collapse
+
+Wrap
+
+Copy
+import OpenAI from 'openai';
+import * as process from 'process';  // For process.env
+Add the following helper function to your code (copy and paste it as a new async function, e.g., in a utils.ts file or inline). This uses Assistant ID asst_mZOWphXE1Zaj4nppl5OGsHL7 which has access to Vector Store ID vs_68755fcbdfc081918788b7ce0db68682 for Iowa-specific market data and sales comps:
+text
+
+Collapse
+
+Wrap
+
+Copy
+async function queryAssistant(propertyData: any, queryContent: string, assistantId: string = 'asst_mZOWphXE1Zaj4nppl5OGsHL7'): Promise<string> {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const thread = await openai.beta.threads.create();
+    await openai.beta.threads.messages.create(thread.id, {
+        role: 'user',
+        content: queryContent
+    });
+    let run = await openai.beta.threads.runs.create(thread.id, { assistant_id: assistantId });
+    while (run.status !== 'completed') {
+        run = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        await new Promise(resolve => setTimeout(resolve, 1000));  // Sleep 1s
+    }
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    const response = messages.data[0].content[0].text.value;  // Extract text response
+    await openai.beta.threads.del(thread.id);  // Cleanup
+    return response;
+}
+In your valuation processing pipeline function (e.g., an async function handling the backend steps), make the following updates. Assume propertyData is an object:
+For Step 1: Vector Store Base Value Lookup – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+const vectorResult = await openaiService.getCountyBaseValue(
+  propertyData.county,
+  propertyData.state, 
+  propertyData.landType
+);
+const baseValue = vectorResult.baseValue;  // Adjust based on your exact variable names
+For Step 2: CSR2 Quantitative Calculation – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+let csr2Value = 0;
+if (propertyData.csr2Mean && propertyData.csr2Mean > 0) {
+    csr2Value = propertyData.csr2Mean * 174;  // Or your exact formula
+}
+Add Step 2.5: Market Analysis & Sales Comps Fetch (new, paste this code right after Step 2):
+text
+
+Collapse
+
+Wrap
+
+Copy
+let marketComps: any = { comps: [], trends: {} };
+if (propertyData.state === 'Iowa') {
+    const marketQuery = `Perform market analysis and provide sales comps for ${propertyData.landType} land in ${propertyData.county} County, Iowa. Include recent sales data, $/acre, dates, trends, and factors from the vector store vs_68755fcbdfc081918788b7ce0db68682. Respond in JSON format with keys: comps (array of objects with date, price_per_acre, details), trends (object with yoy_change, factors).`;
+    const marketResponse = await queryAssistant(propertyData, marketQuery);
+    marketComps = JSON.parse(marketResponse);  // Parse JSON response
+}
+For Step 3: Income Approach Analysis – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+let incomeCapValue = 0;
+if (propertyData.cashRentPerAcre) {
+    incomeCapValue = propertyData.cashRentPerAcre / 0.03;  // Default cap rate 3%, adjust if variable
+}
+For Step 4: AI Reasoning & Market Adjustment – Update your original code to incorporate marketComps (replace or augment the existing reasoning call):
+text
+
+Collapse
+
+Wrap
+
+Copy
+const reasoningInputs = {
+    baseValue: baseValue,
+    acreage: propertyData.acreage,
+    landType: propertyData.landType,
+    county: propertyData.county,
+    state: propertyData.state,
+    additionalDetails: additionalDetails + csr2Context + incomeContext,  // Adjust variables as needed
+    marketComps: JSON.stringify(marketComps)  // New: Feed in comps as JSON string
+};
+const reasoningResult = await openaiService.performReasonedValuation(reasoningInputs);  // Or your exact method, adjust to async if needed
+const adjustedValue = reasoningResult.adjustedValue;  // Adjust based on your response parsing
+For Step 5: Property Improvements Assessment – No change, keep your original code.
+For Step 6: Final Synthesis & Report Generation – Update to pass marketComps (replace or augment the existing synthesis call):
+text
+
+Collapse
+
+Wrap
+
+Copy
+const finalResult = await openaiService.synthesizeFinalValuation({
+  baseValue: vectorResult.baseValue,
+  adjustedValue: reasoningResult.adjustedValue,
+  improvements: reasoningResult.improvements,
+  marketComps: marketComps,  // New: For insights/citations
+  marketInsight: marketComps.trends,  // Example, adjust as needed
+  acreage: propertyData.acreage,
+  totalImprovementsValue: totalImprovementsValue
+});
+Update Frontend Code (if applicable):
+If your frontend has a file like index.js or a TypeScript frontend file, open it.
+Add progress message for the new step (copy and paste into your polling or status update logic):
+text
+
+Collapse
+
+Wrap
+
+Copy
+// Example in JS/TS; adjust for your framework
+updateStatus('Fetching Iowa market analysis and sales comps...');
+In the report rendering section, add display for market comps (copy and paste):
+text
+
+Collapse
+
+Wrap
+
+Copy
+// Example in JS/TS
+document.getElementById('market-comps').innerHTML = JSON.stringify(finalResult.marketComps, null, 2);  // Or format as list/table
+Implement Parsing Functions (if not already handling JSON):
+If needed, add this to a utils.ts file or backend (copy and paste; already handled in Step 2.5 via JSON.parse, but for robustness):
+text
+
+Collapse
+
+Wrap
+
+Copy
+function parseMarketComps(response: string): any {
+    try {
+        return JSON.parse(response);
+    } catch (e) {
+        return { comps: [], trends: {} };  // Fallback
+    }
+}
+Update Step 2.5 to use it if necessary: marketComps = parseMarketComps(marketResponse);
+Test the Updates:
+Click the "Run" button in Replit to start/restart the app (it will run ts-node or your script).
+Test with a sample Iowa property input (e.g., { county: 'Hamilton', state: 'Iowa', landType: 'irrigated', csr2Mean: 86.2, acreage: 100 }).
+Check the console/logs for outputs from the new step. Verify marketComps are fetched and used in AI reasoning.
+If errors occur (e.g., API key issues), check the Shell console and debug.

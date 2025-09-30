@@ -1,0 +1,135 @@
+Below is a concise **“pull-request checklist”** you can drop straight into Replit.
+It walks through every touch-point—from React form to the OpenAI prompt—needed to make **cash rent per-acre** a first-class variable in TerraValue’s valuation pipeline.
+
+---
+
+## 1 · Frontend - React 18 / TypeScript
+
+| Task                         | File(s)                              | Key Snippet                                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add form control**         | `src/components/PropertyForm.tsx`    | `tsx const schema = z.object({ …, cashRent: z.number().min(0, 'Rent must be ≥ 0'), });  // React-Hook-Form useForm<...>() const { register, … } = useForm({ resolver: zodResolver(schema) }); … <Input type="number" step="0.01" {...register('cashRent')} placeholder="Cash rent $/acre" /> ` |
+| **Persist UI state**         | `src/store/valuation.ts`             | add `cashRent?: number` to the ValuationRequest type.                                                                                                                                                                                                                                          |
+| **Send to API**              | `src/api/valuations.ts`              | include `cashRent` field in body of `POST /valuations`. TanStack React Query mutation already handles optimistic updates; just extend dto.                                                                                                                                                     |
+| **Display in results panel** | `src/components/ValuationReport.tsx` | add a “Cash Rent Input” row; show either user input or “County Avg (X \$/ac)”.                                                                                                                                                                                                                 |
+
+---
+
+## 2 · Backend - Node/Express + Drizzle ORM
+
+### 2.1 Database migration
+
+```ts
+// drizzle/20240702_add_cash_rent.ts
+import { pgTable, numeric } from 'drizzle-orm/pg-core';
+export const up = (db) =>
+  db.schema.alterTable('properties', (t) => {
+    t.numeric('cash_rent_per_acre').check('cash_rent_nonneg', 'cash_rent_per_acre>=0');
+  });
+export const down = (db) =>
+  db.schema.alterTable('properties', (t) => {
+    t.dropColumn('cash_rent_per_acre');
+  });
+```
+
+`npm run drizzle:migrate` to apply.
+
+### 2.2 DTO & route
+
+```ts
+// routes/valuationRoutes.ts
+router.post('/', async (req, res) => {
+  const { cashRent, …rest } = valuationSchema.parse(req.body);   // zod validation
+  const valuation = await valuationService.run({ cashRent, …rest });
+  res.json(valuation);
+});
+```
+
+### 2.3 Service layer change
+
+```ts
+// services/valuationService.ts
+export async function run(req: ValuationRequest) {
+  const { cashRent, acres, capRate = 0.03 } = req;
+
+  // === 1. deterministic “income cap” estimate ===========
+  const incomeCapPrice = cashRent
+    ? (cashRent / capRate) * acres      // classic NOI / cap
+    : undefined;
+
+  // === 2. vector-store context augmentation ============
+  const countyStats = await vectorStore.similaritySearch(…);
+  const promptContext = {
+    …countyStats,
+    cashRent,
+    incomeCapPrice,
+  };
+
+  // === 3. OpenAI reasoning stage =======================
+  const aiResult = await openAI.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: baseSystemPrompt },
+      {
+        role: 'user',
+        content: `Given the following data, blend deterministic income-cap value with comps and soil productivity. 
+        If cashRent is null, infer from county average. Return:
+        • finalValuePerAcre
+        • weightings: {incomeCap, comps, soil, appreciation}
+        • commentary.`,
+      },
+      { role: 'assistant', content: JSON.stringify(promptContext) },
+    ],
+  });
+
+  // merge & return
+  return synthesise(aiResult, incomeCapPrice, …);
+}
+```
+
+---
+
+## 3 · Validation & Error Handling
+
+* **Zod** already blocks negative numbers; extend schema to reject > \$1,000/ac (guard rails).
+* If user omits cash rent: pull `avg_cash_rent` from vector-store county record and log `source: "county_survey"`.
+* Throw HTTP 422 for NaN or out-of-band rent; React Query will surface toast.
+
+---
+
+## 4 · Unit & Integration Tests
+
+```ts
+// tests/valuation.test.ts
+it('computes income-cap price correctly', () => {
+  const price = calcIncomeCap(350, 0.03, 160);
+  expect(price).toBeCloseTo(1_866_667);  // ($350/0.03)*160
+});
+```
+
+Run `npx vitest`.
+
+---
+
+## 5 · DevOps / Deployment
+
+1. **Rebuild**: `npm run build && docker compose up -d --build web`
+2. **PostgreSQL migration** will run automatically via entry-point script.
+3. **Smoke test** via Replit Shell:
+
+   ```bash
+   curl -X POST /api/valuations \
+     -d '{"address":"__", "acres":160, "cashRent":400, ...}'
+   ```
+
+---
+
+## 6 · Documentation Snippet (README)
+
+> **Cash Rent Input**
+> Users can now enter cash rent (\$/acre). TerraValue capitalizes this rent at a user-configurable cap rate (default 3 %) and blends it with AI-derived comps and soil productivity to deliver a more income-anchored valuation.
+
+---
+
+### Done ✓
+
+Merge, deploy, and cash-rent is live in <60 min.

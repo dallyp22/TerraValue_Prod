@@ -1,0 +1,301 @@
+I'll provide a comprehensive technical explanation of how the polygon drawing and owner name display systems work in your LandIQ application.
+Read file: client/src/components/map-parcel-picker.tsx
+
+Read file: client/src/components/map-parcel-picker.tsx
+
+# Technical Architecture: Polygon Drawing & Owner Name Display
+
+## Overview Architecture
+
+The map component uses a **hybrid approach** combining multiple specialized libraries to create a professional land analysis platform:
+
+### Core Technology Stack
+- **MapLibre GL JS**: Open-source map rendering engine for WebGL-based vector maps
+- **MapboxDraw**: Polygon drawing toolkit (adapted for MapLibre GL compatibility)
+- **Turf.js**: Geospatial analysis library for area calculations and geometric operations
+- **React**: Component state management and lifecycle handling
+- **TypeScript**: Type safety and interface definitions
+
+## 1. Polygon Drawing System
+
+### Core Components Architecture
+
+```typescript
+interface MapParcelPickerProps {
+  onParcelSelected?: (data: ParcelData) => void;
+  onLocationChange?: (lat: number, lon: number, address?: string) => void;
+}
+
+interface ParcelData {
+  wkt: string;              // Well-Known Text format for GIS
+  coordinates: [number, number];
+  acres?: number;           // Calculated area
+  csr2?: CSR2Data;         // Soil productivity data
+}
+```
+
+### MapboxDraw Integration & Compatibility Layer
+
+The system uses **MapboxDraw** with a custom compatibility layer for **MapLibre GL**:
+
+```typescript
+// Custom MapLibre GL compatible styles
+const customDrawStyles = [
+  {
+    'id': 'gl-draw-polygon-fill-active',
+    'type': 'fill',
+    'filter': ['all', ['==', 'active', 'true'], ['==', '$type', 'Polygon']],
+    'paint': {
+      'fill-color': '#fbb03b',
+      'fill-opacity': 0.1
+    }
+  },
+  // ... 8 additional style layers for different draw states
+];
+
+draw.current = new MapboxDraw({
+  displayControlsDefault: false,
+  controls: { polygon: true, trash: true },
+  styles: customDrawStyles  // Overrides default incompatible styles
+});
+```
+
+**Key Technical Challenge**: MapboxDraw was designed for Mapbox GL JS, not MapLibre GL. The default styles use `line-dasharray` expressions that MapLibre GL doesn't support. The solution was to completely override the default styles with MapLibre GL-compatible alternatives.
+
+### Live Polygon Drawing Feedback System
+
+The system implements **real-time area calculation** during polygon drawing:
+
+```typescript
+const setupPolygonDrawingEvents = useCallback((mapInstance: maplibregl.Map) => {
+  let liveTooltip: maplibregl.Popup | null = null;
+  
+  mapInstance.on('draw.update', (e) => {
+    const feature = e.features[0];
+    if (feature.geometry.type === 'Polygon' && feature.geometry.coordinates[0].length > 3) {
+      // Real-time area calculation using Turf.js
+      const areaSqM = turf.area(feature);
+      const acres = parseFloat((areaSqM / 4046.86).toFixed(2));
+      
+      // Dynamic tooltip positioning at polygon centroid
+      const center = turf.centroid(feature);
+      liveTooltip.setLngLat([center.geometry.coordinates[0], center.geometry.coordinates[1]])
+        .setHTML(`<div class="live-area-tooltip">📐 ${acres} acres</div>`);
+    }
+  });
+}, []);
+```
+
+### Enhanced Polygon Visualization
+
+When a polygon is completed, the system adds **custom styled layers** with dynamic properties:
+
+```typescript
+// Add pronounced visual layers post-drawing
+mapInstance.addLayer({
+  id: 'drawn-polygon-fill',
+  type: 'fill',
+  source: 'drawn-polygon-fill',
+  paint: {
+    'fill-color': '#3B82F6',
+    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.4, 16, 0.6], // Zoom-responsive opacity
+    'fill-antialias': true
+  }
+});
+
+mapInstance.addLayer({
+  id: 'drawn-polygon-stroke',
+  type: 'line',
+  source: 'drawn-polygon-fill',
+  paint: {
+    'line-color': '#1E40AF',
+    'line-width': ['interpolate', ['linear'], ['zoom'], 12, 2, 16, 4], // Zoom-responsive width
+    'line-opacity': 0.9
+  }
+});
+```
+
+## 2. Owner Name Display System
+
+### Native Symbol Layer Architecture
+
+The owner name display uses **MapLibre GL's native symbol layers** rather than DOM-based overlays:
+
+```typescript
+const manageOwnerLabels = useCallback(() => {
+  map.current.addLayer({
+    'id': 'parcels-labels',
+    'type': 'symbol',
+    'source': 'parcels',
+    'layout': {
+      'text-field': ['get', 'ownerLabel'],           // Data-driven text content
+      'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      'text-size': 12,
+      'text-anchor': 'center',
+      'text-allow-overlap': true,                    // Prevents label hiding
+      'text-ignore-placement': false,
+      'text-padding': 2,
+      'text-max-width': 15,
+      'visibility': showOwnerNames ? 'visible' : 'none'
+    },
+    'paint': {
+      'text-color': '#1a1a1a',
+      'text-halo-color': '#ffffff',                  // White outline for readability
+      'text-halo-width': 2,
+      'text-opacity': 1
+    },
+    'minzoom': 13                                    // Performance optimization
+  });
+}, [showOwnerNames]);
+```
+
+### Font System & Glyphs
+
+**Critical Technical Solution**: MapLibre GL requires proper glyph/font configuration:
+
+```typescript
+const mapStyles = {
+  street: {
+    // ... other configuration
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
+  },
+  satellite: {
+    // ... other configuration  
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
+  }
+};
+```
+
+Without the `glyphs` property, text rendering fails with "use of text-field requires a style glyphs property" error.
+
+### Data Source Integration
+
+The system fetches parcel data from **ArcGIS FeatureServer** and processes it for label display:
+
+```typescript
+const loadParcels = useCallback(async () => {
+  if (map.current.getZoom() <= 12) return; // Performance guard
+  
+  const bounds = map.current.getBounds();
+  const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
+  
+  const url = `https://services3.arcgis.com/kd9gaiUExYqUbnoq/arcgis/rest/services/Iowa_Parcels_2017/FeatureServer/0/query?where=1%3D1&outFields=PARCELNUMB,DEEDHOLDER,PARCELCLAS&geometry=${bbox}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=geojson`;
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  
+  // Process and limit data for performance
+  const limitedFeatures = data.features.slice(0, 50).map((feature: any) => {
+    const ownerName = feature.properties.DEEDHOLDER;
+    const ownerLabel = ownerName 
+      ? (ownerName.length > 18 ? ownerName.substring(0, 18) + '...' : ownerName)
+      : 'Unknown Owner';
+    
+    return {
+      ...feature,
+      properties: {
+        ...feature.properties,
+        ownerLabel: ownerLabel  // Processed label for display
+      }
+    };
+  });
+  
+  // Update GeoJSON source
+  (map.current.getSource('parcels') as maplibregl.GeoJSONSource).setData({
+    type: 'FeatureCollection',
+    features: limitedFeatures
+  });
+}, []);
+```
+
+## 3. Data Flow & Integration
+
+### Polygon → CSR2 Analysis Pipeline
+
+```mermaid
+graph TD
+    A[User Draws Polygon] --> B[draw.create Event]
+    B --> C[Turf.js Area Calculation]
+    C --> D[Generate WKT String]
+    D --> E[POST /api/average-csr2]
+    E --> F[Backend CSR2 Analysis]
+    F --> G[Display Results Popup]
+    G --> H[Update State & Callbacks]
+```
+
+### Owner Name Display Pipeline
+
+```mermaid
+graph TD
+    A[Map Move/Zoom] --> B[loadParcels()]
+    B --> C[Bounds-Based ArcGIS Query]
+    C --> D[Process Owner Names]
+    D --> E[Update GeoJSON Source]
+    E --> F[Symbol Layer Re-render]
+    F --> G[Native Map Labels]
+```
+
+## 4. Performance Optimizations
+
+### Zoom-Based Loading
+- **Parcel data**: Only loads at zoom > 12
+- **Owner labels**: Only visible at zoom ≥ 13
+- **Feature limiting**: Maximum 50 parcels per viewport
+
+### Memory Management
+```typescript
+// Cleanup on component unmount
+return () => {
+  if (map.current) {
+    map.current.remove();
+    map.current = null;
+    draw.current = null;
+  }
+};
+```
+
+### Efficient State Updates
+- **Debounced loading**: Only triggers on `moveend` events
+- **Conditional rendering**: Labels only created when needed
+- **Source reuse**: Updates existing GeoJSON sources rather than recreating
+
+## 5. Technical Challenges & Solutions
+
+### 1. MapboxDraw Compatibility
+**Problem**: Line-dasharray expressions incompatible with MapLibre GL
+**Solution**: Complete style override with 8 custom draw styles
+
+### 2. Font Rendering
+**Problem**: "text-field requires glyphs property" error
+**Solution**: Added `glyphs` property to map styles pointing to MapLibre demo fonts
+
+### 3. Performance at Scale
+**Problem**: Thousands of parcels causing lag
+**Solution**: Zoom-based loading + 50-feature limit + minzoom restrictions
+
+### 4. Real-time Area Calculation
+**Problem**: Smooth UX during polygon drawing
+**Solution**: Turf.js integration with dynamic tooltip positioning using centroid calculation
+
+### 5. State Management Complexity
+**Problem**: Multiple drawing modes, map states, and data sources
+**Solution**: Careful useCallback/useEffect dependency management with proper cleanup
+
+## 6. Integration Points
+
+### Backend CSR2 API
+```typescript
+const response = await fetch('/api/average-csr2', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ polygon: polygon.geometry })
+});
+```
+
+### Parent Component Callbacks
+```typescript
+onParcelSelected?.(parcelData);           // Polygon completion
+onLocationChange?.(lat, lon, address);    // Map interaction
+```
+
+This architecture creates a seamless, professional mapping experience that rivals commercial platforms like Zillow or ArcGIS Online while maintaining high performance and technical robustness.

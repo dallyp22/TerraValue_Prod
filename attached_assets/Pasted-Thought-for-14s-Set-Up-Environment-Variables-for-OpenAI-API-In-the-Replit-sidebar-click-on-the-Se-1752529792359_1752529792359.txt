@@ -1,0 +1,182 @@
+Thought for 14s
+Set Up Environment Variables for OpenAI API:
+In the Replit sidebar, click on the "Secrets" tab (lock icon) under Tools.
+Add or update a secret: Key = OPENAI_API_KEY, Value = [paste your actual OpenAI API key here, obtained from platform.openai.com/account/api-keys]. This ensures secure access to the Assistants API and vector stores.
+Install Required Packages:
+Open the Shell panel at the bottom of Replit.
+Copy and paste the following command into the Shell and press Enter:
+text
+
+Collapse
+
+Wrap
+
+Copy
+pip install openai
+Update Backend Code:
+Open your main backend file (e.g., server.py or app.py) in the editor.
+At the top of the file, add the following imports (copy and paste below any existing imports):
+text
+
+Collapse
+
+Wrap
+
+Copy
+from openai import OpenAI
+import os
+import time
+import json
+In your openaiService module or directly in the backend file, add the following helper function (copy and paste it as a new function, e.g., after other service functions). This uses Assistant ID asst_mZOWphXE1Zaj4nppl5OGsHL7 which has access to Vector Store ID vs_68755fcbdfc081918788b7ce0db68682 for Iowa-specific market data and sales comps:
+text
+
+Collapse
+
+Wrap
+
+Copy
+def query_assistant(property_data, query_content, assistant_id='asst_mZOWphXE1Zaj4nppl5OGsHL7'):
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    thread = client.beta.threads.create()
+    client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=query_content
+    )
+    run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
+    while run.status != 'completed':
+        run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+        time.sleep(1)
+    messages = client.beta.threads.messages.list(thread_id=thread.id)
+    response = messages.data[0].content[0].text.value  # Extract text response
+    # Parse as needed (e.g., json.loads if response is JSON)
+    client.beta.threads.delete(thread_id=thread.id)  # Cleanup
+    return response
+In your valuation processing pipeline function (e.g., the function handling the backend steps), make the following updates:
+For Step 1: Vector Store Base Value Lookup – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+vector_result = await openaiService.getCountyBaseValue(
+  property_data['county'],
+  property_data['state'], 
+  property_data['landType']
+);
+base_value = vector_result.baseValue  # Adjust based on your exact variable names
+For Step 2: CSR2 Quantitative Calculation – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+if property_data['csr2Mean'] and property_data['csr2Mean'] > 0:
+    csr2_value = property_data['csr2Mean'] * 174  # Or your exact formula
+Add Step 2.5: Market Analysis & Sales Comps Fetch (new, paste this code right after Step 2):
+text
+
+Collapse
+
+Wrap
+
+Copy
+if property_data['state'] == 'Iowa':
+    market_query = f"Perform market analysis and provide sales comps for {property_data['landType']} land in {property_data['county']} County, Iowa. Include recent sales data, $/acre, dates, trends, and factors from the vector store vs_68755fcbdfc081918788b7ce0db68682. Respond in JSON format with keys: comps (array of objects with date, price_per_acre, details), trends (object with yoy_change, factors)."
+    market_response = query_assistant(property_data, market_query)
+    market_comps = json.loads(market_response)  # Parse JSON response
+else:
+    market_comps = {'comps': [], 'trends': {}}  # Fallback for non-Iowa
+For Step 3: Income Approach Analysis – No change, keep your original code, e.g.:
+text
+
+Collapse
+
+Wrap
+
+Copy
+if property_data['cashRentPerAcre']:
+    income_cap_value = property_data['cashRentPerAcre'] / 0.03  # Default cap rate 3%, adjust if variable
+For Step 4: AI Reasoning & Market Adjustment – Update your original code to incorporate market_comps (replace or augment the existing reasoning call):
+text
+
+Collapse
+
+Wrap
+
+Copy
+reasoning_inputs = {
+    'baseValue': base_value,
+    'acreage': property_data['acreage'],
+    'landType': property_data['landType'],
+    'county': property_data['county'],
+    'state': property_data['state'],
+    'additionalDetails': additional_details + csr2_context + income_context,  # Adjust variables as needed
+    'marketComps': json.dumps(market_comps)  # New: Feed in comps as JSON string
+}
+reasoning_result = await openaiService.performReasonedValuation(**reasoning_inputs)  # Or your exact method
+adjusted_value = reasoning_result.adjustedValue  # Adjust based on your response parsing
+For Step 5: Property Improvements Assessment – No change, keep your original code.
+For Step 6: Final Synthesis & Report Generation – Update to pass market_comps (replace or augment the existing synthesis call):
+text
+
+Collapse
+
+Wrap
+
+Copy
+final_result = await openaiService.synthesizeFinalValuation(
+  vector_result.baseValue,
+  reasoning_result.adjustedValue,
+  reasoning_result.improvements,
+  market_comps,  # New: For insights/citations
+  market_comps['trends'],  # Example, adjust as needed
+  property_data['acreage'],
+  total_improvements_value
+);
+Update Frontend Code (if applicable):
+If your frontend has a file like index.js or a Streamlit script, open it.
+Add progress message for the new step (copy and paste into your polling or status update logic):
+text
+
+Collapse
+
+Wrap
+
+Copy
+// Example in JS; adjust for your framework
+updateStatus('Fetching Iowa market analysis and sales comps...');
+In the report rendering section, add display for market comps (copy and paste):
+text
+
+Collapse
+
+Wrap
+
+Copy
+// Example in JS
+document.getElementById('market-comps').innerHTML = JSON.stringify(finalResult.marketComps, null, 2);  // Or format as list/table
+Implement Parsing Functions (if not already handling JSON):
+If needed, add this to a utils.py file or backend (copy and paste; already handled in Step 2.5 via json.loads, but for robustness):
+text
+
+Collapse
+
+Wrap
+
+Copy
+def parse_market_comps(response):
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        return {'comps': [], 'trends': {}}  # Fallback
+Update Step 2.5 to use it if necessary: market_comps = parse_market_comps(market_response)
+Test the Updates:
+Click the "Run" button in Replit to start/restart the app.
+Test with a sample Iowa property input (e.g., county: 'Hamilton', state: 'Iowa', landType: 'irrigated', csr2Mean: 86.2, acreage: 100).
+Check the console/logs for outputs from the new step. Verify market_comps are fetched and used in AI reasoning.
+If errors occur (e.g., API key issues), check the Shell console and debug.

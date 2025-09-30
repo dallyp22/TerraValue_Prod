@@ -1,0 +1,8 @@
+Remove hardcoded API key from OpenAI configuration
+
+Remove hardcoded OpenAI API key from `server/services/openai.ts` and update the `clean_push_to_github.sh` script to create a new, clean repository history without secrets.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 382b50a9-7371-4316-ad0d-ad3365090d15
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/ade925d2-e731-4eae-96a3-a9426e01b099/382b50a9-7371-4316-ad0d-ad3365090d15/KHKnh4N

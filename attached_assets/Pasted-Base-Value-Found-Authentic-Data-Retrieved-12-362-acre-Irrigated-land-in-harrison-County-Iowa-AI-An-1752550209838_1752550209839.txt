@@ -1,0 +1,95 @@
+Base Value Found
+Authentic Data Retrieved
+$12,362/acre
+Irrigated land in harrison County, Iowa
+AI Analysis
+Complete
+Property Analysis
+
+The analyzed parcel in harrison County, Iowa, has several significant characteristics that influence its value beyond the county's established base value for Irrigated land. The parcel boasts an excellent Iowa CSR2 rating of 89.9, indicating high productivity potential, which is notably above average for the region. The CSR2-based calculated value of $15,643/acre highlights the parcel's high productivity, which warrants upward adjustment from the base value. SOIL PRODUCTIVITY DATA: - Iowa CSR2 Rating: 89.9 (excellent productivity) - CSR2 Range: 89.9 - 89.9 - This authentic soil data should be factored into the valuation as it directly impacts agricultural productivity and land value. INCOME CAPITALIZATION DATA: - Cash Rent: $315/acre annually (user_input) - Cap Rate: 3.0% - Income Cap Value: $10,500/acre - This income approach provides a fundamental basis for land value based on earning potential. This valuation accounts for the excellent soil productivity, balanced against the income-based valuation, without substantial specific property disadvantages (such as poor drainage, extreme topography, or location issues) identified. The lack of specific infrastructural improvements or maintenance issues implies no additional value adjustments are necessary for those factors.
+BASE COUNTY VALUE
+$12,362/acre
+CSR2 QUANTITATIVE
+$15,643/acre
+Market Intelligence
+Complete
+Market Analysis
+
+The final valuation reflects the ongoing appreciation in the irrigated farmland market within Harrison County, as evidenced by recent comparable sales data showing prices ranging from $6300 to $9550 per acre for similar land types. This highly influences the computed final valuation, despite the substantial market adjustment. The valuation incorporates the steady demand in the local market, the decrease in auction volume, and the stabilizing economic conditions post-election. Nevertheless, climate variability and rising input costs, coupled with potential regulatory changes, have dampened overall valuation gains. Continual advancements in agricultural technology and improved resource efficiency counterbalance these factors, ensuring developmental resilience and sustained land value growth.
+AI MARKET-ADJUSTED VALUE
+$12,240/acre
+Based on market comps and analysis
+Valuation Report
+Export PDF
+Valuation Approaches Comparison
+CSR2 Quantitative
+$15,643/acre
+Based on soil productivity
+Income Approach
+$10,500/acre
+Based on cash rent analysis
+AI Market-Adjusted
+$15,300/acre
+AI-enhanced market analysis
+Selected Method
+CSR2 Quantitative: $15,643/acre
+Tillable vs Non-Tillable Land Analysis
+Land Distribution
+
+Total Acres
+58.95
+Tillable Acres
+48.0
+Non-Tillable Acres
+11.0
+Valuation per Acre
+
+Selected Method
+CSR2 Quantitative
+Tillable Value
+$15,643/acre
+Non-Tillable Value
+$15,643/acre
+Blended Average
+$16,218/acre
+Tillable Percentage
+
+81.4%
+Total Property Value Calculation
+$750,864
+Tillable Land Value
+$171,290.85
+Non-Tillable Land Value
+$0
+Property Improvements
+$922,154.85
+Total Estimated Property Value
+Based on CSR2 Quantitative methodology
+Iowa Market Analysis & Sales Comps
+Market Summary
+
+Harrison County's irrigated land market has shown stable demand with properties consistently attracting competitive bids. Prices have remained firm, supported by a reduction in auction volume and stable market conditions influenced by economic trends post-election【4:13†file】. Recent sales data indicates that tillable lands are in demand with notable transactions at competitive rates【4:0†file】【4:2†file】.
+Recent Sales Comparables
+
+$9,550/acre
+2025-03
+Tillable land with CSR2 of 69.6 and 156.89 tillable acres.
+176.62 acres
+Irrigated
+$6,300/acre
+2025-01
+Tillable land with CSR2 of 66.2 and 113.22 tillable acres.
+151.65 acres
+Irrigated
+$8,800/acre
+2025-05
+Tillable land with CSR2 of 62.9 and 68.45 tillable acres.
+73.4 acres
+Irrigated
+Average Comp Price
+$8,217/acre
+Market Trends & Factors
+
+Stable demand
+Reduction in auction volume
+Economic conditions post-election

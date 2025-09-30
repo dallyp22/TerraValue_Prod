@@ -1,0 +1,135 @@
+Below is a check-list + code “cheat sheet” you can hand to whoever is working inside Replit to make sure TerraValue is reliably returning real CSR2 values from the Iowa statewide raster.
+
+1 · Quick sanity check
+Confirm you have internet egress
+In the Replit shell, run
+
+bash
+Copy
+Edit
+curl -s 'https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer?f=json' | jq '.serviceDescription'
+You should see a JSON blob. If that times out, the Replit workspace is blocking outbound traffic.
+
+Verify a point call in shell
+
+bash
+Copy
+Edit
+curl -G \
+  'https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer/identify' \
+  --data-urlencode 'f=json' \
+  --data-urlencode 'geometry=-93.65,41.6' \
+  --data-urlencode 'geometryType=esriGeometryPoint' \
+  --data-urlencode 'sr=4326' \
+  --data-urlencode 'returnGeometry=false'
+Expect "value": 88-ish (Des Moines area). If you get "value": -128, that’s the no-data flag.
+
+2 · Common pitfalls & fixes
+Symptom	Probable cause	Fix
+All returns are -128	Coordinates swapped (lat,lon) or wrong projection	Send lon,lat in EPSG 4326.
+Network CORS error in browser	Missing header on ArcGIS call	The image service does send Access-Control-Allow-Origin: *. If you proxy through Express, don’t strip that header.
+ERR_CERT_DATE_INVALID	Replit opens http → ArcGIS forces https	Hard-code https:// in endpoint constant.
+Parcel click returns 500	Polygon WKT too large → fetch URL > 2048 chars	Use exportImage GeoTIFF route instead of identify for big polygons (see code below).
+“Cannot find module ‘geotiff’”	geotiff is ESM only; imported with require	import GeoTIFF from "geotiff"; not const GeoTIFF = require("geotiff").
+“write EPIPE” on large tile download	Replit memory limit (512 MB)	Add size=1024,1024 param to exportImage or stream to temp file (see snippet).
+
+3 · Minimal working Node function
+ts
+Copy
+Edit
+import axios from "axios";
+import GeoTIFF from "geotiff";
+
+export async function csr2PolygonMean(wkt: string) {
+  // 1. get bbox
+  const [, coords] = /POLYGON\(\((.*)\)\)/.exec(wkt)!;
+  const pts = coords.split(",").map((p) => p.trim().split(" ").map(Number));
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const bbox = `${Math.min(...xs)},${Math.min(...ys)},${Math.max(...xs)},${Math.max(...ys)}`;
+
+  // 2. export cropped GeoTIFF (≤ ~4 MB)
+  const { data } = await axios.get(
+    "https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer/exportImage",
+    {
+      params: {
+        f: "json",
+        bbox,
+        bboxSR: 4326,
+        size: "1024,1024",
+        imageSR: 4326,
+        format: "tiff",
+        noData: -128
+      },
+      timeout: 15000
+    }
+  );
+
+  const arrayBuf = (
+    await axios.get<ArrayBuffer>(data.href, { responseType: "arraybuffer" })
+  ).data;
+
+  // 3. parse GeoTIFF in pure JS
+  const tiff = await GeoTIFF.fromArrayBuffer(arrayBuf);
+  const img = await tiff.getImage();
+  const raster = await img.readRasters({ interleave: true }) as Int8Array;
+
+  const valid = raster.filter((v) => v !== -128);
+  if (!valid.length) return null;
+
+  return Number((valid.reduce((a, b) => a + b) / valid.length).toFixed(2));
+}
+No key, no token, works entirely on the client or server.
+
+4 · Express route with throttle + cache
+ts
+Copy
+Edit
+import NodeCache from "node-cache";
+import pLimit from "p-limit";
+const cache = new NodeCache({ stdTTL: 3600 });
+const limit = pLimit(3);               // courteous to the public server
+
+router.post("/polygon", async (req, res) => {
+  const { wkt } = req.body;
+  const key = Buffer.from(wkt).toString("base64");
+  const cached = cache.get(key);
+  if (cached) return res.json(cached);
+
+  try {
+    const mean = await limit(() => csr2PolygonMean(wkt));
+    const payload = { mean };
+    cache.set(key, payload);
+    res.json(payload);
+  } catch (e) {
+    console.error(e);
+    res.status(502).send("CSR2 lookup failed");
+  }
+});
+5 · Front-end checklist
+Confirm lon/lat order when you build the map click handler:
+
+js
+Copy
+Edit
+const { lng, lat } = e.lngLat;              // MapLibre gives correct order
+Always send WKT in EPSG 4326.
+If you get polygons from PostGIS they are already 4326; if you’re reading Shapefile rows in EPSG 102039 you must transform first.
+
+Handle null – show “Not rated” badge if mean === null.
+
+6 · Smoke test script
+Add scripts/smoke.js:
+
+js
+Copy
+Edit
+import { csr2PolygonMean } from "./services/csr2.js";
+const SAMPLE = "POLYGON((-93.612 41.615,-93.612 41.605,-93.602 41.605,-93.602 41.615,-93.612 41.615))";
+csr2PolygonMean(SAMPLE).then(console.log).catch(console.error);
+Run:
+
+bash
+Copy
+Edit
+node --loader ts-node/esm scripts/smoke.js   # expect ~88

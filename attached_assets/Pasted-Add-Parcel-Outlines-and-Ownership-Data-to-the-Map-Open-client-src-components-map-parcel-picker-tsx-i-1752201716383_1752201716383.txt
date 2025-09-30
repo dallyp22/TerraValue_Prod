@@ -1,0 +1,94 @@
+Add Parcel Outlines and Ownership Data to the Map
+Open client/src/components/map-parcel-picker.tsx in Cursor. This adds a GeoJSON source and layer for Iowa parcels from the ArcGIS FeatureServer. Parcels load dynamically based on map bounds and zoom level (only at zoom > 12 to avoid performance issues, as the service limits 2000 features per query). On click, a popup shows ownership data (e.g., deed holder, parcel number).
+
+Add/import these at the top (after existing imports; use Cursor's Cmd+K to suggest imports if needed):
+
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+import maplibregl from 'maplibre-gl';
+Then, in your map initialization function (after const map = new maplibregl.Map({...})), add this inside the map.on('load', () => { ... }) block:
+
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// Add source for parcels (initially empty)
+map.addSource('parcels', {
+  type: 'geojson',
+  data: { type: 'FeatureCollection', features: [] }
+});
+
+// Add outline layer for parcels
+map.addLayer({
+  id: 'parcels-outline',
+  type: 'line',
+  source: 'parcels',
+  paint: {
+    'line-color': '#0000FF', // Blue outlines
+    'line-width': 1,
+    'line-opacity': 0.8
+  }
+});
+
+// Function to load parcels based on current bounds
+const loadParcels = async () => {
+  if (map.getZoom() <= 12) {
+    // Clear data if zoomed out
+    map.getSource('parcels').setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
+
+  const bounds = map.getBounds();
+  const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
+  const url = `https://services3.arcgis.com/kd9gaiUExYqUbnoq/arcgis/rest/services/Iowa_Parcels_2017/FeatureServer/0/query?where=1%3D1&outFields=PARCELNUMB,DEEDHOLDER,PARCELCLAS&geometry=${bbox}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=geojson`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.features && data.features.length > 0 && data.features.length <= 2000) {
+      map.getSource('parcels').setData(data);
+    } else {
+      // Handle too many features or empty (e.g., alert user to zoom in)
+      console.warn('Too many or no parcels in view; zoom in for details.');
+      map.getSource('parcels').setData({ type: 'FeatureCollection', features: [] });
+    }
+  } catch (error) {
+    console.error('Error loading parcels:', error);
+  }
+};
+
+// Load parcels on initial load and after moves
+loadParcels();
+map.on('moveend', loadParcels);
+
+// Show ownership popup on click
+map.on('click', 'parcels-outline', (e) => {
+  if (e.features && e.features.length > 0) {
+    const props = e.features[0].properties;
+    const html = `
+      <strong>Owner:</strong> ${props.DEEDHOLDER || 'Unknown'}<br>
+      <strong>Parcel Number:</strong> ${props.PARCELNUMB || 'N/A'}<br>
+      <strong>Class:</strong> ${props.PARCELCLAS || 'N/A'}
+    `;
+    new maplibregl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(html)
+      .addTo(map);
+  }
+});
+
+// Make the layer interactive
+map.on('mouseenter', 'parcels-outline', () => {
+  map.getCanvas().style.cursor = 'pointer';
+});
+map.on('mouseleave', 'parcels-outline', () => {
+  map.getCanvas().style.cursor = '';
+});

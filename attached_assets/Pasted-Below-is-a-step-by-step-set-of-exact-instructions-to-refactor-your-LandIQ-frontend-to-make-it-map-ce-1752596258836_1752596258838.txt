@@ -1,0 +1,248 @@
+Below is a step-by-step set of exact instructions to refactor your LandIQ frontend to make it map-centric. The goal is to have the map (using MapLibre GL) as the primary full-screen element, covering the majority of the screen (e.g., 100% width/height minus any fixed overlays). Other modules (e.g., PropertyForm, ValuationPipeline, ValuationReport) will be overlaid as floating panels, modals, or sidebars on top of the map for a smooth, immersive experience. Users will interact directly with the map:
+
+Clicking on parcels will display owner information in a popup or sidebar.
+A toggle switch will enable/disable polygon drawing mode for CSR2 and acreage calculation.
+These changes assume your current setup (React 18, Wouter, TanStack React Query, Shadcn/UI, Tailwind CSS, MapLibre GL, Turf.js for geospatial ops). I'll specify file paths based on your described architecture (e.g., assuming components are in src/components/, schema in shared/schema.ts, etc.). If your file structure differs, adjust accordingly.
+
+I'll provide code snippets where needed. Use animations (e.g., via Tailwind's transition classes or Framer Motion if you add it) for smoothness. Ensure responsiveness with Tailwind's media queries.
+
+Step 1: Restructure Routing and Main Layout
+Make the entire app live under a single "map-centric" route/view. Remove multi-page navigation; everything overlays the map.
+
+Update Routing (src/router.tsx or wherever Wouter is configured):
+Simplify to a single route for the map view. Use React state or URL params to manage overlays (e.g., ?mode=valuation).
+Example:
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// src/router.tsx (or App.tsx if no separate router file)
+import { Router, Route } from 'wouter';
+import MapCentricHome from './components/MapCentricHome'; // New component, see below
+
+function App() {
+  return (
+    <Router>
+      <Route path="/" component={MapCentricHome} />
+      {/* Redirect other routes to / or handle as overlays */}
+    </Router>
+  );
+}
+Create a New Map-Centric Home Component (src/components/MapCentricHome.tsx):
+This will be the main container: Map as background, overlays on top.
+Use absolute positioning for overlays with Tailwind.
+Add a toggle for draw mode (using a Shadcn/UI Switch).
+Manage state for overlays (e.g., show owner info, form, etc.) using React's useState and React Query for data fetching.
+Code:
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// src/components/MapCentricHome.tsx
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Switch } from '@/components/ui/switch'; // Shadcn/UI
+import EnhancedMap from './EnhancedMap'; // New, see Step 2
+import PropertyFormOverlay from './PropertyFormOverlay'; // New, see Step 3
+import ValuationPipelineOverlay from './ValuationPipelineOverlay'; // New, see Step 3
+import ValuationReportOverlay from './ValuationReportOverlay'; // New, see Step 3
+import OwnerInfoSidebar from './OwnerInfoSidebar'; // New, see Step 4
+
+export default function MapCentricHome() {
+  const [drawModeEnabled, setDrawModeEnabled] = useState(false);
+  const [selectedParcel, setSelectedParcel] = useState(null); // For owner info
+  const [showForm, setShowForm] = useState(false); // Toggle overlays
+  const [showPipeline, setShowPipeline] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+
+  // Example: Fetch valuation data with React Query (adapt to your API)
+  const { data: valuationData } = useQuery(['valuation'], () => fetch('/api/valuations').then(res => res.json()));
+
+  return (
+    <div className="relative w-screen h-screen overflow-hidden">
+      {/* Map as full-screen base */}
+      <EnhancedMap
+        drawModeEnabled={drawModeEnabled}
+        onParcelClick={(parcel) => setSelectedParcel(parcel)} // Handle click, see Step 4
+        onPolygonDrawn={(polygon) => {
+          // Handle drawn polygon: calculate area with Turf.js, fetch CSR2, etc.
+          const area = turf.area(polygon); // Assuming Turf.js imported
+          console.log('Acreage:', area / 4046.86); // Convert to acres
+          // Trigger backend or update state for CSR2 analysis
+        }}
+      />
+
+      {/* Top-right toggle for draw mode */}
+      <div className="absolute top-4 right-4 z-50 flex items-center space-x-2 bg-white p-2 rounded shadow transition-all duration-300">
+        <Switch
+          checked={drawModeEnabled}
+          onCheckedChange={setDrawModeEnabled}
+        />
+        <span className="text-sm">Draw Polygon Mode</span>
+      </div>
+
+      {/* Overlays: Floating panels/modals on top of map */}
+      {showForm && <PropertyFormOverlay onClose={() => setShowForm(false)} />}
+      {showPipeline && <ValuationPipelineOverlay data={valuationData} onClose={() => setShowPipeline(false)} />}
+      {showReport && <ValuationReportOverlay data={valuationData} onClose={() => setShowReport(false)} />}
+
+      {/* Sidebar for owner info */}
+      {selectedParcel && <OwnerInfoSidebar parcel={selectedParcel} onClose={() => setSelectedParcel(null)} />}
+
+      {/* Bottom toolbar for actions (smooth fade-in) */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-50 flex space-x-4 bg-white p-2 rounded shadow transition-all duration-300">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-500 text-white rounded">Open Property Form</button>
+        <button onClick={() => setShowPipeline(true)} className="px-4 py-2 bg-green-500 text-white rounded">View Pipeline</button>
+        <button onClick={() => setShowReport(true)} className="px-4 py-2 bg-purple-500 text-white rounded">View Report</button>
+      </div>
+    </div>
+  );
+}
+Notes:
+Map covers 100% of the screen. Overlays use absolute and z-50 to float on top.
+Add animations: Use transition-all duration-300 for smooth show/hide.
+For smoothness, add error boundaries (e.g., React's ErrorBoundary) around overlays.
+Step 2: Enhance the Map Component for Interactivity
+Assuming your current map is in src/components/MapParcelPicker.tsx, rename/refactor it to EnhancedMap.tsx and add features.
+
+Update Map Component (src/components/EnhancedMap.tsx):
+Integrate MapLibre GL with satellite imagery (as before).
+Add parcel clicking: Load parcel layers (e.g., from USDA/ARS or OpenStreetMap) and handle 'click' events.
+Add draw toggle: Use Mapbox Draw compatibility layer to enable/disable drawing.
+Props: drawModeEnabled, onParcelClick, onPolygonDrawn.
+Code (simplified; import necessary libs like maplibregl, @maplibre/maplibre-gl-mapbox-draw or similar compatibility):
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// src/components/EnhancedMap.tsx
+import { useRef, useEffect } from 'react';
+import maplibregl from 'maplibre-gl';
+import MapboxDraw from '@mapbox/mapbox-gl-draw'; // Compatibility layer
+import * as turf from '@turf/turf';
+
+export default function EnhancedMap({ drawModeEnabled, onParcelClick, onPolygonDrawn }) {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const draw = useRef(null);
+
+  useEffect(() => {
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: 'https://api.maptiler.com/maps/satellite/style.json?key=YOUR_KEY', // Satellite style
+      center: [-93.5, 42.0], // Iowa center, adjust
+      zoom: 8,
+    });
+
+    draw.current = new MapboxDraw({ displayControlsDefault: false });
+    map.current.addControl(draw.current);
+
+    // Load parcel layer (e.g., vector source from USDA)
+    map.current.on('load', () => {
+      map.current.addSource('parcels', { type: 'vector', url: 'YOUR_PARCEL_TILE_URL' }); // e.g., USDA field boundaries
+      map.current.addLayer({ id: 'parcels-layer', type: 'fill', source: 'parcels', paint: { 'fill-color': '#888' } });
+
+      // Click handler for parcels
+      map.current.on('click', 'parcels-layer', (e) => {
+        if (e.features.length > 0) {
+          const parcel = e.features[0].properties; // Assume properties include owner info
+          onParcelClick(parcel); // Pass to parent
+        }
+      });
+
+      // Cursor change for interactivity
+      map.current.on('mouseenter', 'parcels-layer', () => { map.current.getCanvas().style.cursor = 'pointer'; });
+      map.current.on('mouseleave', 'parcels-layer', () => { map.current.getCanvas().style.cursor = ''; });
+    });
+
+    // Toggle draw mode
+    if (drawModeEnabled) {
+      draw.current.changeMode('draw_polygon');
+    } else {
+      draw.current.changeMode('simple_select');
+    }
+
+    // Handle polygon drawn
+    map.current.on('draw.create', (e) => {
+      const polygon = e.features[0];
+      onPolygonDrawn(polygon); // Trigger CSR2/acre calc
+    });
+
+    return () => map.current.remove();
+  }, [drawModeEnabled]);
+
+  return <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />;
+}
+Notes:
+Replace YOUR_PARCEL_TILE_URL and YOUR_KEY with actual values (e.g., from OpenStreetMap or USDA integration).
+For smoothness: Use map.flyTo() for animations on zoom/focus.
+If no compatibility layer, search for "maplibre-gl-draw" package and install via npm (assuming Vite allows it).
+Step 3: Convert Modules to Overlays
+Refactor existing components to be overlays (e.g., side panels or modals) using Shadcn/UI's Dialog or absolute divs.
+
+Create Overlay Wrappers (e.g., src/components/PropertyFormOverlay.tsx):
+Wrap your existing PropertyForm in a floating panel.
+Example for PropertyFormOverlay (repeat for others):
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// src/components/PropertyFormOverlay.tsx
+import { PropertyForm } from './PropertyForm'; // Your existing form
+
+export default function PropertyFormOverlay({ onClose }) {
+  return (
+    <div className="absolute top-20 right-4 z-50 w-1/3 h-3/4 bg-white p-4 rounded shadow-lg overflow-auto transition-all duration-300 animate-fade-in">
+      <button onClick={onClose} className="absolute top-2 right-2">Close</button>
+      <PropertyForm /> {/* Your Zod-validated form */}
+    </div>
+  );
+}
+Add to tailwind.config.js for animations if needed: extend: { animation: { 'fade-in': 'fadeIn 0.3s ease-in' } } and define @keyframes.
+Similar for ValuationPipelineOverlay and ValuationReportOverlay:
+Position them as needed (e.g., bottom-right for pipeline, center for report).
+Use React Query inside for real-time polling (every 2s, as before).
+Step 4: Implement Parcel Click for Owner Info
+Create OwnerInfoSidebar (src/components/OwnerInfoSidebar.tsx):
+Display owner details from parcel properties (fetched via map click).
+Code:
+tsx
+
+Collapse
+
+Wrap
+
+Copy
+// src/components/OwnerInfoSidebar.tsx
+export default function OwnerInfoSidebar({ parcel, onClose }) {
+  return (
+    <div className="absolute top-0 right-0 z-50 w-1/4 h-full bg-white p-4 shadow-lg transition-all duration-300">
+      <button onClick={onClose}>Close</button>
+      <h2>Owner Info</h2>
+      <p>Name: {parcel?.owner_name || 'Unknown'}</p>
+      <p>Address: {parcel?.address || 'N/A'}</p>
+      {/* Add more fields from USDA/OpenStreetMap data */}
+    </div>
+  );
+}
+Step 5: Testing and Optimizations
+Run Development Server: npm run dev (Vite). Test map interactions, toggle, clicks, and overlays.
+Smoothness Enhancements:
+Lazy load overlays: Use React.lazy() for components.
+Cache map data: Use React Query for CSR2 fetches with 1-hour TTL.
+Responsiveness: Add Tailwind classes like md:w-1/3 for mobile (e.g., make overlays full-screen on small devices).
+Edge Cases: Handle no parcel data with fallbacks. Add loading spinners (Shadcn/UI Spinner).
+Deployment: Update Vite config for production builds. Ensure backend integrations (e.g., geocoding) work with the new flow.
+This refactor keeps your core logic intact while achieving a map-centric UX. If you encounter issues (e.g., with Draw library), provide error details for further tweaks.

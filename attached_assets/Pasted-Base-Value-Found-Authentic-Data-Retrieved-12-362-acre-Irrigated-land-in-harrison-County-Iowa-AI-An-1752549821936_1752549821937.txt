@@ -1,0 +1,96 @@
+Base Value Found
+Authentic Data Retrieved
+$12,362/acre
+Irrigated land in harrison County, Iowa
+AI Analysis
+Complete
+Property Analysis
+
+The analyzed parcel in harrison County, Iowa, has several significant characteristics that influence its value beyond the county's established base value for Irrigated land. The parcel boasts an excellent Iowa CSR2 rating of 89.9, indicating high productivity potential, which is notably above average for the region. The CSR2-based calculated value of $15,643/acre highlights the parcel's high productivity, which warrants upward adjustment from the base value. SOIL PRODUCTIVITY DATA: - Iowa CSR2 Rating: 89.9 (excellent productivity) - CSR2 Range: 89.9 - 89.9 - This authentic soil data should be factored into the valuation as it directly impacts agricultural productivity and land value. INCOME CAPITALIZATION DATA: - Cash Rent: $315/acre annually (user_input) - Cap Rate: 3.0% - Income Cap Value: $10,500/acre - This income approach provides a fundamental basis for land value based on earning potential. This valuation accounts for the excellent soil productivity, balanced against the income-based valuation, without substantial specific property disadvantages (such as poor drainage, extreme topography, or location issues) identified. The lack of specific infrastructural improvements or maintenance issues implies no additional value adjustments are necessary for those factors.
+BASE COUNTY VALUE
+$12,362/acre
+CSR2 QUANTITATIVE
+$15,643/acre
+Market Intelligence
+Complete
+Market Analysis
+
+The final valuation of $918,420 aligns closely with the broader appreciation trends within the Harrison County irrigated farmland market. Despite a significant negative market adjustment factor, the strong agricultural underpinning, technological advancements, and resource efficiency are positively influencing the market. The current regional demand, coupled with lower auction volumes, maintains robust price levels despite macroeconomic pressures. Regulatory considerations, alongside the importance of soil health and water management, are key ongoing dynamics in this market landscape.
+AI MARKET-ADJUSTED VALUE
+$-98,000/acre
+Based on market comps and analysis
+Valuation Report
+Export PDF
+Valuation Approaches Comparison
+CSR2 Quantitative
+$15,643/acre
+Based on soil productivity
+Income Approach
+$10,500/acre
+Based on cash rent analysis
+AI Market-Adjusted
+$14,000/acre
+AI-enhanced market analysis
+Selected Method
+CSR2 Quantitative: $15,643/acre
+Tillable vs Non-Tillable Land Analysis
+Land Distribution
+
+Total Acres
+33.38
+Tillable Acres
+29.0
+Non-Tillable Acres
+4.4
+Valuation per Acre
+
+Selected Method
+CSR2 Quantitative
+Tillable Value
+$15,643/acre
+Non-Tillable Value
+$15,643/acre
+Blended Average
+$16,476/acre
+Tillable Percentage
+
+86.9%
+Total Property Value Calculation
+$453,647
+Tillable Land Value
+$68,516.34
+Non-Tillable Land Value
+$0
+Property Improvements
+$522,163.34
+Total Estimated Property Value
+Based on CSR2 Quantitative methodology
+Iowa Market Analysis & Sales Comps
+Market Summary
+
+The irrigated land market in Harrison County, Iowa, shows a robust demand with stable conditions as properties fetched strong prices. Although the volume of auctions is low, it sustains the market values. Recent trends indicate a slight year-over-year decrease in prices by approximately 3%, attributed to a tightening buyer pool amid stable demands【4:17†March-2025-Land-Talk-Monthly.txt】.
+Recent Sales Comparables
+
+$11,000/acre
+2025-03
+Tillable, 70 CSR2
+77 acres
+Irrigated
+$7,700/acre
+2025-01
+Tillable, 65.1 CSR2
+198.05 acres
+Irrigated
+$7,500/acre
+2025-05
+CRP, 63.3 CSR2
+66.02 acres
+Irrigated
+Average Comp Price
+$8,733/acre
+Market Trends & Factors
+
+Lower auction volume supports prices
+Strong demand but smaller buyer pool
+Year-over-Year Change
+-300.0%

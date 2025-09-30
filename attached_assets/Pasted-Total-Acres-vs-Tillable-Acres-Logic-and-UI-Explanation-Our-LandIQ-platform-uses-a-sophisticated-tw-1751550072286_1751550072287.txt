@@ -1,0 +1,55 @@
+Total Acres vs Tillable Acres: Logic and UI Explanation
+Our LandIQ platform uses a sophisticated two-tier acreage system designed for practical agricultural land valuation. Here's how it works:
+
+The Logic Behind Total vs Tillable Acres
+Total Acreage (acreage field):
+
+Represents the entire property size including all land types
+Used for overall property boundaries and legal descriptions
+Includes tillable cropland, non-tillable areas, farmsteads, roads, waterways, etc.
+Tillable Acres (tillableAcres field):
+
+Represents only the land suitable for crop production
+Critical for CSR2 calculations since CSR2 only applies to cropland
+Affects the precision of soil-based valuations
+Typically 85-95% of total acreage on most Iowa farms
+How the UI Works
+Property Form Interface:
+
+Side-by-side input fields in a responsive grid layout
+Total Acreage field (left) - labeled "Total Acreage" with decimal input
+Tillable Acres field (right) - labeled "Tillable Acres" with placeholder "e.g. 152"
+Smart validation - tillable acres cannot exceed total acres
+Mobile-responsive - stacks vertically on smaller screens
+User Experience Flow:
+
+Farmers input total property size first (familiar concept)
+Then specify tillable portion (what they actually farm)
+Clear visual separation with distinct labels
+Intuitive number inputs with decimal support
+Valuation Logic Implementation
+CSR2 Calculations:
+
+// CSR2 value applies only to tillable acres
+const csr2Value = csr2Rating * dollarPerPoint; // Per acre for tillable land
+const totalCroplandValue = csr2Value * tillableAcres;
+const nonTillableValue = baseValue * (totalAcres - tillableAcres);
+Smart Valuation Strategy:
+
+When CSR2 data is available: Use CSR2 × $/point for tillable acres, base county value for non-tillable
+When no CSR2 data: Apply county base value uniformly across all acres
+Blended approach: Weighted average based on tillable vs non-tillable portions
+Example Calculation:
+
+Total: 160 acres, Tillable: 155 acres
+CSR2: 85 rating at $185/point = $15,725/acre for tillable land
+Non-tillable: 5 acres at county base value
+Result: Precision valuation reflecting actual farming capability
+Display in Reports
+Valuation Breakdown shows:
+
+CSR2 value prominently highlighted when available
+Clear distinction between land value and total property value
+Tillable acres factored into CSR2 calculations
+Non-tillable areas valued at county base rates
+This two-tier system provides the precision that agricultural professionals need while maintaining simplicity for farmers entering property data. The UI guides users naturally through the process while the backend applies sophisticated valuation logic based on actual farming potential.

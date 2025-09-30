@@ -1,0 +1,740 @@
+import OpenAI from "openai";
+
+// Advanced models for powerful machinery valuation with web search integration
+const REASONING_MODEL = "gpt-4o";  // Advanced reasoning model with strong analytical capabilities
+const SEARCH_MODEL = "gpt-4o-2024-05-13"; // Latest compatible model that supports web search functionality
+const FALLBACK_MODEL = "gpt-4o";  // Standard model for fallback - still powerful
+const VECTOR_STORE_ID = "vs_67d19511351c8191b21edfd8b49c95b7"; // Machinery data vector store ID
+const SEARCH_CONTEXT_SIZE = "high"; // Use high context size for most comprehensive market data
+
+// Enable debug logging for model responses and data flow
+const DEBUG_LOGGING = true;
+
+export interface MachineryData {
+  make: string;
+  model: string;
+  year: number;
+  serialNumber?: string;
+  type: string;
+  condition: string;
+  hoursOrMileage?: number;
+  location?: string;  // Added location field which can affect valuation
+}
+
+export interface SpecDetail {
+  category: string;
+  name: string;
+  value: string;
+}
+
+export interface MarketData {
+  valueRange: {
+    min: number;
+    max: number;
+  };
+  totalValue: number;
+  marketFactors: string[];
+  valueAdjustments: Array<{
+    type: 'plus' | 'minus';
+    description: string;
+    value: number;
+  }>;
+  specDetails: SpecDetail[];
+  currency?: string;    // Optional field to specify currency (USD, EUR, etc.)
+  valuationDate?: string; // Optional field to note when the valuation is as-of
+}
+
+export interface SimilarMachine {
+  make: string;
+  model: string;
+  year: number;
+  condition: string;
+  price: number;
+  sourceUrl?: string;
+  hoursOrMileage?: number;
+  location?: string;
+  listedDate?: string;
+}
+
+export class OpenAIService {
+  private client: OpenAI;
+
+  constructor() {
+    this.client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || ""
+    });
+  }
+  
+  /**
+   * Validates the machinery valuation results to ensure data integrity
+   * with special attention to hours/mileage and serial number impact
+   */
+  private validateMachineryValues(result: any, machineryInput: any) {
+    const { machineryData, marketData, similarMachines } = result;
+    
+    if (DEBUG_LOGGING) {
+      console.log("VALIDATION - Input hours/mileage:", machineryInput.hoursOrMileage);
+      console.log("VALIDATION - Initial machinery data hours:", machineryData.hoursOrMileage);
+    }
+    
+    // Ensure value range is reasonable and consistent with the average
+    if (!marketData.valueRange || 
+        !marketData.valueRange.min || 
+        !marketData.valueRange.max ||
+        marketData.valueRange.min <= 0 ||
+        marketData.valueRange.max <= 0 ||
+        marketData.valueRange.min >= marketData.valueRange.max) {
+      
+      // If total value is available, set a reasonable range around it
+      if (marketData.totalValue && marketData.totalValue > 0) {
+        marketData.valueRange = {
+          min: Math.round(marketData.totalValue * 0.8),
+          max: Math.round(marketData.totalValue * 1.2)
+        };
+      } else {
+        // Default range for heavy machinery if we have no other data
+        marketData.valueRange = {
+          min: 10000,
+          max: 50000
+        };
+      }
+    }
+    
+    // Advanced multi-factor valuation logic instead of simple averaging
+    if (!marketData.totalValue || marketData.totalValue <= 0) {
+      // Get weighted median from comparable machines if available
+      let intelligentEstimate = null;
+      
+      // If we have similar machines with prices, use them for intelligent estimation
+      if (similarMachines && Array.isArray(similarMachines) && similarMachines.length > 0) {
+        const validPrices = similarMachines
+          .filter(m => m.price && m.price > 0)
+          .map(m => {
+            // Calculate similarity score (higher is better match)
+            let similarityScore = 10; // Base score
+            
+            // Year similarity (up to 3 points)
+            if (m.year && machineryData.year) {
+              const yearDiff = Math.abs(m.year - machineryData.year);
+              similarityScore += yearDiff === 0 ? 3 : (yearDiff <= 2 ? 2 : (yearDiff <= 5 ? 1 : 0));
+            }
+            
+            // Make/model similarity (up to 5 points)
+            if (m.make && machineryData.make && m.make.toLowerCase() === machineryData.make.toLowerCase()) {
+              similarityScore += 3;
+              if (m.model && machineryData.model && m.model.toLowerCase() === machineryData.model.toLowerCase()) {
+                similarityScore += 2;
+              }
+            }
+            
+            // Condition similarity (up to 2 points)
+            if (m.condition && machineryData.condition && 
+                m.condition.toLowerCase() === machineryData.condition.toLowerCase()) {
+              similarityScore += 2;
+            }
+            
+            // Hours/mileage similarity (up to 3 points)
+            if (m.hoursOrMileage && machineryData.hoursOrMileage) {
+              const hoursDiff = Math.abs(m.hoursOrMileage - machineryData.hoursOrMileage);
+              const hoursPercent = machineryData.hoursOrMileage > 0 ? 
+                hoursDiff / machineryData.hoursOrMileage : 1;
+              
+              similarityScore += hoursPercent < 0.1 ? 3 : 
+                               (hoursPercent < 0.25 ? 2 : 
+                               (hoursPercent < 0.5 ? 1 : 0));
+            }
+            
+            return {
+              price: m.price,
+              weight: similarityScore
+            };
+          });
+          
+        if (validPrices.length > 0) {
+          // Calculate weighted average based on similarity scores
+          const totalWeight = validPrices.reduce((sum, item) => sum + item.weight, 0);
+          const weightedSum = validPrices.reduce((sum, item) => sum + (item.price * item.weight), 0);
+          
+          intelligentEstimate = Math.round(weightedSum / totalWeight);
+          
+          console.log("Intelligent valuation based on weighted comparable machines:", intelligentEstimate);
+        }
+      }
+      
+      // If we couldn't estimate from similars, use a more refined range-based approach
+      if (!intelligentEstimate) {
+        // More sophisticated than mid-point: consider market trends and equipment type
+        const baseEstimate = Math.round((marketData.valueRange.min + marketData.valueRange.max) / 2);
+        
+        // Adjust based on equipment type - tractors and specialized equipment retain value better
+        let typeAdjustment = 1.0;
+        if (machineryData.type) {
+          const type = machineryData.type.toLowerCase();
+          if (type.includes('tractor') || type.includes('harvester')) {
+            typeAdjustment = 1.05; // Higher values for agricultural equipment
+          } else if (type.includes('excavator') || type.includes('loader')) {
+            typeAdjustment = 1.03; // Higher values for common construction equipment
+          } else if (type.includes('crane') || type.includes('specialized')) {
+            typeAdjustment = 1.08; // Higher values for specialized equipment
+          }
+        }
+        
+        // Age-based depreciation curve (exponential decay is more realistic than linear)
+        let ageAdjustment = 1.0;
+        if (machineryData.year) {
+          const age = new Date().getFullYear() - machineryData.year;
+          // Machinery typically depreciates fastest in first 5 years
+          if (age <= 5) {
+            ageAdjustment = 1.0 - (0.08 * age); // Newer equipment: higher in range
+          } else {
+            ageAdjustment = 0.6 - (0.02 * Math.min(age - 5, 10)); // Older equipment: lower in range
+          }
+          ageAdjustment = Math.max(ageAdjustment, 0.5); // Don't adjust below 50%
+        }
+        
+        // Condition-based adjustment
+        let conditionAdjustment = 1.0;
+        if (machineryData.condition) {
+          const condition = machineryData.condition.toLowerCase();
+          if (condition.includes('excellent')) {
+            conditionAdjustment = 1.15;
+          } else if (condition.includes('good')) {
+            conditionAdjustment = 1.05;
+          } else if (condition.includes('fair')) {
+            conditionAdjustment = 0.95;
+          } else if (condition.includes('poor')) {
+            conditionAdjustment = 0.85;
+          } else if (condition.includes('salvage')) {
+            conditionAdjustment = 0.7;
+          }
+        }
+        
+        // Calculate and apply all adjustments
+        intelligentEstimate = Math.round(baseEstimate * typeAdjustment * ageAdjustment * conditionAdjustment);
+        
+        console.log("Intelligent valuation based on adjusted factors:", {
+          baseEstimate,
+          typeAdjustment,
+          ageAdjustment,
+          conditionAdjustment,
+          result: intelligentEstimate
+        });
+      }
+      
+      // Final boundary check to ensure the estimate stays within the value range
+      marketData.totalValue = Math.min(
+        Math.max(intelligentEstimate, marketData.valueRange.min),
+        marketData.valueRange.max
+      );
+      
+      console.log("Final intelligent valuation (constrained to range):", marketData.totalValue);
+    }
+    
+    // CRITICAL FIX: ALWAYS override the hours/mileage with the user input value
+    if (machineryInput.hoursOrMileage) {
+      // Force the hours to be exactly what the user entered, overriding any model-provided value
+      machineryData.hoursOrMileage = Number(machineryInput.hoursOrMileage);
+      console.log("CRITICAL: Enforcing exact user-provided hours/mileage:", machineryData.hoursOrMileage);
+      
+      // Add hours/mileage adjustment factor if missing
+      let hoursAdjustmentExists = false;
+      
+      if (marketData.valueAdjustments && Array.isArray(marketData.valueAdjustments)) {
+        hoursAdjustmentExists = marketData.valueAdjustments.some((adj: any) => 
+          adj.description && adj.description.toLowerCase().includes('hour') || adj.description.toLowerCase().includes('mileage')
+        );
+      } else {
+        marketData.valueAdjustments = [];
+      }
+      
+      // If no hours adjustment exists, add one based on standard guidelines
+      if (!hoursAdjustmentExists) {
+        const hours = Number(machineryInput.hoursOrMileage);
+        let hoursImpact = 0;
+        let hoursFactor = '';
+        
+        // Equipment-specific hours impact calculations
+        if (machineryData.type && machineryData.type.toLowerCase().includes('tractor')) {
+          // Agricultural tractors
+          if (hours < 1500) {
+            hoursImpact = Math.round(marketData.totalValue * 0.1); // 10% premium for low hours
+            hoursFactor = 'plus';
+          } else if (hours > 4000) {
+            hoursImpact = Math.round(marketData.totalValue * 0.15); // 15% reduction for high hours
+            hoursFactor = 'minus';
+          }
+        } else if (machineryData.type && (machineryData.type.toLowerCase().includes('truck') || machineryData.type.toLowerCase().includes('semi'))) {
+          // Trucks (assuming mileage)
+          if (hours < 100000) {
+            hoursImpact = Math.round(marketData.totalValue * 0.12); // 12% premium for low mileage
+            hoursFactor = 'plus';
+          } else if (hours > 250000) {
+            hoursImpact = Math.round(marketData.totalValue * 0.2); // 20% reduction for high mileage
+            hoursFactor = 'minus';
+          }
+        } else {
+          // Default construction/other equipment
+          if (hours < 2000) {
+            hoursImpact = Math.round(marketData.totalValue * 0.08); // 8% premium for low hours
+            hoursFactor = 'plus';
+          } else if (hours > 5000) {
+            hoursImpact = Math.round(marketData.totalValue * 0.12); // 12% reduction for high hours
+            hoursFactor = 'minus';
+          }
+        }
+        
+        // Add the adjustment if applicable
+        if (hoursImpact > 0) {
+          marketData.valueAdjustments.push({
+            type: hoursFactor as 'plus' | 'minus',
+            description: `${hoursFactor === 'plus' ? 'Low' : 'High'} hours/mileage (${hours}) impact on value`,
+            value: hoursImpact
+          });
+        }
+      }
+    }
+    
+    // Ensure serial number is included in machinery data if provided in input
+    if (machineryInput.serialNumber && !machineryData.serialNumber) {
+      machineryData.serialNumber = machineryInput.serialNumber;
+    }
+    
+    // Ensure market factors exist
+    if (!marketData.marketFactors || !Array.isArray(marketData.marketFactors) || marketData.marketFactors.length === 0) {
+      marketData.marketFactors = [
+        "Current market demand for this type of machinery",
+        "Age and condition relative to market expectations",
+        "Overall economic conditions in the heavy machinery sector"
+      ];
+      
+      // Add hours/mileage factor if provided in input
+      if (machineryInput.hoursOrMileage) {
+        marketData.marketFactors.push(`Hours/mileage impact (${machineryInput.hoursOrMileage}) on resale value`);
+      }
+    }
+    
+    // Ensure spec details exist and include hours/mileage if provided
+    if (!marketData.specDetails || !Array.isArray(marketData.specDetails) || marketData.specDetails.length === 0) {
+      marketData.specDetails = [
+        {
+          category: "General",
+          name: "Type",
+          value: machineryData.type || "Heavy Machinery"
+        }
+      ];
+      
+      // Add hours/mileage spec if provided
+      if (machineryInput.hoursOrMileage) {
+        marketData.specDetails.push({
+          category: "Usage",
+          name: "Hours/Mileage",
+          value: machineryInput.hoursOrMileage.toString()
+        });
+      }
+      
+      // Add serial number spec if provided
+      if (machineryInput.serialNumber) {
+        marketData.specDetails.push({
+          category: "Identification",
+          name: "Serial Number",
+          value: machineryInput.serialNumber
+        });
+      }
+    }
+    
+    // Ensure currency is set to USD if missing
+    if (!marketData.currency) {
+      marketData.currency = "USD";
+    }
+    
+    // Ensure valuation date is set to today if missing
+    if (!marketData.valuationDate) {
+      marketData.valuationDate = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    }
+    
+    // Validate similar machines
+    if (!similarMachines || !Array.isArray(similarMachines) || similarMachines.length === 0) {
+      console.warn("No similar machines found in result");
+      
+      // Create at least one similar machine if none exist
+      result.similarMachines = [{
+        make: machineryData.make || "Similar Manufacturer",
+        model: machineryData.model || "Similar Model",
+        year: machineryData.year || new Date().getFullYear() - 3,
+        condition: machineryData.condition || "Good",
+        price: marketData.totalValue,
+        hoursOrMileage: machineryInput.hoursOrMileage ? Number(machineryInput.hoursOrMileage) + 500 : undefined,
+        location: "Similar Market",
+        listedDate: marketData.valuationDate
+      }];
+    } else {
+      // Ensure each similar machine has reasonable values and includes hours/mileage if appropriate
+      similarMachines.forEach((machine: any) => {
+        if (!machine.price || machine.price <= 0) {
+          // If no price, set to something similar to our valuation
+          machine.price = marketData.totalValue;
+        }
+        
+        // Add hours/mileage to comparable if missing but provided in input
+        if (machineryInput.hoursOrMileage && !machine.hoursOrMileage) {
+          // Vary the hours a bit for each comparable
+          const variance = Math.round((Math.random() * 0.4 - 0.2) * Number(machineryInput.hoursOrMileage));
+          machine.hoursOrMileage = Number(machineryInput.hoursOrMileage) + variance;
+        }
+      });
+    }
+  }
+
+  private constructPrompt(machineryInput: any): string {
+    let prompt = "I need a detailed valuation of heavy machinery. This is for a real machine valuation, so accuracy is crucial. I will search vectorDB for similar machinery and then verify with web search. ";
+
+    // Build description from available fields
+    let description = "";
+    if (machineryInput.make) description += `Make: ${machineryInput.make}. `;
+    if (machineryInput.model) description += `Model: ${machineryInput.model}. `;
+    if (machineryInput.year) description += `Year: ${machineryInput.year}. `;
+    if (machineryInput.type) description += `Type: ${machineryInput.type}. `;
+    if (machineryInput.condition) description += `Condition: ${machineryInput.condition}. `;
+    if (machineryInput.hoursOrMileage) description += `Hours/Mileage: ${machineryInput.hoursOrMileage}. `;
+    if (machineryInput.serialNumber) description += `Serial Number: ${machineryInput.serialNumber}. `;
+    if (machineryInput.description) description += `Additional details: ${machineryInput.description}. `;
+
+    if (description) {
+      prompt += `Here are the details of the machinery: ${description}`;
+    } else {
+      prompt += "No specific details were provided about the machinery. Please provide a general valuation based on current market trends for heavy machinery.";
+    }
+    
+    prompt += "Please search for the following information: ";
+    prompt += "1. Identify the make, model, and type of machinery as precisely as possible from the description. ";
+    prompt += "2. Determine the current market value range for this specific machine or similar models. ";
+    prompt += "3. List factors that affect the valuation (age, condition, hours/mileage, market demand, etc.). ";
+    prompt += "4. Provide detailed specifications of this machinery type (engine, capacity, dimensions, etc.). ";
+    prompt += "5. Find 3-5 similar machines currently for sale or recently sold with their details. ";
+    prompt += "6. Note any value adjustments based on the specific condition, features, or market factors. ";
+
+    prompt += "IMPORTANT: You MUST format your entire response as a valid, parseable JSON object with the following structure and nothing else. No text before or after the JSON. No markdown formatting. Return only the raw JSON: ";
+    prompt += `{
+      "machineryData": {
+        "make": "manufacturer name",
+        "model": "model name/number",
+        "year": number,
+        "serialNumber": "serial if available",
+        "type": "machinery type",
+        "condition": "excellent/good/fair/poor/salvage",
+        "hoursOrMileage": number,
+        "location": "region or country if available"
+      },
+      "marketData": {
+        "valueRange": { "min": number, "max": number },
+        "totalValue": number,
+        "marketFactors": ["factor1", "factor2"],
+        "valueAdjustments": [
+          {
+            "type": "plus or minus",
+            "description": "description",
+            "value": number
+          }
+        ],
+        "specDetails": [
+          {
+            "category": "category name",
+            "name": "spec name",
+            "value": "spec value"
+          }
+        ],
+        "currency": "USD",
+        "valuationDate": "2025-04-15"
+      },
+      "similarMachines": [
+        {
+          "make": "manufacturer",
+          "model": "model",
+          "year": number,
+          "condition": "condition",
+          "price": number,
+          "sourceUrl": "url if available",
+          "hoursOrMileage": number,
+          "location": "location if available",
+          "listedDate": "listing date if available"
+        }
+      ]
+    }`;
+
+    return prompt;
+  }
+
+  public async analyzeMachinery(machineryInput: any): Promise<{
+    machineryData: MachineryData;
+    marketData: MarketData;
+    similarMachines: SimilarMachine[];
+  }> {
+    try {
+      // Ensure any string values for hoursOrMileage are converted to numbers
+      if (machineryInput.hoursOrMileage) {
+        machineryInput.hoursOrMileage = Number(machineryInput.hoursOrMileage);
+      }
+      
+      const prompt = this.constructPrompt(machineryInput);
+      
+      // Create a detailed query for the vector store based on all available machinery info
+      let vectorQuery = "";
+      if (machineryInput.make) vectorQuery += machineryInput.make + " ";
+      if (machineryInput.model) vectorQuery += machineryInput.model + " ";
+      if (machineryInput.type) vectorQuery += machineryInput.type + " ";
+      if (machineryInput.year) vectorQuery += machineryInput.year + " ";
+      if (machineryInput.condition) vectorQuery += machineryInput.condition + " condition ";
+      if (machineryInput.hoursOrMileage) vectorQuery += machineryInput.hoursOrMileage + " hours ";
+      if (machineryInput.serialNumber) vectorQuery += "SN:" + machineryInput.serialNumber + " ";
+      
+      // If no specific info was provided, use a general query
+      if (!vectorQuery.trim()) {
+        vectorQuery = "heavy machinery valuation";
+      }
+      
+      console.log("Querying vector store with:", vectorQuery, "Hours/Mileage:", machineryInput.hoursOrMileage);
+      
+      // Create a detailed prompt focusing on hours/mileage and serial number impact for reasoning models
+      const enhancedPrompt = `
+You are a professional machinery appraiser with specialized expertise in heavy equipment valuation.
+
+TASK: Provide a comprehensive valuation for this machinery:
+${machineryInput.make ? `Make: ${machineryInput.make}` : ''}
+${machineryInput.model ? `Model: ${machineryInput.model}` : ''}
+${machineryInput.year ? `Year: ${machineryInput.year}` : ''}
+${machineryInput.type ? `Type: ${machineryInput.type}` : ''}
+${machineryInput.condition ? `Condition: ${machineryInput.condition}` : ''}
+${machineryInput.hoursOrMileage ? `HOURS/MILEAGE: ${machineryInput.hoursOrMileage} (CRITICAL FACTOR)` : ''}
+${machineryInput.serialNumber ? `SERIAL NUMBER: ${machineryInput.serialNumber} (CHECK FOR SPECIAL CONFIGURATIONS)` : ''}
+
+REQUIRED ANALYSIS STEPS:
+1. First search our vector store for information about this specific machine and similar equipment
+2. Gather current market prices from multiple sources when analyzing this machine
+3. For HOURS/MILEAGE:
+   - This is THE MOST CRITICAL valuation factor in most cases
+   - Calculate specific percentage adjustments for high/low hours based on machine type
+   - For each equipment category, apply these guidelines:
+     * Construction: <2,000 hrs = low, 2,000-5,000 = avg, >5,000 = high
+     * Agricultural: <1,500 hrs = low, 1,500-4,000 = avg, >4,000 = high
+     * Trucks: <100K mi = low, 100-250K = avg, >250K = high
+4. Analyze the serial number to identify any special configurations, packages, or rare variants
+5. Find 3-5 comparable machines in the vector store with similar specs
+6. Consider regional market variations, economic conditions, and industry trends
+
+You MUST return ONLY valid, parseable JSON in this exact format:
+${prompt}
+
+Ensure your valuation is based on REAL MARKET DATA and reflects ACCURATE VALUES that would be expected in the marketplace.
+`;
+
+      try {
+        // First attempt: Use the advanced search model with web search capability
+        console.log("Using gpt-4o-mini-search-preview-2025-03-11 model for real-time machinery market data");
+        
+        try {
+          // Use the search model with web search options and high context size for comprehensive data
+          const searchCompletion = await this.client.chat.completions.create({
+            model: SEARCH_MODEL,
+            web_search_options: {
+              search_context_size: SEARCH_CONTEXT_SIZE,
+              user_location: {
+                type: "approximate",
+                approximate: {
+                  country: "US", // Default to US market for machinery valuations
+                }
+              }
+            },
+            messages: [
+              {
+                role: "user",
+                content: `You are an expert machinery appraiser with access to the latest web data about agricultural, construction, and industrial equipment. You must perform the following tasks:
+
+1. FIRST, search for CURRENT market data on ${machineryInput.make || ""} ${machineryInput.model || ""} ${machineryInput.year || ""} ${machineryInput.type || ""} equipment prices
+2. Search for current industry reports on used agricultural and heavy machinery market trends (IronConnect, Machinery Pete, TractorHouse, etc.)
+3. Find market indices for used equipment values and agricultural machinery pricing 
+4. Research regional market factors affecting equipment prices
+5. Gather specific data on how hours/mileage impacts valuation for this class of equipment
+6. Identify the impact of ${machineryInput.condition || "various conditions"} on current market values
+
+Use all this web search data COMBINED with your knowledge of machinery valuations to create an accurate market assessment.
+Format your entire response as a valid JSON object exactly as specified.
+
+${enhancedPrompt}`
+              }
+            ]
+          });
+          
+          console.log("Successfully used search-enabled model for machinery valuation");
+          
+          const content = searchCompletion.choices[0].message.content;
+          
+          if (!content) {
+            throw new Error("No content returned from search-enabled model");
+          }
+          
+          // Process the response content
+          return this.processApiResponse(content, machineryInput);
+        } catch (searchError) {
+          // Log the error but continue to fallback option
+          console.warn("Search-enabled model failed, falling back to reasoning model:", searchError);
+          
+          // Second attempt: Use reasoning model for advanced analytical capability
+          try {
+            console.log("Using standard GPT-4o model for advanced machinery valuation");
+            
+            const reasoningCompletion = await this.client.chat.completions.create({
+              model: REASONING_MODEL,
+              messages: [
+                {
+                  role: "user",
+                  content: `You are an expert in heavy machinery valuation with access to market data for ${machineryInput.make || "various manufacturers"} equipment.
+
+CRITICAL FACTORS IN YOUR ANALYSIS:
+1. Hours/mileage of ${machineryInput.hoursOrMileage || "not provided"} must be accurately reflected in the valuation
+2. Current market reports from industry sources (Equipment Watch, Iron Solutions, auction data)
+3. Regional market conditions and seasonal factors 
+4. Impact of ${machineryInput.condition || "equipment condition"} on resale value
+5. Recent sales data for similar models
+
+For this ${machineryInput.make || ""} ${machineryInput.model || ""} ${machineryInput.year || ""} with ${machineryInput.hoursOrMileage || "unspecified"} hours, provide:
+- Precise valuation range based on comparable machines
+- Detailed value adjustments for hours/mileage impact
+- Market factors affecting this specific equipment category
+- Detailed specifications from manufacturer data
+
+${enhancedPrompt}`
+                }
+              ],
+              max_completion_tokens: 4000 // Allow adequate tokens for reasoning and response
+            });
+            
+            const content = reasoningCompletion.choices[0].message.content;
+            console.log("Successfully used Reasoning Model for machinery valuation");
+            
+            if (!content) {
+              throw new Error("No content returned from reasoning model");
+            }
+            
+            // Process the response from the reasoning model
+            return this.processApiResponse(content, machineryInput);
+          } catch (reasoningError) {
+            // Final fallback: Use standard search model as last resort
+            console.warn("Reasoning model failed, falling back to standard search model:", reasoningError);
+            
+            return this.fallbackToStandardModel(enhancedPrompt, machineryInput);
+          }
+        }
+      } catch (error) {
+        console.error("All API approaches failed, using last resort fallback:", error);
+        return this.fallbackToStandardModel(enhancedPrompt, machineryInput);
+      }
+    } catch (error: any) {
+      console.error("Error analyzing machinery:", error);
+      
+      // Handle common API errors with more specific messages
+      if (error.status === 401) {
+        throw new Error("Authentication error: Please check your OpenAI API key");
+      } else if (error.status === 429) {
+        throw new Error("Rate limit exceeded: Too many requests to the OpenAI API");
+      } else if (error.status === 500) {
+        throw new Error("OpenAI server error: Please try again later");
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+        throw new Error("Network error: Unable to connect to OpenAI API");
+      } else if (error.message.includes('JSON')) {
+        throw new Error("Invalid response: Unable to parse results from the analysis");
+      } else {
+        throw new Error(`Failed to analyze machinery: ${error.message}`);
+      }
+    }
+  }
+  
+  /**
+   * Process response content from any OpenAI API source
+   */
+  private processApiResponse(content: string, machineryInput: any): {
+    machineryData: MachineryData;
+    marketData: MarketData;
+    similarMachines: SimilarMachine[];
+  } {
+    // Extract JSON content in case OpenAI includes any extra text
+    let jsonContent = content;
+    const jsonStartIndex = content.indexOf('{');
+    const jsonEndIndex = content.lastIndexOf('}');
+    
+    if (jsonStartIndex !== -1 && jsonEndIndex !== -1 && jsonEndIndex > jsonStartIndex) {
+      jsonContent = content.substring(jsonStartIndex, jsonEndIndex + 1);
+    }
+    
+    try {
+      const result = JSON.parse(jsonContent);
+      
+      // Validate that the result has the expected structure
+      if (!result.machineryData || !result.marketData || !result.similarMachines) {
+        throw new Error("Response is missing required data structure");
+      }
+      
+      // Validate the response data for consistency and completeness
+      this.validateMachineryValues(result, machineryInput);
+      
+      if (DEBUG_LOGGING) {
+        console.log("FINAL DATA - Hours/mileage after validation:", result.machineryData.hoursOrMileage);
+      }
+      
+      return {
+        machineryData: result.machineryData,
+        marketData: result.marketData,
+        similarMachines: result.similarMachines
+      };
+    } catch (parseError) {
+      console.error("Error parsing OpenAI response:", parseError);
+      console.error("Raw response:", content);
+      throw new Error("Failed to parse the machinery valuation results. The API response was not in the expected format.");
+    }
+  }
+  
+  /**
+   * Fallback to standard model if both Responses API and reasoning models fail
+   */
+  private async fallbackToStandardModel(enhancedPrompt: string, machineryInput: any): Promise<{
+    machineryData: MachineryData;
+    marketData: MarketData;
+    similarMachines: SimilarMachine[];
+  }> {
+    console.log("Using standard chat completions with detailed machinery valuation prompt");
+    
+    const completion = await this.client.chat.completions.create({
+      model: FALLBACK_MODEL, // Use standard fallback model without web search
+      messages: [
+        {
+          role: "user",
+          content: `You are an expert in heavy machinery valuation specializing in agricultural and construction equipment.
+
+IMPORTANT VALUATION FACTORS:
+1. Hours/mileage (${machineryInput.hoursOrMileage || "not provided"}) is THE MOST CRITICAL factor - often more important than age
+2. Serial numbers can indicate special configurations that affect value
+3. Regional market conditions impact pricing significantly
+4. Market reports from industry sources like TractorHouse, Machinery Pete, and auction data
+
+For this ${machineryInput.make || ""} ${machineryInput.model || ""} ${machineryInput.year || ""} in ${machineryInput.condition || "unknown"} condition:
+- You MUST incorporate the exact hours/mileage (${machineryInput.hoursOrMileage || "not provided"}) into your valuation
+- Create realistic valuations based on actual market data
+- Include specific adjustments for hours/mileage impact
+
+${enhancedPrompt}`
+        }
+      ]
+    });
+    
+    // Get content from the completion
+    const content = completion.choices[0].message.content;
+    console.log("Successfully used Chat Completions API as fallback");
+    
+    if (!content) {
+      throw new Error("No content returned from OpenAI");
+    }
+    
+    return this.processApiResponse(content, machineryInput);
+  }
+}
+
+export const openaiService = new OpenAIService();
