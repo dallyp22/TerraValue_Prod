@@ -73,7 +73,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     
     setIsLoadingCSR2(true);
     try {
-      let wkt: string;
+      let wkt: string = '';
       let mergedPolygon: any;
       
       // First priority: Merge all geometries if multiple sections exist
@@ -162,6 +162,11 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
           description: "Exact parcel boundaries unavailable. CSR2 values are estimated based on parcel location and acreage.",
           variant: "default",
         });
+      }
+      
+      // Only proceed if we have a valid WKT
+      if (!wkt) {
+        throw new Error('Unable to determine parcel boundaries');
       }
       
       // Get CSR2 data
