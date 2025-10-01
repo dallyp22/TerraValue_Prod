@@ -42,6 +42,9 @@ interface PropertyFormOverlayProps {
   parcelData?: ParcelData;
 }
 
+// Cache for CSR2 data by parcel number to ensure consistency
+const csr2Cache = new Map<string, any>();
+
 export default function PropertyFormOverlay({ onClose, onValuationCreated, drawnPolygonData, parcelData }: PropertyFormOverlayProps) {
   const { toast } = useToast();
   const [isLoadingCSR2, setIsLoadingCSR2] = useState(false);
@@ -58,6 +61,14 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
 
   const fetchParcelCSR2Data = async () => {
     if (!parcelData) return;
+    
+    // Check cache first
+    const cacheKey = parcelData.parcel_number;
+    if (cacheKey && csr2Cache.has(cacheKey)) {
+      const cachedData = csr2Cache.get(cacheKey);
+      setParcelCSR2Data(cachedData);
+      return;
+    }
     
     setIsLoadingCSR2(true);
     try {
@@ -112,12 +123,19 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       
       if (csr2Data.success) {
         // Use original parcel acres to maintain data accuracy
-        setParcelCSR2Data({
+        const resultData = {
           wkt,
           csr2: csr2Data,
           acres: parcelData.acres, // Use original parcel acres
           originalAcres: parcelData.acres // Keep consistent
-        });
+        };
+        
+        // Cache the result by parcel number
+        if (parcelData.parcel_number) {
+          csr2Cache.set(parcelData.parcel_number, resultData);
+        }
+        
+        setParcelCSR2Data(resultData);
       }
     } catch (error) {
       toast({
