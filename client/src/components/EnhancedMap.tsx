@@ -615,7 +615,6 @@ export default function EnhancedMap({
             geometry: geometry // Include actual polygon geometry
           };
           
-          console.log('Parcel clicked:', parcel);
           onParcelClick(parcel);
           
           // Only show popup if not in drawing mode
