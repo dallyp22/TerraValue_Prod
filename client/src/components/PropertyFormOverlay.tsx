@@ -8,11 +8,38 @@ import { useState, useEffect } from 'react';
 import * as turf from '@turf/turf';
 import type { PropertyForm as PropertyFormData } from '@shared/schema';
 
+interface ParcelData {
+  owner_name: string;
+  address: string;
+  acres: number;
+  coordinates: [number, number];
+  parcel_number: string;
+  parcel_class: string;
+  county: string;
+  geometry?: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  };
+}
+
+interface DrawnPolygonData {
+  wkt: string;
+  acres: number;
+  coordinates: [number, number];
+  csr2?: {
+    mean?: number;
+    min?: number;
+    max?: number;
+    count?: number;
+  };
+  polygon?: any;
+}
+
 interface PropertyFormOverlayProps {
   onClose: () => void;
   onValuationCreated: (valuationId: number) => void;
-  drawnPolygonData?: any;
-  parcelData?: any;
+  drawnPolygonData?: DrawnPolygonData;
+  parcelData?: ParcelData;
 }
 
 export default function PropertyFormOverlay({ onClose, onValuationCreated, drawnPolygonData, parcelData }: PropertyFormOverlayProps) {
