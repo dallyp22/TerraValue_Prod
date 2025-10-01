@@ -68,11 +68,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         // Use actual parcel geometry - this is the accurate approach
         const coords = parcelData.geometry.coordinates[0];
         wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-        console.log('Using actual parcel geometry for CSR2 calculation');
       } else {
         // Fallback to circular buffer approximation if geometry is not available
-        console.warn('Actual parcel geometry not available, using circular approximation');
-        
         // Create a buffer polygon around the clicked point (approximately the parcel area)
         const centerLat = parcelData.coordinates[1];
         const centerLon = parcelData.coordinates[0];
