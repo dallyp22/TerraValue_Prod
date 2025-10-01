@@ -63,61 +63,27 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     try {
       let wkt: string;
       
-      // For Harrison County parcels, use total acreage to ensure consistency
-      // Large parcels are divided into multiple features, so we need a consistent approach
-      if (parcelData.county === 'Harrison County' && parcelData.acres > 0) {
-        // Use a consistent center point based on parcel number hash to ensure repeatability
-        // This ensures consistent CSR2 values for the same parcel regardless of which section is clicked
+      // First priority: Use actual polygon geometry if available
+      if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
+        const coords = parcelData.geometry.coordinates[0];
+        wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
         
-        // Create a deterministic center point based on parcel number
-        // For now, use a fixed known center for consistency (this could be improved with actual parcel centroid data)
-        let centerLat = parcelData.coordinates[1];
-        let centerLon = parcelData.coordinates[0];
-        
-        // For the Kelley parcel specifically, use a consistent center point
-        if (parcelData.parcel_number === '120000688100000') {
-          centerLat = 41.738;  // Approximate center of the full parcel
-          centerLon = -95.664; // Approximate center of the full parcel
-        }
-        
-        const acres = parcelData.acres; // Use total parcel acres (e.g., 245.74 for the Kelley parcel)
-        
-        // Calculate radius for the total parcel area
-        // 1 acre = 4046.86 m²
-        const areaInMeters = acres * 4046.86;
-        const radius = Math.sqrt(areaInMeters / Math.PI);
-        
-        // Create a circular polygon representing the entire parcel
-        const center = turf.point([centerLon, centerLat]);
-        const buffered = turf.buffer(center, radius, { units: 'meters' });
-        if (!buffered || !buffered.geometry) throw new Error('Failed to create buffer');
-        const polygon = turf.polygon(buffered.geometry.coordinates as number[][][]);
-        
-        // Convert to WKT
-        const coords = polygon.geometry.coordinates[0];
-        wkt = `POLYGON((${coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-        
-        
-        // Note to user about approximation for multi-section parcels
-        if (acres > 100) {
+        // Note for large parcels that may have multiple sections
+        if (parcelData.acres > 100) {
           toast({
-            title: "Large Parcel Analysis",
-            description: `Analyzing entire ${Math.round(acres)} acre parcel. CSR2 values represent the average across all sections.`,
+            title: "Analyzing Parcel Section",
+            description: `CSR2 analysis for this ${Math.round(parcelData.acres)} acre section. Note: Large parcels may have multiple sections with varying soil quality.`,
             variant: "default",
           });
         }
-      } else if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
-        // Use actual parcel geometry for non-Harrison County parcels
-        const coords = parcelData.geometry.coordinates[0];
-        wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
       } else {
-        // Fallback to circular buffer approximation if geometry is not available
-        // Create a buffer polygon around the clicked point (approximately the parcel area)
+        // Fallback: Create buffer based on parcel acreage
+        // This is less accurate but ensures we get some CSR2 data
         const centerLat = parcelData.coordinates[1];
         const centerLon = parcelData.coordinates[0];
         const acres = parcelData.acres || 160; // Default to 160 acres if not provided
         
-        // Calculate approximate radius for the given acres (assuming square shape)
+        // Calculate approximate radius for the given acres
         // 1 acre = 4046.86 m²
         const areaInMeters = acres * 4046.86;
         const radius = Math.sqrt(areaInMeters / Math.PI);
@@ -135,7 +101,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         // Notify user that we're using an approximation
         toast({
           title: "Using Approximate Boundaries",
-          description: "Exact parcel boundaries unavailable. CSR2 values are estimated based on parcel acreage.",
+          description: "Exact parcel boundaries unavailable. CSR2 values are estimated based on parcel location and acreage.",
           variant: "default",
         });
       }
