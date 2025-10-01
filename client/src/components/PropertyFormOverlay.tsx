@@ -251,8 +251,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               acreage: drawnPolygonData.acres || 0,
               latitude: drawnPolygonData.coordinates[1],
               longitude: drawnPolygonData.coordinates[0],
-              county: drawnPolygonData.county || '',
-              state: drawnPolygonData.state || 'Iowa',
+              county: 'Harrison', // Default county for drawn polygons
+              state: 'Iowa', // Default state for drawn polygons
               csr2Mean: drawnPolygonData.csr2?.mean,
               csr2Min: drawnPolygonData.csr2?.min,
               csr2Max: drawnPolygonData.csr2?.max,
