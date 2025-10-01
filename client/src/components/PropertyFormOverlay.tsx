@@ -73,110 +73,151 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     
     setIsLoadingCSR2(true);
     try {
-      let wkt: string = '';
-      let mergedPolygon: any;
+      // Collect all polygon geometries (either from allGeometries or single geometry)
+      let polygons: any[] = [];
       
-      // First priority: Merge all geometries if multiple sections exist
-      if (parcelData.allGeometries && parcelData.allGeometries.length > 1) {
-        // Multiple sections detected - merge them all together
-        const polygons = parcelData.allGeometries.map((geom: any) => {
+      if (parcelData.allGeometries && parcelData.allGeometries.length > 0) {
+        // Use all sections if available
+        polygons = parcelData.allGeometries.map((geom: any) => {
           if (geom.type === 'Polygon' && geom.coordinates) {
             return turf.polygon(geom.coordinates);
           }
           return null;
         }).filter(p => p !== null);
-        
-        if (polygons.length > 1) {
-          // Merge all polygons into a single multi-polygon or union
-          mergedPolygon = polygons[0];
-          for (let i = 1; i < polygons.length; i++) {
-            const union = turf.union(mergedPolygon, polygons[i]);
-            if (union) mergedPolygon = union;
-          }
-          
-          // Convert merged polygon to WKT
-          if (mergedPolygon && mergedPolygon.geometry) {
-            const geom = mergedPolygon.geometry;
-            if (geom.type === 'Polygon') {
-              const coords = geom.coordinates[0];
-              wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-            } else if (geom.type === 'MultiPolygon') {
-              // Handle MultiPolygon result from union
-              const polygonWkts = geom.coordinates.map((polygon: number[][][]) => {
-                const coords = polygon[0];
-                return `(${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')})`;
-              });
-              wkt = `MULTIPOLYGON(${polygonWkts.join(', ')})`;
-            }
-          }
-          
-          toast({
-            title: "Analyzing Complete Parcel",
-            description: `Merging ${polygons.length} sections of the ${Math.round(parcelData.acres)} acre parcel for comprehensive CSR2 analysis.`,
-            variant: "default",
-          });
-        } else if (polygons.length === 1) {
-          // Single polygon from allGeometries
-          mergedPolygon = polygons[0];
-          const coords = mergedPolygon.geometry.coordinates[0];
-          wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-        }
       } else if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
         // Single geometry available
-        const coords = parcelData.geometry.coordinates[0];
-        wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+        polygons = [turf.polygon(parcelData.geometry.coordinates)];
+      }
+      
+      // Generate sample points within the parcel boundaries
+      let samplePoints: [number, number][] = [];
+      
+      if (polygons.length > 0) {
+        // Determine number of sample points based on acreage
+        const acres = parcelData.acres || 160;
+        let gridSize: number;
+        if (acres < 40) {
+          gridSize = 3; // 3x3 = 9 points
+        } else if (acres < 160) {
+          gridSize = 4; // 4x4 = 16 points
+        } else {
+          gridSize = 5; // 5x5 = 25 points
+        }
         
-        // Note for large parcels that may have multiple sections
-        if (parcelData.acres > 100 && !parcelData.allGeometries) {
-          toast({
-            title: "Partial Parcel Analysis",
-            description: `CSR2 analysis for one section of this ${Math.round(parcelData.acres)} acre parcel. Complete parcel may have additional sections.`,
-            variant: "default",
-          });
+        // Create a bounding box for all polygons
+        let minLng = Infinity, maxLng = -Infinity;
+        let minLat = Infinity, maxLat = -Infinity;
+        
+        polygons.forEach(polygon => {
+          const bbox = turf.bbox(polygon);
+          minLng = Math.min(minLng, bbox[0]);
+          minLat = Math.min(minLat, bbox[1]);
+          maxLng = Math.max(maxLng, bbox[2]);
+          maxLat = Math.max(maxLat, bbox[3]);
+        });
+        
+        // Generate grid points within bounding box
+        const lngStep = (maxLng - minLng) / (gridSize + 1);
+        const latStep = (maxLat - minLat) / (gridSize + 1);
+        
+        for (let i = 1; i <= gridSize; i++) {
+          for (let j = 1; j <= gridSize; j++) {
+            const lng = minLng + (lngStep * i);
+            const lat = minLat + (latStep * j);
+            const point = turf.point([lng, lat]);
+            
+            // Check if point is inside any of the polygons
+            const isInside = polygons.some(polygon => turf.booleanPointInPolygon(point, polygon));
+            if (isInside) {
+              samplePoints.push([lng, lat]);
+            }
+          }
+        }
+        
+        // If we have very few points, add the center point and corners
+        if (samplePoints.length < 3) {
+          // Add center point
+          const centerLng = (minLng + maxLng) / 2;
+          const centerLat = (minLat + maxLat) / 2;
+          const centerPoint = turf.point([centerLng, centerLat]);
+          if (polygons.some(p => turf.booleanPointInPolygon(centerPoint, p))) {
+            samplePoints.push([centerLng, centerLat]);
+          }
+          
+          // Add clicked point as fallback
+          if (parcelData.coordinates) {
+            samplePoints.push(parcelData.coordinates);
+          }
         }
       } else {
-        // Fallback: Create buffer based on parcel acreage
-        // This is less accurate but ensures we get some CSR2 data
+        // Fallback: Use clicked point and surrounding points
         const centerLat = parcelData.coordinates[1];
         const centerLon = parcelData.coordinates[0];
-        const acres = parcelData.acres || 160; // Default to 160 acres if not provided
+        const acres = parcelData.acres || 160;
         
-        // Calculate approximate radius for the given acres
-        // 1 acre = 4046.86 m²
-        const areaInMeters = acres * 4046.86;
-        const radius = Math.sqrt(areaInMeters / Math.PI);
+        // Calculate approximate spread based on acreage
+        // 1 acre ≈ 63.6m x 63.6m, so for N acres, approximate as square
+        const sideLength = Math.sqrt(acres * 4046.86); // in meters
+        const degreeSpread = sideLength / 111000; // rough conversion to degrees
         
-        // Create a circular polygon
-        const center = turf.point([centerLon, centerLat]);
-        const buffered = turf.buffer(center, radius, { units: 'meters' });
-        if (!buffered || !buffered.geometry) throw new Error('Failed to create buffer');
-        const polygon = turf.polygon(buffered.geometry.coordinates as number[][][]);
-        
-        // Convert to WKT
-        const coords = polygon.geometry.coordinates[0];
-        wkt = `POLYGON((${coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-        
-        // Notify user that we're using an approximation
+        // Create a 3x3 grid around the center
+        for (let i = -1; i <= 1; i++) {
+          for (let j = -1; j <= 1; j++) {
+            const lng = centerLon + (i * degreeSpread / 3);
+            const lat = centerLat + (j * degreeSpread / 3);
+            samplePoints.push([lng, lat]);
+          }
+        }
+      }
+      
+      // Query CSR2 for each sample point
+      const csr2Values: number[] = [];
+      
+      if (samplePoints.length > 0) {
         toast({
-          title: "Using Approximate Boundaries",
-          description: "Exact parcel boundaries unavailable. CSR2 values are estimated based on parcel location and acreage.",
+          title: "Analyzing Soil Quality",
+          description: `Sampling ${samplePoints.length} points across the ${Math.round(parcelData.acres)} acre parcel for comprehensive CSR2 analysis.`,
           variant: "default",
         });
+        
+        // Query each point
+        for (const point of samplePoints) {
+          try {
+            const pointWkt = `POINT(${point[0]} ${point[1]})`;
+            const response = await apiRequest('POST', '/api/csr2/polygon', { wkt: pointWkt });
+            const data = await response.json();
+            
+            if (data.success && data.mean) {
+              csr2Values.push(data.mean);
+            }
+          } catch (error) {
+            // Skip failed points silently
+          }
+        }
       }
       
-      // Only proceed if we have a valid WKT
-      if (!wkt) {
-        throw new Error('Unable to determine parcel boundaries');
+      // Calculate average CSR2
+      let csr2Data: any = {};
+      if (csr2Values.length > 0) {
+        const mean = csr2Values.reduce((sum, val) => sum + val, 0) / csr2Values.length;
+        const min = Math.min(...csr2Values);
+        const max = Math.max(...csr2Values);
+        
+        csr2Data = {
+          success: true,
+          mean: Math.round(mean * 10) / 10,
+          min: Math.round(min),
+          max: Math.round(max),
+          count: csr2Values.length
+        };
+      } else {
+        throw new Error('Unable to calculate CSR2 values');
       }
-      
-      // Get CSR2 data
-      const csr2Response = await apiRequest('POST', '/api/csr2/polygon', { wkt });
-      const csr2Data = await csr2Response.json();
       
       if (csr2Data.success) {
         // Use original parcel acres to maintain data accuracy
         const resultData = {
-          wkt,
+          wkt: `MULTIPOINT(${samplePoints.map(p => `${p[0]} ${p[1]}`).join(', ')})`,
           csr2: csr2Data,
           acres: parcelData.acres, // Use original parcel acres
           originalAcres: parcelData.acres // Keep consistent
