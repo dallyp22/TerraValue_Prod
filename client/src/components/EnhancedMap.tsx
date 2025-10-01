@@ -525,8 +525,8 @@ export default function EnhancedMap({
       // Function to handle Harrison County parcel clicks
       const handleHarrisonParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         if (e.features && e.features.length > 0) {
-          const props = e.features[0].properties;
-          const geometry = e.features[0].geometry;
+          const clickedFeature = e.features[0];
+          const props = clickedFeature.properties;
           
           // Use gisacre field for acres (authentic data from tileset)
           const acres = parseFloat(props.gisacre) || 0;
@@ -535,36 +535,76 @@ export default function EnhancedMap({
           const parcelNumber = props.parcelnumb || props.parcelnu_1 || '';
           if (map.current && parcelNumber) {
             map.current.setFilter('harrison-parcels-selected', ['==', ['get', 'parcelnumb'], parcelNumber]);
-          }
-          
-          // Map Harrison County fields to expected format using actual tileset field names
-          const parcel = {
-            owner_name: props.owner || props.owner2 || props.owner3 || 'Unknown',
-            address: props.address || props.parcelid || 'N/A', 
-            acres: Math.round(acres * 100) / 100, // Round to 2 decimal places
-            coordinates: [e.lngLat.lng, e.lngLat.lat],
-            parcel_number: props.parcelnumb || props.parcelnu_1 || 'N/A',
-            parcel_class: props.class_ || 'N/A',
-            county: 'Harrison County',
-            geometry: geometry // Include actual polygon geometry
-          };
-          
-          // Harrison County parcel successfully clicked
-          onParcelClick(parcel);
-          
-          // Only show popup if not in drawing mode
-          if (!drawModeEnabledRef.current) {
-            const html = `
-              <strong>Owner:</strong> ${parcel.owner_name}<br>
-              <strong>Parcel Number:</strong> ${parcel.parcel_number}<br>
-              <strong>Class:</strong> ${parcel.parcel_class}<br>
-              <strong>County:</strong> Harrison County<br>
-              <small><em>Updated Harrison County Data</em></small>
-            `;
-            new maplibregl.Popup()
-              .setLngLat(e.lngLat)
-              .setHTML(html)
-              .addTo(map.current!);
+            
+            // Query ALL features with the same parcel number to get all sections
+            const allFeatures = map.current.querySourceFeatures('harrison-parcels', {
+              sourceLayer: 'TMV-79tjod',
+              filter: ['==', ['get', 'parcelnumb'], parcelNumber]
+            });
+            
+            // Collect all geometries from all sections
+            const allGeometries = allFeatures.map(f => f.geometry).filter(g => g.type === 'Polygon');
+            
+            // Map Harrison County fields to expected format using actual tileset field names
+            const parcel = {
+              owner_name: props.owner || props.owner2 || props.owner3 || 'Unknown',
+              address: props.address || props.parcelid || 'N/A', 
+              acres: Math.round(acres * 100) / 100, // Round to 2 decimal places
+              coordinates: [e.lngLat.lng, e.lngLat.lat],
+              parcel_number: props.parcelnumb || props.parcelnu_1 || 'N/A',
+              parcel_class: props.class_ || 'N/A',
+              county: 'Harrison County',
+              geometry: clickedFeature.geometry, // Primary geometry (clicked section)
+              allGeometries: allGeometries // All polygon sections for this parcel
+            };
+            
+            // Harrison County parcel successfully clicked
+            onParcelClick(parcel);
+            
+            // Only show popup if not in drawing mode
+            if (!drawModeEnabledRef.current) {
+              const html = `
+                <strong>Owner:</strong> ${parcel.owner_name}<br>
+                <strong>Parcel Number:</strong> ${parcel.parcel_number}<br>
+                <strong>Class:</strong> ${parcel.parcel_class}<br>
+                <strong>County:</strong> Harrison County<br>
+                ${allGeometries.length > 1 ? `<strong>Sections:</strong> ${allGeometries.length}<br>` : ''}
+                <small><em>Updated Harrison County Data</em></small>
+              `;
+              new maplibregl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map.current!);
+            }
+          } else {
+            // Fallback if no parcel number
+            const parcel = {
+              owner_name: props.owner || props.owner2 || props.owner3 || 'Unknown',
+              address: props.address || props.parcelid || 'N/A', 
+              acres: Math.round(acres * 100) / 100, // Round to 2 decimal places
+              coordinates: [e.lngLat.lng, e.lngLat.lat],
+              parcel_number: props.parcelnumb || props.parcelnu_1 || 'N/A',
+              parcel_class: props.class_ || 'N/A',
+              county: 'Harrison County',
+              geometry: clickedFeature.geometry // Include actual polygon geometry
+            };
+            
+            onParcelClick(parcel);
+            
+            // Only show popup if not in drawing mode
+            if (!drawModeEnabledRef.current) {
+              const html = `
+                <strong>Owner:</strong> ${parcel.owner_name}<br>
+                <strong>Parcel Number:</strong> ${parcel.parcel_number}<br>
+                <strong>Class:</strong> ${parcel.parcel_class}<br>
+                <strong>County:</strong> Harrison County<br>
+                <small><em>Updated Harrison County Data</em></small>
+              `;
+              new maplibregl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map.current!);
+            }
           }
         }
       };

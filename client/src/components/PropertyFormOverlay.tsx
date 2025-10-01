@@ -20,6 +20,7 @@ interface ParcelData {
     type: 'Polygon';
     coordinates: number[][][];
   };
+  allGeometries?: any[]; // All polygon sections for multi-section parcels
 }
 
 interface DrawnPolygonData {
@@ -73,17 +74,63 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     setIsLoadingCSR2(true);
     try {
       let wkt: string;
+      let mergedPolygon: any;
       
-      // First priority: Use actual polygon geometry if available
-      if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
+      // First priority: Merge all geometries if multiple sections exist
+      if (parcelData.allGeometries && parcelData.allGeometries.length > 1) {
+        // Multiple sections detected - merge them all together
+        const polygons = parcelData.allGeometries.map((geom: any) => {
+          if (geom.type === 'Polygon' && geom.coordinates) {
+            return turf.polygon(geom.coordinates);
+          }
+          return null;
+        }).filter(p => p !== null);
+        
+        if (polygons.length > 1) {
+          // Merge all polygons into a single multi-polygon or union
+          mergedPolygon = polygons[0];
+          for (let i = 1; i < polygons.length; i++) {
+            const union = turf.union(mergedPolygon, polygons[i]);
+            if (union) mergedPolygon = union;
+          }
+          
+          // Convert merged polygon to WKT
+          if (mergedPolygon && mergedPolygon.geometry) {
+            const geom = mergedPolygon.geometry;
+            if (geom.type === 'Polygon') {
+              const coords = geom.coordinates[0];
+              wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+            } else if (geom.type === 'MultiPolygon') {
+              // Handle MultiPolygon result from union
+              const polygonWkts = geom.coordinates.map((polygon: number[][][]) => {
+                const coords = polygon[0];
+                return `(${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')})`;
+              });
+              wkt = `MULTIPOLYGON(${polygonWkts.join(', ')})`;
+            }
+          }
+          
+          toast({
+            title: "Analyzing Complete Parcel",
+            description: `Merging ${polygons.length} sections of the ${Math.round(parcelData.acres)} acre parcel for comprehensive CSR2 analysis.`,
+            variant: "default",
+          });
+        } else if (polygons.length === 1) {
+          // Single polygon from allGeometries
+          mergedPolygon = polygons[0];
+          const coords = mergedPolygon.geometry.coordinates[0];
+          wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+        }
+      } else if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
+        // Single geometry available
         const coords = parcelData.geometry.coordinates[0];
         wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
         
         // Note for large parcels that may have multiple sections
-        if (parcelData.acres > 100) {
+        if (parcelData.acres > 100 && !parcelData.allGeometries) {
           toast({
-            title: "Analyzing Parcel Section",
-            description: `CSR2 analysis for this ${Math.round(parcelData.acres)} acre section. Note: Large parcels may have multiple sections with varying soil quality.`,
+            title: "Partial Parcel Analysis",
+            description: `CSR2 analysis for one section of this ${Math.round(parcelData.acres)} acre parcel. Complete parcel may have additional sections.`,
             variant: "default",
           });
         }
