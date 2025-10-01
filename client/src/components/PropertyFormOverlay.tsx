@@ -34,29 +34,45 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     
     setIsLoadingCSR2(true);
     try {
-      // For Option 1, we need to get the parcel geometry from the ArcGIS service
-      // Since we have the parcel clicked data, we can create a polygon from the center point
-      // In a real implementation, we'd need the actual parcel boundary
+      let wkt: string;
       
-      // Create a buffer polygon around the clicked point (approximately the parcel area)
-      const centerLat = parcelData.coordinates[1];
-      const centerLon = parcelData.coordinates[0];
-      const acres = parcelData.acres || 160; // Default to 160 acres if not provided
-      
-      // Calculate approximate radius for the given acres (assuming square shape)
-      // 1 acre = 4046.86 m²
-      const areaInMeters = acres * 4046.86;
-      const radius = Math.sqrt(areaInMeters / Math.PI);
-      
-      // Create a circular polygon
-      const center = turf.point([centerLon, centerLat]);
-      const buffered = turf.buffer(center, radius, { units: 'meters' });
-      if (!buffered || !buffered.geometry) throw new Error('Failed to create buffer');
-      const polygon = turf.polygon(buffered.geometry.coordinates as number[][][]);
-      
-      // Convert to WKT
-      const coords = polygon.geometry.coordinates[0];
-      const wkt = `POLYGON((${coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+      // Check if we have actual parcel geometry
+      if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
+        // Use actual parcel geometry - this is the accurate approach
+        const coords = parcelData.geometry.coordinates[0];
+        wkt = `POLYGON((${coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+        console.log('Using actual parcel geometry for CSR2 calculation');
+      } else {
+        // Fallback to circular buffer approximation if geometry is not available
+        console.warn('Actual parcel geometry not available, using circular approximation');
+        
+        // Create a buffer polygon around the clicked point (approximately the parcel area)
+        const centerLat = parcelData.coordinates[1];
+        const centerLon = parcelData.coordinates[0];
+        const acres = parcelData.acres || 160; // Default to 160 acres if not provided
+        
+        // Calculate approximate radius for the given acres (assuming square shape)
+        // 1 acre = 4046.86 m²
+        const areaInMeters = acres * 4046.86;
+        const radius = Math.sqrt(areaInMeters / Math.PI);
+        
+        // Create a circular polygon
+        const center = turf.point([centerLon, centerLat]);
+        const buffered = turf.buffer(center, radius, { units: 'meters' });
+        if (!buffered || !buffered.geometry) throw new Error('Failed to create buffer');
+        const polygon = turf.polygon(buffered.geometry.coordinates as number[][][]);
+        
+        // Convert to WKT
+        const coords = polygon.geometry.coordinates[0];
+        wkt = `POLYGON((${coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ')}))`;
+        
+        // Notify user that we're using an approximation
+        toast({
+          title: "Using Approximate Boundaries",
+          description: "Exact parcel boundaries unavailable. CSR2 values are estimated based on parcel acreage.",
+          variant: "default",
+        });
+      }
       
       // Get CSR2 data
       const csr2Response = await apiRequest('POST', '/api/csr2/polygon', { wkt });
