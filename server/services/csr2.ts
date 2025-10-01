@@ -143,15 +143,41 @@ export async function csr2PolygonMean(wkt: string): Promise<number | null> {
 
 /**
  * Fetch CSR2 statistics for a given Well-Known Text geometry
- * Samples multiple points within the polygon to get min/max/mean statistics
+ * Handles both POINT and POLYGON formats
  */
 export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
   return limit(async () => {
     try {
-      // Extract coordinates from WKT polygon
+      // Check if WKT is a POINT
+      const pointMatch = /POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt);
+      if (pointMatch) {
+        // Handle single point query
+        const x = parseFloat(pointMatch[1]);
+        const y = parseFloat(pointMatch[2]);
+        
+        const value = await csr2PointValue(x, y);
+        
+        if (value === null) {
+          return {
+            mean: null,
+            min: null,
+            max: null,
+            count: 0
+          };
+        }
+        
+        return {
+          mean: Number(value.toFixed(1)),
+          min: Math.round(value),
+          max: Math.round(value),
+          count: 1
+        };
+      }
+      
+      // Handle POLYGON format (existing code)
       const coordsMatch = /POLYGON\(\((.*)\)\)/.exec(wkt);
       if (!coordsMatch) {
-        throw new Error('Invalid WKT polygon format');
+        throw new Error('Invalid WKT format - must be POINT or POLYGON');
       }
 
       const coords = coordsMatch[1];
