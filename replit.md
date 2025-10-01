@@ -7,7 +7,9 @@ TerraValue is an AI-powered web application designed for agricultural land valua
 Preferred communication style: Simple, everyday language.
 
 ## Recent Updates (October 2025)
-- Fixed CSR2 rating inconsistency: System now uses actual parcel polygon boundaries for soil analysis instead of circular approximations, ensuring consistent CSR2 values when selecting the same parcel multiple times.
+- Fixed CSR2 rating accuracy issue: System now queries and merges all polygon sections for multi-section parcels (like the Kelley parcel #120000688100000), providing comprehensive CSR2 analysis for the entire parcel area rather than individual sections.
+- Implemented CSR2 caching by parcel number for consistency across multiple clicks.
+- Enhanced parcel click handling to detect multi-section parcels and show section count in popup.
 
 ## System Architecture
 
