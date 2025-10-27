@@ -4,3 +4,24 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.*.local
+
+# Local config and cache
+.config/
+.local/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+Thumbs.db

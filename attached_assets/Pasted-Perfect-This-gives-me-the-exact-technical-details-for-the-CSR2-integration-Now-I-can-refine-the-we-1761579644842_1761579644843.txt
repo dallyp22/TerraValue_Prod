@@ -1,0 +1,435 @@
+Perfect! This gives me the exact technical details for the CSR2 integration. Now I can refine the webapp architecture to match your proven TerraValue approach.
+
+## Updated Architecture with TerraValue-Style CSR2 Integration
+
+### 1. CSR2 Data Setup
+
+**File Storage:**
+```
+/server/data/
+├── csr2_iowa.tif              # Primary CSR2 raster (Iowa State University)
+├── csr2_iowa_stats.tif        # Statistical overlay
+└── boundary_data/
+    └── iowa_counties.geojson  # For county-based filtering
+```
+
+**Backend Dependencies:**
+```json
+{
+  "dependencies": {
+    "geotiff": "^2.0.7",
+    "proj4": "^2.9.0",
+    "@turf/turf": "^6.5.0"
+  }
+}
+```
+
+### 2. CSR2 Query Engine
+
+```javascript
+// csr2Service.js
+const GeoTIFF = require('geotiff');
+const path = require('path');
+
+class CSR2Service {
+  constructor() {
+    this.tiffPath = path.join(__dirname, '../data/csr2_iowa.tif');
+    this.statsPath = path.join(__dirname, '../data/csr2_iowa_stats.tif');
+    this.cache = new Map();
+    this.tiffImage = null;
+    this.statsImage = null;
+  }
+
+  async initialize() {
+    // Load GeoTIFF files once at startup
+    const tiff = await GeoTIFF.fromFile(this.tiffPath);
+    this.tiffImage = await tiff.getImage();
+    
+    const statsTiff = await GeoTIFF.fromFile(this.statsPath);
+    this.statsImage = await statsTiff.getImage();
+    
+    console.log('CSR2 GeoTIFF files loaded successfully');
+  }
+
+  // Generate sampling grid based on parcel size
+  generateSamplingGrid(bounds, acres) {
+    const { minLng, minLat, maxLng, maxLat } = bounds;
+    
+    // Determine grid density based on acreage
+    let gridSize;
+    if (acres < 40) {
+      gridSize = 3; // 9 points
+    } else if (acres < 160) {
+      gridSize = 4; // 16 points
+    } else {
+      gridSize = 5; // 25 points
+    }
+    
+    const points = [];
+    const lngStep = (maxLng - minLng) / (gridSize + 1);
+    const latStep = (maxLat - minLat) / (gridSize + 1);
+    
+    for (let i = 1; i <= gridSize; i++) {
+      for (let j = 1; j <= gridSize; j++) {
+        points.push({
+          lng: minLng + (lngStep * i),
+          lat: minLat + (latStep * j)
+        });
+      }
+    }
+    
+    return points;
+  }
+
+  // Convert geographic coordinates to pixel coordinates
+  geoToPixel(lng, lat) {
+    const bbox = this.tiffImage.getBoundingBox();
+    const [width, height] = [this.tiffImage.getWidth(), this.tiffImage.getHeight()];
+    
+    const pixelX = Math.floor(((lng - bbox[0]) / (bbox[2] - bbox[0])) * width);
+    const pixelY = Math.floor(((bbox[3] - lat) / (bbox[3] - bbox[1])) * height);
+    
+    return { x: pixelX, y: pixelY };
+  }
+
+  // Query CSR2 value at a single point
+  async getCSR2AtPoint(lng, lat) {
+    try {
+      const { x, y } = this.geoToPixel(lng, lat);
+      
+      // Read the pixel window (1x1 at the specific point)
+      const window = [x, y, x + 1, y + 1];
+      const rasterData = await this.tiffImage.readRasters({ window });
+      
+      // Get the CSR2 value (first band)
+      const csr2Value = rasterData[0][0];
+      
+      // Validate range (CSR2 is 0-100)
+      if (csr2Value < 0 || csr2Value > 100) {
+        return null;
+      }
+      
+      return csr2Value;
+    } catch (error) {
+      console.error('Error reading CSR2 at point:', error);
+      return null;
+    }
+  }
+
+  // Main method: Get CSR2 statistics for a parcel
+  async getCSR2ForParcel(bounds, acres, parcelId = null) {
+    // Check cache first
+    if (parcelId && this.cache.has(parcelId)) {
+      return this.cache.get(parcelId);
+    }
+    
+    // Generate sampling grid
+    const samplePoints = this.generateSamplingGrid(bounds, acres);
+    
+    // Query CSR2 at each point
+    const csr2Values = [];
+    for (const point of samplePoints) {
+      const value = await this.getCSR2AtPoint(point.lng, point.lat);
+      if (value !== null) {
+        csr2Values.push(value);
+      }
+    }
+    
+    if (csr2Values.length === 0) {
+      return null;
+    }
+    
+    // Calculate statistics
+    const result = {
+      mean: csr2Values.reduce((a, b) => a + b, 0) / csr2Values.length,
+      min: Math.min(...csr2Values),
+      max: Math.max(...csr2Values),
+      samples: csr2Values.length,
+      values: csr2Values
+    };
+    
+    // Cache the result
+    if (parcelId) {
+      this.cache.set(parcelId, result);
+    }
+    
+    return result;
+  }
+
+  // Get CSR2 for a polygon (for drawn areas)
+  async getCSR2ForPolygon(coordinates, acres) {
+    const turf = require('@turf/turf');
+    const polygon = turf.polygon([coordinates]);
+    const bbox = turf.bbox(polygon);
+    
+    const bounds = {
+      minLng: bbox[0],
+      minLat: bbox[1],
+      maxLng: bbox[2],
+      maxLat: bbox[3]
+    };
+    
+    return await this.getCSR2ForParcel(bounds, acres);
+  }
+}
+
+// Initialize singleton
+const csr2Service = new CSR2Service();
+module.exports = csr2Service;
+```
+
+### 3. Enhanced Scraping Pipeline with CSR2
+
+```javascript
+// auctionProcessor.js
+const csr2Service = require('./csr2Service');
+
+async function processAuctionListing(scrapedData) {
+  // 1. Extract basic info from Firecrawl result
+  const listing = await extractListingDetails(scrapedData);
+  
+  // 2. Geocode the property
+  const location = await geocodeAddress(listing.address);
+  
+  // 3. Get parcel boundaries (if available from auction site)
+  const parcelBounds = await getParcelBoundaries(location.lat, location.lng, listing.acres);
+  
+  // 4. Get CSR2 data
+  const csr2Data = await csr2Service.getCSR2ForParcel(
+    parcelBounds,
+    listing.acres,
+    listing.parcelId
+  );
+  
+  // 5. Calculate valuation
+  const valuation = calculateLandValue(
+    listing.acres,
+    csr2Data.mean,
+    location.county,
+    listing.propertyType
+  );
+  
+  return {
+    ...listing,
+    location: {
+      lat: location.lat,
+      lng: location.lng,
+      county: location.county,
+      state: location.state
+    },
+    csr2: {
+      mean: csr2Data.mean,
+      min: csr2Data.min,
+      max: csr2Data.max,
+      confidence: calculateCSR2Confidence(csr2Data)
+    },
+    valuation: {
+      estimatedValue: valuation.totalValue,
+      valuePerAcre: valuation.perAcre,
+      methodology: 'TerraValue',
+      confidence: valuation.confidence
+    }
+  };
+}
+
+function calculateCSR2Confidence(csr2Data) {
+  // High confidence when samples are consistent
+  const range = csr2Data.max - csr2Data.min;
+  if (range < 10) return 'high';
+  if (range < 20) return 'medium';
+  return 'low';
+}
+```
+
+### 4. Valuation Formula Integration
+
+```javascript
+// valuationEngine.js
+function calculateLandValue(acres, avgCSR2, county, propertyType) {
+  // Base your formula on TerraValue's proven methodology
+  
+  // Step 1: CSR2-based base value
+  const baseMultiplier = getBaseMultiplier(county); // e.g., $100-150 per CSR2 point
+  const baseValue = avgCSR2 * baseMultiplier;
+  
+  // Step 2: County adjustments (market factors)
+  const countyAdjustments = {
+    'Story': 1.15,      // High demand near Ames
+    'Polk': 1.20,       // Des Moines metro premium
+    'Dallas': 1.18,     // Growth corridor
+    'Warren': 1.12,
+    'default': 1.0
+  };
+  const countyFactor = countyAdjustments[county] || countyAdjustments.default;
+  
+  // Step 3: Property type adjustments
+  const typeAdjustments = {
+    'tillable': 1.0,
+    'pasture': 0.70,
+    'mixed': 0.85,
+    'timber': 0.60,
+    'recreational': 0.75
+  };
+  const typeFactor = typeAdjustments[propertyType] || 0.85;
+  
+  // Step 4: Size adjustments (per-acre value changes with size)
+  let sizeFactor = 1.0;
+  if (acres < 40) sizeFactor = 0.95;        // Small parcel discount
+  else if (acres > 320) sizeFactor = 1.05;  // Large farm premium
+  
+  // Final calculation
+  const adjustedValuePerAcre = baseValue * countyFactor * typeFactor * sizeFactor;
+  const totalValue = adjustedValuePerAcre * acres;
+  
+  // Confidence scoring
+  const confidence = calculateValuationConfidence(avgCSR2, acres, propertyType);
+  
+  return {
+    totalValue: Math.round(totalValue),
+    perAcre: Math.round(adjustedValuePerAcre),
+    confidence: confidence,
+    breakdown: {
+      baseValuePerAcre: Math.round(baseValue),
+      countyFactor: countyFactor,
+      typeFactor: typeFactor,
+      sizeFactor: sizeFactor
+    }
+  };
+}
+
+function calculateValuationConfidence(csr2, acres, propertyType) {
+  let score = 100;
+  
+  // Reduce confidence for edge cases
+  if (csr2 < 20 || csr2 > 95) score -= 15;  // Extreme CSR2 values
+  if (acres < 10) score -= 20;               // Very small parcels
+  if (acres > 1000) score -= 10;             // Very large parcels
+  if (propertyType === 'mixed') score -= 10; // Mixed use harder to value
+  
+  if (score >= 85) return 'high';
+  if (score >= 70) return 'medium';
+  return 'low';
+}
+
+function getBaseMultiplier(county) {
+  // This should be updated periodically based on market data
+  // You could pull this from recent sales data or set manually
+  const countyMultipliers = {
+    'Story': 140,
+    'Polk': 145,
+    'Dallas': 142,
+    'Warren': 135,
+    'default': 125
+  };
+  
+  return countyMultipliers[county] || countyMultipliers.default;
+}
+
+module.exports = { calculateLandValue };
+```
+
+### 5. API Endpoint with CSR2 Integration
+
+```javascript
+// routes/auctions.js
+const express = require('express');
+const router = express.Router();
+const csr2Service = require('../services/csr2Service');
+
+// Get auction details with live CSR2 calculation
+router.get('/auctions/:id', async (req, res) => {
+  const auction = await db.getAuction(req.params.id);
+  
+  // Recalculate CSR2 if requested (for updates)
+  if (req.query.refreshCSR2 === 'true') {
+    const bounds = await getParcelBounds(auction.location.lat, auction.location.lng);
+    const csr2Data = await csr2Service.getCSR2ForParcel(bounds, auction.acres);
+    
+    auction.csr2 = csr2Data;
+    auction.valuation = calculateLandValue(
+      auction.acres,
+      csr2Data.mean,
+      auction.location.county,
+      auction.propertyType
+    );
+    
+    // Update database
+    await db.updateAuction(auction.id, { csr2: csr2Data, valuation: auction.valuation });
+  }
+  
+  res.json(auction);
+});
+
+// Calculate CSR2 for user-drawn polygon
+router.post('/calculate-csr2', async (req, res) => {
+  const { coordinates, acres } = req.body;
+  
+  const csr2Data = await csr2Service.getCSR2ForPolygon(coordinates, acres);
+  const valuation = calculateLandValue(acres, csr2Data.mean, req.body.county, req.body.propertyType);
+  
+  res.json({
+    csr2: csr2Data,
+    valuation: valuation
+  });
+});
+
+module.exports = router;
+```
+
+### 6. Enhanced Map Popup with CSR2 Details
+
+```jsx
+<Popup>
+  <div style={{ minWidth: '300px' }}>
+    <h3>{auction.acres} Acres - {auction.city}, IA</h3>
+    
+    <div style={{ backgroundColor: '#f0f9ff', padding: '10px', borderRadius: '5px', margin: '10px 0' }}>
+      <h4>Soil Quality (CSR2)</h4>
+      <div style={{ fontSize: '24px', fontWeight: 'bold', color: getCSR2Color(auction.csr2.mean) }}>
+        {auction.csr2.mean.toFixed(1)}
+      </div>
+      <div style={{ fontSize: '12px', color: '#666' }}>
+        Range: {auction.csr2.min} - {auction.csr2.max}
+        <br/>
+        Confidence: {auction.csr2.confidence}
+      </div>
+    </div>
+    
+    <div style={{ backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '5px' }}>
+      <h4>Estimated Value</h4>
+      <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+        ${auction.valuation.estimatedValue.toLocaleString()}
+      </div>
+      <div style={{ fontSize: '14px' }}>
+        ${auction.valuation.valuePerAcre.toLocaleString()}/acre
+      </div>
+      <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+        {auction.valuation.confidence} confidence • TerraValue methodology
+      </div>
+    </div>
+    
+    <div style={{ marginTop: '10px' }}>
+      <strong>Auction Date:</strong> {formatDate(auction.auctionDate)}
+      <br/>
+      <strong>Type:</strong> {auction.propertyType}
+    </div>
+    
+    <a href={auction.listingUrl} target="_blank" 
+       style={{ display: 'block', marginTop: '10px', textAlign: 'center', 
+                backgroundColor: '#2563eb', color: 'white', padding: '8px', 
+                borderRadius: '5px', textDecoration: 'none' }}>
+      View Full Listing
+    </a>
+  </div>
+</Popup>
+```
+
+## Key Advantages of This Approach
+
+1. **Proven Methodology** - Uses the exact TerraValue point-sampling approach you've already validated
+2. **Fast & Reliable** - Local GeoTIFF queries are sub-second, no API dependencies
+3. **Accurate Valuations** - CSR2-based pricing gives real competitive intelligence
+4. **Scalable** - Can handle thousands of parcels with cached results
+5. **Expandable** - Easy to add more states as you acquire GeoTIFF data
+
+Would you like me to create a starter codebase for this, or focus on any specific component like the Firecrawl integration for those specific auction sites?

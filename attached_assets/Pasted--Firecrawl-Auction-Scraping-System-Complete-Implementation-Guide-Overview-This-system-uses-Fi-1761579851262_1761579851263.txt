@@ -1,0 +1,1396 @@
+# Firecrawl Auction Scraping System - Complete Implementation Guide
+
+## Overview
+This system uses Firecrawl to scrape land auction listings from multiple sources, with a flexible architecture to easily add new auction sites. The scraper extracts property details, normalizes data, and stores it for the mapping application.
+
+## Architecture
+
+```
+/auction-scraper/
+├── src/
+│   ├── config/
+│   │   ├── firecrawl.config.js      # Firecrawl API configuration
+│   │   └── sources.config.js         # Auction site configurations
+│   ├── scrapers/
+│   │   ├── BaseScraper.js            # Base scraper class
+│   │   ├── FarmersNationalScraper.js # Site-specific scrapers
+│   │   ├── MidwestAgScraper.js
+│   │   └── index.js                  # Scraper registry
+│   ├── parsers/
+│   │   ├── LLMParser.js              # AI-powered data extraction
+│   │   └── schemas.js                # Data validation schemas
+│   ├── services/
+│   │   ├── FirecrawlService.js       # Firecrawl wrapper
+│   │   ├── StorageService.js         # Database operations
+│   │   └── QueueService.js           # Job queue management
+│   ├── utils/
+│   │   ├── validators.js             # Data validation
+│   │   ├── normalizers.js            # Data normalization
+│   │   └── logger.js                 # Logging utility
+│   └── index.js                      # Main orchestrator
+├── scripts/
+│   ├── run-scraper.js                # Manual scrape trigger
+│   ├── test-source.js                # Test individual sources
+│   └── add-source.js                 # CLI tool to add sources
+├── .env.example
+├── package.json
+└── README.md
+```
+
+## Step 1: Project Setup
+
+### package.json
+```json
+{
+  "name": "auction-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "scrape": "node scripts/run-scraper.js",
+    "scrape:source": "node scripts/test-source.js",
+    "add:source": "node scripts/add-source.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@mendable/firecrawl-js": "^1.0.0",
+    "@anthropic-ai/sdk": "^0.27.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8",
+    "bull": "^4.12.0",
+    "ioredis": "^5.3.2",
+    "postgres": "^3.4.4",
+    "winston": "^3.11.0",
+    "date-fns": "^3.0.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
+```
+
+### .env.example
+```env
+# Firecrawl API
+FIRECRAWL_API_KEY=your_firecrawl_api_key_here
+
+# Anthropic API (for LLM parsing)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/auctions
+
+# Redis (for job queue)
+REDIS_URL=redis://localhost:6379
+
+# Scraping Configuration
+SCRAPE_INTERVAL_HOURS=24
+MAX_CONCURRENT_SCRAPES=3
+RETRY_ATTEMPTS=3
+RETRY_DELAY_MS=5000
+
+# Logging
+LOG_LEVEL=info
+```
+
+## Step 2: Core Configuration Files
+
+### src/config/sources.config.js
+```javascript
+/**
+ * Auction Source Configurations
+ * 
+ * Each source defines how to scrape that specific auction site.
+ * 
+ * Fields:
+ * - id: Unique identifier for the source
+ * - name: Display name
+ * - baseUrl: Main website URL
+ * - listingsUrl: URL to auction listings page
+ * - scrapeType: 'crawl' (multi-page) or 'scrape' (single page)
+ * - crawlConfig: Firecrawl crawl options
+ * - scrapeConfig: Firecrawl scrape options
+ * - parserHints: Guidance for LLM parser
+ * - enabled: Whether to include in scraping runs
+ */
+
+export const auctionSources = [
+  {
+    id: 'farmers-national',
+    name: "Farmers National Company",
+    baseUrl: "https://farmersnational.com",
+    listingsUrl: "https://farmersnational.com/property-search",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 50,
+      maxDepth: 2,
+      allowBackwardLinks: false,
+      includePaths: ['/property/', '/auction/'],
+      excludePaths: ['/about', '/contact', '/blog'],
+      scrapeOptions: {
+        formats: ['markdown', 'html'],
+        onlyMainContent: true,
+        waitFor: 2000
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY', 'MMMM DD, YYYY'],
+      acresPatterns: ['acres', 'ac.', 'total acres'],
+      pricePatterns: ['$', 'price', 'asking'],
+      addressPatterns: ['located', 'address', 'property location']
+    },
+    enabled: true
+  },
+  
+  {
+    id: 'midwest-ag-services',
+    name: "Midwest Land & Home",
+    baseUrl: "https://midwestagservices.com",
+    listingsUrl: "https://midwestagservices.com/auctions",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 30,
+      maxDepth: 2,
+      includePaths: ['/auctions/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres', 'ac'],
+      addressPatterns: ['location:', 'address:']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'iowa-land-company',
+    name: "Iowa Land Company",
+    baseUrl: "https://iowalandcompany.com",
+    listingsUrl: "https://iowalandcompany.com/properties",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 40,
+      maxDepth: 2,
+      includePaths: ['/properties/', '/auction/'],
+      scrapeOptions: {
+        formats: ['markdown', 'html'],
+        onlyMainContent: true,
+        waitFor: 1500
+      }
+    },
+    parserHints: {
+      dateFormats: ['MMMM DD, YYYY', 'MM/DD/YYYY'],
+      acresPatterns: ['acres', 'total acres'],
+      addressPatterns: ['located near', 'property address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'peoples-company',
+    name: "Peoples Company",
+    baseUrl: "https://peoplescompany.com",
+    listingsUrl: "https://peoplescompany.com/land-for-sale",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 50,
+      maxDepth: 2,
+      includePaths: ['/land-for-sale/', '/properties/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true,
+        waitFor: 2000
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY', 'MMMM DD, YYYY'],
+      acresPatterns: ['total acres:', 'acres:'],
+      addressPatterns: ['location', 'county']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'highpoint-land',
+    name: "HighPoint Land Company",
+    baseUrl: "https://www.highpointlandcompany.com",
+    listingsUrl: "https://www.highpointlandcompany.com/properties",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 30,
+      maxDepth: 2,
+      includePaths: ['/properties/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres'],
+      addressPatterns: ['located in', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'zomer-company',
+    name: "Zomer Company",
+    baseUrl: "https://zomercompany.com",
+    listingsUrl: "https://zomercompany.com/listings",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 25,
+      maxDepth: 2,
+      includePaths: ['/listings/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres', 'total land'],
+      addressPatterns: ['location', 'property address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'land-search',
+    name: "Land Search",
+    baseUrl: "https://landsearch.com",
+    listingsUrl: "https://landsearch.com/properties/iowa",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 100,
+      maxDepth: 2,
+      includePaths: ['/properties/iowa/'],
+      excludePaths: ['/properties/iowa/residential'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY', 'YYYY-MM-DD'],
+      acresPatterns: ['acres', 'size:'],
+      addressPatterns: ['address', 'county']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'dream-dirt',
+    name: "DreamDirt",
+    baseUrl: "https://dreamdirt.com",
+    listingsUrl: "https://dreamdirt.com/search/iowa",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 50,
+      maxDepth: 2,
+      includePaths: ['/listing/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true,
+        waitFor: 2000
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres'],
+      addressPatterns: ['location', 'county']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'land-watch',
+    name: "LandWatch",
+    baseUrl: "https://landwatch.com",
+    listingsUrl: "https://landwatch.com/iowa-land-for-sale",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 100,
+      maxDepth: 2,
+      includePaths: ['/iowa-land-for-sale/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres', 'lot size'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'steffes-group',
+    name: "Steffes Group",
+    baseUrl: "https://steffes-website-production.azurewebsites.net",
+    listingsUrl: "https://steffes-website-production.azurewebsites.net/auctions",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 40,
+      maxDepth: 2,
+      includePaths: ['/auctions/', '/auction/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true,
+        waitFor: 2500
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY', 'MMMM DD, YYYY'],
+      acresPatterns: ['acres', 'total'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'mccall-auctions',
+    name: "McCall Auctions",
+    baseUrl: "https://www.mccallauctions.com",
+    listingsUrl: "https://www.mccallauctions.com/mccall-listings?cat=17",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 30,
+      maxDepth: 2,
+      includePaths: ['/mccall-listings', '/listing/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres'],
+      addressPatterns: ['location', 'sale location']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'midwest-land-mgmt',
+    name: "Midwest Land Management",
+    baseUrl: "https://www.midwestlandmanagement.com",
+    listingsUrl: "https://www.midwestlandmanagement.com/",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 25,
+      maxDepth: 2,
+      includePaths: ['/property/', '/listing/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres', 'acreage'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'randy-pryor',
+    name: "Randy Pryor Real Estate",
+    baseUrl: "https://randypryorrealestate.com",
+    listingsUrl: "https://randypryorrealestate.com/farm-land-auctions/",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 20,
+      maxDepth: 2,
+      includePaths: ['/farm-land-auctions/', '/property/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY', 'MMMM DD, YYYY'],
+      acresPatterns: ['acres', 'total acres'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'jim-schaben',
+    name: "Jim Schaben Real Estate",
+    baseUrl: "https://jimschabenrealestate.com",
+    listingsUrl: "https://jimschabenrealestate.com/land-listings",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 25,
+      maxDepth: 2,
+      includePaths: ['/land-listings'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },
+
+  {
+    id: 'denison-livestock',
+    name: "Denison Livestock",
+    baseUrl: "https://www.denisonlivestock.com",
+    listingsUrl: "https://www.denisonlivestock.com/",
+    scrapeType: 'crawl',
+    crawlConfig: {
+      limit: 20,
+      maxDepth: 2,
+      includePaths: ['/auction/', '/sale/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres', 'land'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  }
+];
+
+// Helper to get enabled sources
+export function getEnabledSources() {
+  return auctionSources.filter(source => source.enabled);
+}
+
+// Helper to get source by ID
+export function getSourceById(id) {
+  return auctionSources.find(source => source.id === id);
+}
+
+// Helper to get all source IDs
+export function getAllSourceIds() {
+  return auctionSources.map(source => source.id);
+}
+```
+
+### src/config/firecrawl.config.js
+```javascript
+export const firecrawlConfig = {
+  apiKey: process.env.FIRECRAWL_API_KEY,
+  
+  // Default scrape options (can be overridden per source)
+  defaultScrapeOptions: {
+    formats: ['markdown', 'html'],
+    onlyMainContent: true,
+    waitFor: 1000,
+    timeout: 30000
+  },
+  
+  // Default crawl options
+  defaultCrawlOptions: {
+    limit: 50,
+    maxDepth: 2,
+    allowBackwardLinks: false,
+    scrapeOptions: {
+      formats: ['markdown'],
+      onlyMainContent: true
+    }
+  },
+  
+  // Rate limiting
+  rateLimits: {
+    requestsPerMinute: 60,
+    concurrentRequests: 3
+  }
+};
+```
+
+## Step 3: Core Services
+
+### src/services/FirecrawlService.js
+```javascript
+import FirecrawlApp from '@mendable/firecrawl-js';
+import { firecrawlConfig } from '../config/firecrawl.config.js';
+import logger from '../utils/logger.js';
+
+class FirecrawlService {
+  constructor() {
+    this.client = new FirecrawlApp({ apiKey: firecrawlConfig.apiKey });
+    this.requestQueue = [];
+    this.isProcessing = false;
+  }
+
+  /**
+   * Scrape a single URL
+   */
+  async scrapeUrl(url, options = {}) {
+    try {
+      logger.info(`Scraping URL: ${url}`);
+      
+      const mergedOptions = {
+        ...firecrawlConfig.defaultScrapeOptions,
+        ...options
+      };
+
+      const result = await this.client.scrapeUrl(url, mergedOptions);
+      
+      logger.info(`Successfully scraped: ${url}`);
+      return result;
+      
+    } catch (error) {
+      logger.error(`Error scraping ${url}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Crawl a website starting from a URL
+   */
+  async crawlUrl(url, options = {}) {
+    try {
+      logger.info(`Starting crawl from: ${url}`);
+      
+      const mergedOptions = {
+        ...firecrawlConfig.defaultCrawlOptions,
+        ...options
+      };
+
+      const result = await this.client.crawlUrl(url, mergedOptions);
+      
+      logger.info(`Crawl completed for ${url}. Found ${result.data?.length || 0} pages`);
+      return result;
+      
+    } catch (error) {
+      logger.error(`Error crawling ${url}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Crawl with async job monitoring (for large crawls)
+   */
+  async crawlUrlAsync(url, options = {}) {
+    try {
+      logger.info(`Starting async crawl from: ${url}`);
+      
+      const mergedOptions = {
+        ...firecrawlConfig.defaultCrawlOptions,
+        ...options
+      };
+
+      // Start the crawl
+      const crawlResponse = await this.client.asyncCrawlUrl(url, mergedOptions);
+      const jobId = crawlResponse.jobId;
+      
+      logger.info(`Crawl job started with ID: ${jobId}`);
+
+      // Poll for completion
+      let status = await this.client.checkCrawlStatus(jobId);
+      
+      while (status.status === 'scraping') {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
+        status = await this.client.checkCrawlStatus(jobId);
+        logger.info(`Crawl status: ${status.status} - ${status.completed}/${status.total} pages`);
+      }
+
+      if (status.status === 'completed') {
+        logger.info(`Async crawl completed for ${url}. Found ${status.data?.length || 0} pages`);
+        return status;
+      } else {
+        throw new Error(`Crawl failed with status: ${status.status}`);
+      }
+      
+    } catch (error) {
+      logger.error(`Error in async crawl ${url}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch scrape multiple URLs with rate limiting
+   */
+  async batchScrape(urls, options = {}) {
+    const results = [];
+    const { concurrentRequests } = firecrawlConfig.rateLimits;
+
+    // Process in chunks
+    for (let i = 0; i < urls.length; i += concurrentRequests) {
+      const chunk = urls.slice(i, i + concurrentRequests);
+      const chunkResults = await Promise.allSettled(
+        chunk.map(url => this.scrapeUrl(url, options))
+      );
+      
+      results.push(...chunkResults);
+      
+      // Rate limiting delay between chunks
+      if (i + concurrentRequests < urls.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    return results;
+  }
+}
+
+export default new FirecrawlService();
+```
+
+### src/services/StorageService.js
+```javascript
+import postgres from 'postgres';
+import logger from '../utils/logger.js';
+
+const sql = postgres(process.env.DATABASE_URL);
+
+class StorageService {
+  /**
+   * Save a scraped listing to the database
+   */
+  async saveAuctionListing(listing) {
+    try {
+      const result = await sql`
+        INSERT INTO auction_listings (
+          source_id,
+          source_url,
+          listing_url,
+          property_address,
+          city,
+          state,
+          zip,
+          acres,
+          auction_date,
+          property_type,
+          description,
+          raw_data,
+          scrape_timestamp
+        ) VALUES (
+          ${listing.sourceId},
+          ${listing.sourceUrl},
+          ${listing.listingUrl},
+          ${listing.propertyAddress},
+          ${listing.city},
+          ${listing.state},
+          ${listing.zip},
+          ${listing.acres},
+          ${listing.auctionDate},
+          ${listing.propertyType},
+          ${listing.description},
+          ${JSON.stringify(listing.rawData)},
+          NOW()
+        )
+        ON CONFLICT (listing_url) 
+        DO UPDATE SET
+          acres = EXCLUDED.acres,
+          auction_date = EXCLUDED.auction_date,
+          description = EXCLUDED.description,
+          raw_data = EXCLUDED.raw_data,
+          updated_at = NOW()
+        RETURNING id
+      `;
+
+      logger.info(`Saved listing: ${listing.listingUrl}`);
+      return result[0].id;
+      
+    } catch (error) {
+      logger.error('Error saving listing:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch save multiple listings
+   */
+  async batchSaveListings(listings) {
+    const results = [];
+    
+    for (const listing of listings) {
+      try {
+        const id = await this.saveAuctionListing(listing);
+        results.push({ success: true, id, url: listing.listingUrl });
+      } catch (error) {
+        results.push({ success: false, error: error.message, url: listing.listingUrl });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Get all listings from a specific source
+   */
+  async getListingsBySource(sourceId) {
+    return await sql`
+      SELECT * FROM auction_listings
+      WHERE source_id = ${sourceId}
+      ORDER BY auction_date DESC
+    `;
+  }
+
+  /**
+   * Mark a scrape run
+   */
+  async logScrapeRun(sourceId, status, itemsScraped, errors = null) {
+    await sql`
+      INSERT INTO scrape_logs (
+        source_id,
+        status,
+        items_scraped,
+        errors,
+        run_timestamp
+      ) VALUES (
+        ${sourceId},
+        ${status},
+        ${itemsScraped},
+        ${errors ? JSON.stringify(errors) : null},
+        NOW()
+      )
+    `;
+  }
+}
+
+export default new StorageService();
+```
+
+## Step 4: LLM Parser
+
+### src/parsers/LLMParser.js
+```javascript
+import Anthropic from '@anthropic-ai/sdk';
+import logger from '../utils/logger.js';
+import { auctionListingSchema } from './schemas.js';
+
+class LLMParser {
+  constructor() {
+    this.client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    });
+  }
+
+  /**
+   * Parse scraped content into structured auction listing data
+   */
+  async parseAuctionListing(markdown, sourceConfig) {
+    try {
+      const prompt = this.buildParsingPrompt(markdown, sourceConfig);
+      
+      const message = await this.client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const responseText = message.content[0].text;
+      
+      // Extract JSON from response (handle markdown code blocks)
+      const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       responseText.match(/(\{[\s\S]*\})/);
+      
+      if (!jsonMatch) {
+        throw new Error('No JSON found in LLM response');
+      }
+
+      const parsed = JSON.parse(jsonMatch[1]);
+      
+      // Validate against schema
+      const validated = auctionListingSchema.parse(parsed);
+      
+      logger.info('Successfully parsed listing with LLM');
+      return validated;
+      
+    } catch (error) {
+      logger.error('Error parsing with LLM:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Build the parsing prompt with context from source config
+   */
+  buildParsingPrompt(markdown, sourceConfig) {
+    const { parserHints } = sourceConfig;
+    
+    return `You are extracting structured data from a land auction listing webpage. Parse the following content and return a JSON object with the specified fields.
+
+CONTENT TO PARSE:
+${markdown}
+
+EXTRACTION HINTS:
+- Date formats commonly used: ${parserHints.dateFormats.join(', ')}
+- Acreage keywords: ${parserHints.acresPatterns.join(', ')}
+- Address keywords: ${parserHints.addressPatterns.join(', ')}
+
+REQUIRED JSON FORMAT:
+{
+  "propertyAddress": "Full street address or location description",
+  "city": "City name",
+  "state": "Two-letter state code (e.g., IA)",
+  "zip": "Zip code if available, otherwise null",
+  "acres": 123.45,
+  "auctionDate": "YYYY-MM-DD",
+  "propertyType": "tillable | pasture | mixed | timber | recreational",
+  "description": "Brief description of the property",
+  "listingUrl": "The URL of this specific listing"
+}
+
+RULES:
+1. Extract exact values from the text, don't invent data
+2. For propertyType, choose the best match from the options
+3. If a field cannot be determined, use null
+4. Ensure auctionDate is in YYYY-MM-DD format
+5. Convert acres to a decimal number
+6. Return ONLY the JSON object, no other text
+
+JSON:`;
+  }
+
+  /**
+   * Batch parse multiple listings
+   */
+  async batchParse(scrapedPages, sourceConfig) {
+    const results = [];
+    
+    for (const page of scrapedPages) {
+      const parsed = await this.parseAuctionListing(page.markdown, sourceConfig);
+      
+      if (parsed) {
+        results.push({
+          ...parsed,
+          sourceId: sourceConfig.id,
+          sourceUrl: page.url,
+          rawData: page
+        });
+      }
+      
+      // Small delay to respect API rate limits
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    return results;
+  }
+}
+
+export default new LLMParser();
+```
+
+### src/parsers/schemas.js
+```javascript
+import { z } from 'zod';
+
+export const auctionListingSchema = z.object({
+  propertyAddress: z.string().nullable(),
+  city: z.string(),
+  state: z.string().length(2),
+  zip: z.string().nullable(),
+  acres: z.number().positive(),
+  auctionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  propertyType: z.enum(['tillable', 'pasture', 'mixed', 'timber', 'recreational']),
+  description: z.string(),
+  listingUrl: z.string().url()
+});
+```
+
+## Step 5: Base Scraper Class
+
+### src/scrapers/BaseScraper.js
+```javascript
+import firecrawlService from '../services/FirecrawlService.js';
+import llmParser from '../parsers/LLMParser.js';
+import storageService from '../services/StorageService.js';
+import logger from '../utils/logger.js';
+
+export class BaseScraper {
+  constructor(sourceConfig) {
+    this.config = sourceConfig;
+  }
+
+  /**
+   * Main scraping method
+   */
+  async scrape() {
+    const startTime = Date.now();
+    logger.info(`Starting scrape for: ${this.config.name}`);
+
+    try {
+      // Step 1: Crawl or scrape the source
+      const scrapedData = await this.fetchData();
+      
+      if (!scrapedData || scrapedData.length === 0) {
+        logger.warn(`No data found for ${this.config.name}`);
+        await storageService.logScrapeRun(this.config.id, 'no_data', 0);
+        return { success: true, items: 0 };
+      }
+
+      // Step 2: Parse the scraped content
+      const parsedListings = await this.parseData(scrapedData);
+      
+      if (parsedListings.length === 0) {
+        logger.warn(`No listings parsed for ${this.config.name}`);
+        await storageService.logScrapeRun(this.config.id, 'parse_failed', 0);
+        return { success: true, items: 0 };
+      }
+
+      // Step 3: Save to database
+      const saveResults = await storageService.batchSaveListings(parsedListings);
+      
+      const successCount = saveResults.filter(r => r.success).length;
+      const errorCount = saveResults.filter(r => !r.success).length;
+
+      // Step 4: Log the run
+      await storageService.logScrapeRun(
+        this.config.id,
+        'success',
+        successCount,
+        errorCount > 0 ? saveResults.filter(r => !r.success) : null
+      );
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      logger.info(
+        `Completed scrape for ${this.config.name}: ${successCount} saved, ${errorCount} errors, ${duration}s`
+      );
+
+      return {
+        success: true,
+        items: successCount,
+        errors: errorCount,
+        duration
+      };
+
+    } catch (error) {
+      logger.error(`Scrape failed for ${this.config.name}:`, error.message);
+      await storageService.logScrapeRun(this.config.id, 'error', 0, [error.message]);
+      
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Fetch data using Firecrawl
+   */
+  async fetchData() {
+    const { scrapeType, listingsUrl, crawlConfig, scrapeConfig } = this.config;
+
+    if (scrapeType === 'crawl') {
+      const result = await firecrawlService.crawlUrl(listingsUrl, crawlConfig);
+      return result.data || [];
+    } else {
+      const result = await firecrawlService.scrapeUrl(listingsUrl, scrapeConfig);
+      return [result];
+    }
+  }
+
+  /**
+   * Parse scraped data using LLM
+   */
+  async parseData(scrapedData) {
+    return await llmParser.batchParse(scrapedData, this.config);
+  }
+}
+```
+
+## Step 6: Main Orchestrator
+
+### src/index.js
+```javascript
+import { BaseScraper } from './scrapers/BaseScraper.js';
+import { getEnabledSources, getSourceById } from './config/sources.config.js';
+import logger from './utils/logger.js';
+
+class AuctionScraperOrchestrator {
+  /**
+   * Run scrapers for all enabled sources
+   */
+  async scrapeAll() {
+    logger.info('=== Starting full scrape run ===');
+    const sources = getEnabledSources();
+    const results = [];
+
+    for (const sourceConfig of sources) {
+      const scraper = new BaseScraper(sourceConfig);
+      const result = await scraper.scrape();
+      
+      results.push({
+        source: sourceConfig.name,
+        ...result
+      });
+
+      // Delay between sources to be respectful
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    logger.info('=== Scrape run complete ===');
+    this.logSummary(results);
+    
+    return results;
+  }
+
+  /**
+   * Run scraper for a single source
+   */
+  async scrapeSingle(sourceId) {
+    const sourceConfig = getSourceById(sourceId);
+    
+    if (!sourceConfig) {
+      throw new Error(`Source not found: ${sourceId}`);
+    }
+
+    if (!sourceConfig.enabled) {
+      throw new Error(`Source is disabled: ${sourceId}`);
+    }
+
+    const scraper = new BaseScraper(sourceConfig);
+    return await scraper.scrape();
+  }
+
+  /**
+   * Log summary of scrape results
+   */
+  logSummary(results) {
+    const totalItems = results.reduce((sum, r) => sum + (r.items || 0), 0);
+    const totalErrors = results.reduce((sum, r) => sum + (r.errors || 0), 0);
+    const failed = results.filter(r => !r.success).length;
+
+    logger.info('\n=== SCRAPE SUMMARY ===');
+    logger.info(`Sources processed: ${results.length}`);
+    logger.info(`Total listings found: ${totalItems}`);
+    logger.info(`Total errors: ${totalErrors}`);
+    logger.info(`Failed sources: ${failed}`);
+    
+    results.forEach(r => {
+      const status = r.success ? '✓' : '✗';
+      logger.info(`  ${status} ${r.source}: ${r.items || 0} items`);
+    });
+  }
+}
+
+export default new AuctionScraperOrchestrator();
+```
+
+## Step 7: CLI Scripts
+
+### scripts/run-scraper.js
+```javascript
+#!/usr/bin/env node
+import 'dotenv/config';
+import orchestrator from '../src/index.js';
+
+const args = process.argv.slice(2);
+const sourceId = args[0];
+
+async function main() {
+  try {
+    if (sourceId) {
+      console.log(`Running scraper for source: ${sourceId}`);
+      const result = await orchestrator.scrapeSingle(sourceId);
+      console.log('Result:', result);
+    } else {
+      console.log('Running all scrapers...');
+      const results = await orchestrator.scrapeAll();
+      console.log('\nAll scrapers completed!');
+    }
+    
+    process.exit(0);
+  } catch (error) {
+    console.error('Error:', error.message);
+    process.exit(1);
+  }
+}
+
+main();
+```
+
+### scripts/test-source.js
+```javascript
+#!/usr/bin/env node
+import 'dotenv/config';
+import firecrawlService from '../src/services/FirecrawlService.js';
+import { getSourceById } from '../src/config/sources.config.js';
+
+const sourceId = process.argv[2];
+
+if (!sourceId) {
+  console.error('Usage: npm run scrape:source <source-id>');
+  process.exit(1);
+}
+
+async function testSource() {
+  const config = getSourceById(sourceId);
+  
+  if (!config) {
+    console.error(`Source not found: ${sourceId}`);
+    process.exit(1);
+  }
+
+  console.log(`Testing source: ${config.name}`);
+  console.log(`URL: ${config.listingsUrl}`);
+  console.log(`Type: ${config.scrapeType}\n`);
+
+  try {
+    let result;
+    
+    if (config.scrapeType === 'crawl') {
+      result = await firecrawlService.crawlUrl(config.listingsUrl, config.crawlConfig);
+      console.log(`✓ Crawl successful!`);
+      console.log(`  Pages found: ${result.data?.length || 0}`);
+      
+      if (result.data && result.data.length > 0) {
+        console.log(`\nFirst page preview:`);
+        console.log(result.data[0].markdown?.substring(0, 500) + '...');
+      }
+    } else {
+      result = await firecrawlService.scrapeUrl(config.listingsUrl, config.scrapeConfig);
+      console.log(`✓ Scrape successful!`);
+      console.log(`\nContent preview:`);
+      console.log(result.markdown?.substring(0, 500) + '...');
+    }
+    
+  } catch (error) {
+    console.error('✗ Test failed:', error.message);
+    process.exit(1);
+  }
+}
+
+testSource();
+```
+
+### scripts/add-source.js
+```javascript
+#!/usr/bin/env node
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+console.log('\n=== Add New Auction Source ===\n');
+
+const readline = require('readline').createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+const questions = [
+  'Source ID (lowercase-with-dashes): ',
+  'Display Name: ',
+  'Base URL: ',
+  'Listings URL: ',
+  'Scrape Type (crawl/scrape): '
+];
+
+let answers = [];
+
+function ask(i = 0) {
+  if (i >= questions.length) {
+    generateConfig();
+    readline.close();
+    return;
+  }
+  
+  readline.question(questions[i], (answer) => {
+    answers.push(answer);
+    ask(i + 1);
+  });
+}
+
+function generateConfig() {
+  const [id, name, baseUrl, listingsUrl, scrapeType] = answers;
+  
+  const config = `
+  {
+    id: '${id}',
+    name: "${name}",
+    baseUrl: "${baseUrl}",
+    listingsUrl: "${listingsUrl}",
+    scrapeType: '${scrapeType}',
+    ${scrapeType === 'crawl' ? `crawlConfig: {
+      limit: 50,
+      maxDepth: 2,
+      includePaths: ['/'],
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: true
+      }
+    },` : `scrapeConfig: {
+      formats: ['markdown'],
+      onlyMainContent: true
+    },`}
+    parserHints: {
+      dateFormats: ['MM/DD/YYYY'],
+      acresPatterns: ['acres'],
+      addressPatterns: ['location', 'address']
+    },
+    enabled: true
+  },`;
+
+  console.log('\n=== Generated Configuration ===\n');
+  console.log(config);
+  console.log('\nAdd this to src/config/sources.config.js in the auctionSources array.');
+}
+
+ask();
+```
+
+## Step 8: Database Schema
+
+```sql
+-- Create tables
+CREATE TABLE auction_listings (
+  id SERIAL PRIMARY KEY,
+  source_id VARCHAR(100) NOT NULL,
+  source_url TEXT,
+  listing_url TEXT UNIQUE NOT NULL,
+  property_address TEXT,
+  city VARCHAR(100),
+  state VARCHAR(2),
+  zip VARCHAR(10),
+  acres DECIMAL(10,2),
+  auction_date TIMESTAMP,
+  property_type VARCHAR(50),
+  description TEXT,
+  raw_data JSONB,
+  scrape_timestamp TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE scrape_logs (
+  id SERIAL PRIMARY KEY,
+  source_id VARCHAR(100) NOT NULL,
+  status VARCHAR(50),
+  items_scraped INTEGER,
+  errors JSONB,
+  run_timestamp TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_source_id ON auction_listings(source_id);
+CREATE INDEX idx_auction_date ON auction_listings(auction_date);
+CREATE INDEX idx_state ON auction_listings(state);
+CREATE INDEX idx_scrape_timestamp ON auction_listings(scrape_timestamp);
+```
+
+## Step 9: Usage Instructions for Replit
+
+### Initial Setup
+```bash
+# Install dependencies
+npm install
+
+# Create .env file
+cp .env.example .env
+# Add your API keys to .env
+
+# Set up database (if using Replit PostgreSQL)
+# Run the SQL schema from Step 8
+```
+
+### Test Individual Sources
+```bash
+# Test if a source is scrapable
+npm run scrape:source farmers-national
+
+# This will show you:
+# - If the URL is accessible
+# - How many pages were found
+# - A preview of the content
+```
+
+### Run Scrapers
+```bash
+# Scrape a single source
+npm run scrape farmers-national
+
+# Scrape all enabled sources
+npm run scrape
+```
+
+### Add New Sources
+```bash
+# Interactive CLI to add a new source
+npm run add:source
+
+# Or manually add to src/config/sources.config.js
+```
+
+### Schedule Regular Scraping
+Create a `cron.js` file:
+```javascript
+import cron from 'node-cron';
+import orchestrator from './src/index.js';
+
+// Run every day at 3 AM
+cron.schedule('0 3 * * *', async () => {
+  console.log('Running scheduled scrape...');
+  await orchestrator.scrapeAll();
+});
+
+console.log('Cron job scheduled');
+```
+
+## Step 10: Monitoring & Debugging
+
+### Check Logs
+```javascript
+// src/utils/logger.js
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.simple()
+    }),
+    new winston.transports.File({ filename: 'scraper.log' })
+  ]
+});
+
+export default logger;
+```
+
+### View Recent Scrapes
+```javascript
+// Add to scripts/view-logs.js
+import storageService from '../src/services/StorageService.js';
+
+const logs = await sql`
+  SELECT * FROM scrape_logs 
+  ORDER BY run_timestamp DESC 
+  LIMIT 20
+`;
+
+console.table(logs);
+```
+
+## Key Benefits of This Architecture
+
+1. **Easily Add Sources** - Just add a config object, no code changes
+2. **Robust Parsing** - LLM handles varied website formats
+3. **Rate Limiting** - Built-in delays prevent blocking
+4. **Error Recovery** - Logs failures, continues with other sources
+5. **Flexible Scraping** - Supports both single-page and multi-page crawling
+6. **Cached Results** - Avoids re-scraping same listings
+7. **Monitoring** - Comprehensive logs for debugging
+
+This system will give you a solid foundation for scraping all those auction sites and easily adding more in the future!

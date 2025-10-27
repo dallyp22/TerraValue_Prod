@@ -25,7 +25,8 @@ export interface FieldData {
 }
 
 /**
- * Get CSR2 value for a specific point
+ * Get CSR2 value for a specific point using Michigan State ImageServer
+ * This is the direct raster query approach that was working previously
  */
 export async function csr2PointValue(longitude: number, latitude: number): Promise<number | null> {
   const cacheKey = `point:${longitude},${latitude}`;
@@ -36,33 +37,111 @@ export async function csr2PointValue(longitude: number, latitude: number): Promi
   }
 
   try {
-    const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
-      params: {
-        f: 'json',
-        geometry: `${longitude},${latitude}`,
-        geometryType: 'esriGeometryPoint',
-        sr: 4326,
-        returnGeometry: false
-      },
-      timeout: 10000
+    // Try Michigan State ImageServer first (original working approach)
+    try {
+      const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
+        params: {
+          f: 'json',
+          geometry: `${longitude},${latitude}`,
+          geometryType: 'esriGeometryPoint',
+          sr: 4326,
+          returnGeometry: false
+        },
+        timeout: 10000
+      });
+
+      const value = response.data?.value;
+      
+      if (value && value !== "NoData" && value !== -128) {
+        const csr2Value = typeof value === 'string' ? parseFloat(value) : value;
+        
+        if (!isNaN(csr2Value)) {
+          const result = Number(csr2Value.toFixed(1));
+          console.log(`✅ CSR2 from MSU ImageServer for (${longitude}, ${latitude}): ${result}`);
+          cache.set(cacheKey, result);
+          return result;
+        }
+      }
+    } catch (msuError) {
+      console.log('MSU ImageServer unavailable, falling back to USDA...');
+    }
+
+    // Fallback to USDA Soil Data Access Interpretation Service
+    // Step 1: Get mukey for the point
+    const wkt = `point(${longitude} ${latitude})`;
+    const mukeyQuery = `SELECT TOP 1 mukey FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')`;
+    const mukeyParams = new URLSearchParams({ query: mukeyQuery, format: 'JSON' });
+
+    const mukeyResponse = await fetch('https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: mukeyParams.toString()
     });
 
-    // Parse the response value
-    const value = response.data?.value;
-    
-    if (value === "NoData" || value === -128 || !value) {
+    const mukeyData = await mukeyResponse.json();
+    if (!mukeyData.Table || mukeyData.Table.length === 0) {
       cache.set(cacheKey, null);
       return null;
     }
 
-    const csr2Value = typeof value === 'string' ? parseFloat(value) : value;
-    
-    if (isNaN(csr2Value)) {
+    const mukey = mukeyData.Table[0][0];
+
+    // Step 2: Create AOI with the mapunit key
+    const aoiParams = new URLSearchParams({ SERVICE: 'aoi', REQUEST: 'create', MUKEYLIST: mukey });
+    const aoiResponse = await fetch('https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: aoiParams.toString()
+    });
+
+    const aoiData = await aoiResponse.json();
+    if (!aoiData.id) {
       cache.set(cacheKey, null);
       return null;
     }
 
+    const aoiId = aoiData.id;
+
+    // Step 3: Run CSR2 interpretation (attributekey 189 = Iowa Corn Suitability Rating CSR2)
+    const ratingParams = new URLSearchParams({
+      SERVICE: 'interpretation',
+      REQUEST: 'getrating',
+      AOIID: aoiId.toString(),
+      ATTRIBUTEKEY: '189'
+    });
+
+    const ratingResponse = await fetch('https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: ratingParams.toString()
+    });
+
+    const ratingData = await ratingResponse.json();
+    const interpResultId = ratingData.interpresultid;
+
+    if (!interpResultId) {
+      cache.set(cacheKey, null);
+      return null;
+    }
+
+    // Step 4: Query WFS to get the CSR2 rating value
+    const bbox = `${longitude - 0.01},${latitude - 0.01},${longitude + 0.01},${latitude + 0.01}`;
+    const wfsUrl = `https://SDMDataAccess.sc.egov.usda.gov/Spatial/SDMWGS84Geographic.wfs?SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=mapunitpolythematic&INTERPRESULTID=${interpResultId}&BBOX=${bbox}&SRSNAME=EPSG:4326&OUTPUTFORMAT=GML2&MAXFEATURES=1`;
+    
+    const wfsResponse = await fetch(wfsUrl);
+    const gmlText = await wfsResponse.text();
+    
+    // Parse MapUnitRatingNumeric from GML
+    const ratingMatch = gmlText.match(/<ms:MapUnitRatingNumeric>([\d.]+)<\/ms:MapUnitRatingNumeric>/);
+    
+    if (!ratingMatch) {
+      cache.set(cacheKey, null);
+      return null;
+    }
+
+    const csr2Value = parseFloat(ratingMatch[1]);
     const result = Number(csr2Value.toFixed(1));
+    console.log(`✅ CSR2 from USDA for (${longitude}, ${latitude}): ${result}`);
     cache.set(cacheKey, result);
     return result;
 
@@ -479,38 +558,32 @@ export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
   const wkt = `POLYGON((${coordPairs}))`;
 
   const sql = `
-    WITH aoi AS (
-      SELECT mukey, SUM(ACRES) AS total_acres
-      FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
-      GROUP BY mukey
-    ),
-    csr2 AS (
-      SELECT mu.mukey,
-             SUM(c.comppct_r * CAST(ci.interphr AS FLOAT)) / SUM(c.comppct_r) AS weighted_csr2
-      FROM mapunit mu
-      INNER JOIN component c ON mu.mukey = c.mukey
-      INNER JOIN cointerp ci ON c.cokey = ci.cokey
-      WHERE ci.rulename = 'Iowa Corn Suitability Rating CSR2 (IA)'
-        AND c.majcompflag = 'Yes'
-      GROUP BY mu.mukey
-    )
     SELECT 
-      CASE 
-        WHEN SUM(aoi.total_acres) = 0 THEN 0
-        ELSE SUM(aoi.total_acres * csr2.weighted_csr2) / SUM(aoi.total_acres) 
-      END AS average_csr2,
-      MIN(csr2.weighted_csr2) AS min_csr2,
-      MAX(csr2.weighted_csr2) AS max_csr2,
-      COUNT(DISTINCT csr2.mukey) AS num_map_units
-    FROM aoi 
-    INNER JOIN csr2 ON aoi.mukey = csr2.mukey
+      m.mukey,
+      m.muname,
+      c.comppct_r AS component_percent,
+      cri.interplr AS csr2_rating
+    FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}') AS p
+    INNER JOIN mapunit m ON p.mukey = m.mukey
+    INNER JOIN component c ON m.mukey = c.mukey
+    LEFT JOIN cointerp cri ON c.cokey = cri.cokey
+    WHERE cri.mrulename = 'Iowa Corn Suitability Rating'
+      AND c.comppct_r > 0
+    ORDER BY m.mukey, c.comppct_r DESC
   `;
 
   try {
-    const response = await fetch('https://SDMDataAccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest', {
+    const params = new URLSearchParams({
+      query: sql,
+      format: 'JSON'
+    });
+
+    const response = await fetch('https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: sql, format: 'JSON+COLUMNNAME' })
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
     });
 
     const data = await response.json();
@@ -518,11 +591,60 @@ export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
       throw new Error('No CSR2 data found for polygon');
     }
 
-    // Extract statistics from USDA response
-    const avgCSR2 = parseFloat(data.Table[0][0]) || 0;
-    const minCSR2 = parseFloat(data.Table[0][1]) || avgCSR2;
-    const maxCSR2 = parseFloat(data.Table[0][2]) || avgCSR2;
-    const count = parseInt(data.Table[0][3]) || 1;
+    // Parse response - first row is column names, subsequent rows are data
+    const columns = data.Table[0];
+    const rows = data.Table.slice(1);
+    
+    if (rows.length === 0) {
+      throw new Error('No CSR2 data found for polygon');
+    }
+
+    // Group by map unit and calculate weighted CSR2 for each
+    const mapUnits: { [key: string]: { weights: number[]; values: number[] } } = {};
+    
+    rows.forEach((row: any[]) => {
+      const rowData: any = {};
+      columns.forEach((col: string, idx: number) => {
+        rowData[col] = row[idx];
+      });
+
+      const mukey = rowData.mukey;
+      const percent = parseFloat(rowData.component_percent) || 0;
+      const csr2 = parseFloat(rowData.csr2_rating) || 0;
+
+      if (!mapUnits[mukey]) {
+        mapUnits[mukey] = { weights: [], values: [] };
+      }
+
+      mapUnits[mukey].weights.push(percent);
+      mapUnits[mukey].values.push(csr2);
+    });
+
+    // Calculate weighted average for each map unit, then overall average
+    const mapUnitCSR2s: number[] = [];
+    
+    Object.values(mapUnits).forEach(mu => {
+      let totalWeight = 0;
+      let weightedSum = 0;
+
+      mu.weights.forEach((weight, idx) => {
+        weightedSum += weight * mu.values[idx];
+        totalWeight += weight;
+      });
+
+      if (totalWeight > 0) {
+        mapUnitCSR2s.push(weightedSum / totalWeight);
+      }
+    });
+
+    if (mapUnitCSR2s.length === 0) {
+      throw new Error('No valid CSR2 values found');
+    }
+
+    const avgCSR2 = mapUnitCSR2s.reduce((a, b) => a + b, 0) / mapUnitCSR2s.length;
+    const minCSR2 = Math.min(...mapUnitCSR2s);
+    const maxCSR2 = Math.max(...mapUnitCSR2s);
+    const count = mapUnitCSR2s.length;
 
     return {
       mean: Number(avgCSR2.toFixed(1)),
