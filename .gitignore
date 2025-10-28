@@ -24,4 +24,4 @@ vite.config.ts.*
 npm-debug.log*
 
 # OS
-Thumbs.db
+Thumbs.db/api/index.js
