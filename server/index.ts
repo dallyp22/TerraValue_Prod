@@ -70,6 +70,12 @@ app.use((req, res, next) => {
     });
   });
 
+  // Only start server if not in serverless environment
+  if (!server) {
+    console.log('Running in serverless mode - skipping server startup');
+    return;
+  }
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes

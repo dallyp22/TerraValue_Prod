@@ -40,7 +40,7 @@ const createRateLimiter = (maxRequests: number, windowMs: number) => {
 const generalRateLimiter = createRateLimiter(300, 60000); // 300 requests per minute (increased for auctions)
 const valuationRateLimiter = createRateLimiter(10, 60000); // 10 valuations per minute
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<Server | null> {
   // Health check endpoint (no rate limiting)
   app.get("/api/health", async (req, res) => {
     try {
@@ -900,6 +900,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Only create HTTP server if not running in serverless environment (Vercel)
+  if (process.env.VERCEL) {
+    console.log('Running in Vercel serverless environment - skipping HTTP server creation');
+    return null;
+  }
+  
   const httpServer = createServer(app);
   return httpServer;
 }

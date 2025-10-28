@@ -21,8 +21,14 @@ app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 let routesRegistered = false;
 async function initializeApp() {
   if (!routesRegistered) {
-    await registerRoutes(app);
-    routesRegistered = true;
+    try {
+      await registerRoutes(app);
+      routesRegistered = true;
+      console.log('✅ Routes registered successfully');
+    } catch (error) {
+      console.error('❌ Failed to register routes:', error);
+      throw error;
+    }
   }
 }
 
@@ -32,10 +38,14 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   const message = err.message || "Internal Server Error";
   
   console.error(`[ERROR] ${req.method} ${req.path} - ${status}: ${message}`);
+  if (err.stack) {
+    console.error('Stack trace:', err.stack);
+  }
   
   res.status(status).json({ 
     success: false,
-    message: status >= 500 ? "Internal Server Error" : message
+    message: status >= 500 ? "Internal Server Error" : message,
+    ...(process.env.NODE_ENV === 'development' && { error: err.message, stack: err.stack })
   });
 });
 
@@ -44,7 +54,23 @@ serveStatic(app);
 
 // Export for Vercel serverless
 export default async function handler(req: any, res: any) {
-  await initializeApp();
-  return app(req, res);
+  try {
+    // Set content type to JSON by default for API routes
+    if (req.url.startsWith('/api/')) {
+      res.setHeader('Content-Type', 'application/json');
+    }
+    
+    await initializeApp();
+    return app(req, res);
+  } catch (error) {
+    console.error('Handler initialization error:', error);
+    // Ensure we always return JSON
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(500).json({
+      success: false,
+      message: 'Server initialization failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 }
 
