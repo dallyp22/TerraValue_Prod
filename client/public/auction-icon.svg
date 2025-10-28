@@ -1,0 +1,15 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circle background - will be colored dynamically -->
+  <circle cx="20" cy="20" r="18" fill="currentColor" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- Gavel icon -->
+  <g transform="translate(10, 10)">
+    <!-- Gavel head -->
+    <rect x="2" y="10" width="8" height="4" rx="1" fill="#ffffff"/>
+    <!-- Gavel handle -->
+    <rect x="5" y="14" width="2" height="8" rx="0.5" fill="#ffffff"/>
+    <!-- Gavel base/block -->
+    <rect x="12" y="16" width="6" height="3" rx="0.5" fill="#ffffff"/>
+  </g>
+</svg>
+

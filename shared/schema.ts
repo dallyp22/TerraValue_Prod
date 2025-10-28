@@ -41,6 +41,42 @@ export const valuations = pgTable("valuations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const auctions = pgTable("auctions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  url: text("url").notNull().unique(),
+  sourceWebsite: text("source_website").notNull(),
+  
+  // Auction details
+  auctionDate: timestamp("auction_date"),
+  auctionType: text("auction_type"), // "Online", "In-Person", "Hybrid"
+  auctioneer: text("auctioneer"),
+  
+  // Property details
+  address: text("address"),
+  county: text("county"),
+  state: text("state"),
+  acreage: real("acreage"),
+  landType: text("land_type"), // "Irrigated", "Dryland", "Pasture", "CRP", "Mixed"
+  
+  // Geographic data
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  
+  // CSR2 & Valuation (populated on-demand when user clicks)
+  csr2Mean: real("csr2_mean"),
+  csr2Min: integer("csr2_min"),
+  csr2Max: integer("csr2_max"),
+  estimatedValue: real("estimated_value"), // CSR2-based value per acre
+  
+  // Metadata
+  rawData: json("raw_data"), // Full scraped data
+  scrapedAt: timestamp("scraped_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  status: text("status").default("active") // "active", "sold", "cancelled"
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -108,6 +144,8 @@ export type InsertValuation = z.infer<typeof insertValuationSchema>;
 export type Valuation = typeof valuations.$inferSelect;
 export type PropertyForm = z.infer<typeof propertyFormSchema>;
 export type PropertyImprovement = z.infer<typeof propertyImprovementSchema>;
+export type Auction = typeof auctions.$inferSelect;
+export type InsertAuction = typeof auctions.$inferInsert;
 
 export interface ValuationBreakdown {
   baseValue: number;

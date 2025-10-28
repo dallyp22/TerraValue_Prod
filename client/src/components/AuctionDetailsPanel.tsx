@@ -1,0 +1,207 @@
+import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
+import { X, MapPin, Calendar, Ruler, TrendingUp, ExternalLink, Calculator } from 'lucide-react';
+import { format } from 'date-fns';
+import type { Auction } from '@shared/schema';
+
+interface AuctionDetailsPanelProps {
+  auction: Auction;
+  onClose: () => void;
+}
+
+export function AuctionDetailsPanel({ auction, onClose }: AuctionDetailsPanelProps) {
+  const [calculating, setCalculating] = useState(false);
+  const [valuation, setValuation] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCalculateValuation = async () => {
+    setCalculating(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`/api/auctions/${auction.id}/valuation`, {
+        method: 'POST',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setValuation(data.valuation);
+      } else {
+        setError(data.message || 'Failed to calculate valuation');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return 'Date TBD';
+    try {
+      return format(new Date(date), 'MMM dd, yyyy');
+    } catch {
+      return 'Date TBD';
+    }
+  };
+
+  // Use valuation data if available, otherwise check auction data
+  const csr2Mean = valuation?.csr2Mean || auction.csr2Mean;
+  const estimatedValue = valuation?.estimatedValue || auction.estimatedValue;
+
+  return (
+    <Card className="absolute top-4 right-4 w-96 max-h-[90vh] overflow-y-auto z-50 shadow-2xl bg-white dark:bg-slate-900">
+      <CardHeader className="pb-3 bg-white dark:bg-slate-900">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <CardTitle className="text-lg leading-tight">{auction.title}</CardTitle>
+            <CardDescription className="mt-1 flex items-center gap-1">
+              <span className="font-medium">{auction.sourceWebsite}</span>
+            </CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4 bg-white dark:bg-slate-900">
+        {/* Auction Date */}
+        {auction.auctionDate && (
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Auction Date:</span>
+            <span>{formatDate(auction.auctionDate)}</span>
+          </div>
+        )}
+
+        {/* Location */}
+        {auction.address && (
+          <div className="flex items-start gap-2 text-sm">
+            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <div>
+              <div className="font-medium">Location</div>
+              <div className="text-muted-foreground">{auction.address}</div>
+              {(auction.county || auction.state) && (
+                <div className="text-muted-foreground">
+                  {auction.county && `${auction.county} County`}
+                  {auction.county && auction.state && ', '}
+                  {auction.state}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Acreage */}
+        {auction.acreage && (
+          <div className="flex items-center gap-2 text-sm">
+            <Ruler className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Acreage:</span>
+            <Badge variant="secondary">{auction.acreage} acres</Badge>
+          </div>
+        )}
+
+        {/* Land Type */}
+        {auction.landType && (
+          <div className="flex items-center gap-2 text-sm">
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Land Type:</span>
+            <Badge variant="outline">{auction.landType}</Badge>
+          </div>
+        )}
+
+        {/* Description */}
+        {auction.description && (
+          <div className="text-sm">
+            <div className="font-medium mb-1">Description</div>
+            <p className="text-muted-foreground leading-relaxed">{auction.description}</p>
+          </div>
+        )}
+
+        <Separator />
+
+        {/* CSR2 Valuation Section */}
+        {csr2Mean ? (
+          <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-green-900 dark:text-green-100">
+              <Calculator className="h-4 w-4" />
+              CSR2 Valuation
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <div className="text-muted-foreground">CSR2 Rating</div>
+                <div className="font-bold text-lg">{csr2Mean.toFixed(1)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Est. Value/Acre</div>
+                <div className="font-bold text-lg">
+                  {estimatedValue ? formatCurrency(estimatedValue) : 'N/A'}
+                </div>
+              </div>
+            </div>
+
+            {auction.acreage && estimatedValue && (
+              <div className="pt-2 border-t border-green-200 dark:border-green-800">
+                <div className="text-muted-foreground text-sm">Total Estimated Value</div>
+                <div className="font-bold text-xl text-green-700 dark:text-green-300">
+                  {formatCurrency(estimatedValue * auction.acreage)}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Button
+            onClick={handleCalculateValuation}
+            disabled={calculating || !auction.latitude || !auction.longitude}
+            className="w-full"
+            variant="default"
+          >
+            <Calculator className="mr-2 h-4 w-4" />
+            {calculating ? 'Calculating...' : 'Calculate CSR2 Valuation'}
+          </Button>
+        )}
+
+        {error && (
+          <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 p-3 rounded">
+            {error}
+          </div>
+        )}
+
+        <Separator />
+
+        {/* View Auction Button */}
+        <Button
+          variant="outline"
+          className="w-full"
+          asChild
+        >
+          <a href={auction.url} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            View Full Auction Details
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+

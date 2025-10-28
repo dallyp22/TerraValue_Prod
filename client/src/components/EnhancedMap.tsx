@@ -1,41 +1,59 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import * as turf from '@turf/turf';
 import { useToast } from '@/hooks/use-toast';
+import { AuctionDetailsPanel } from './AuctionDetailsPanel';
+import type { Auction } from '@shared/schema';
 
 interface EnhancedMapProps {
   drawModeEnabled: boolean;
   onParcelClick: (parcel: any) => void;
   onPolygonDrawn: (polygon: any) => void;
+  onAuctionClick?: (auction: Auction) => void;
   drawnPolygonData?: any;
   onMapReady?: (map: maplibregl.Map) => void;
   showOwnerLabels?: boolean;
   showOwnershipHeatmap?: boolean;
   clearDrawnPolygons?: boolean;
   onClearComplete?: () => void;
+  showAuctionLayer?: boolean;
+  auctionFilters?: any;
 }
 
 export default function EnhancedMap({ 
   drawModeEnabled, 
   onParcelClick, 
   onPolygonDrawn,
+  onAuctionClick,
   drawnPolygonData,
   onMapReady,
   showOwnerLabels = false,
   showOwnershipHeatmap = false,
   clearDrawnPolygons = false,
-  onClearComplete
+  onClearComplete,
+  showAuctionLayer = true,
+  auctionFilters
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
   const drawModeEnabledRef = useRef(drawModeEnabled);
+  const auctionClickedRef = useRef<boolean>(false); // Track if auction was just clicked
+  
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const auctionsRef = useRef<Auction[]>([]);
 
   const { toast } = useToast();
+  
+  // Keep auctions ref in sync with state
+  useEffect(() => {
+    auctionsRef.current = auctions;
+  }, [auctions]);
 
   // Update the ref whenever drawModeEnabled changes
   useEffect(() => {
@@ -82,6 +100,100 @@ export default function EnhancedMap({
            center.lng <= harrisonBounds.east && 
            center.lat >= harrisonBounds.south && 
            center.lat <= harrisonBounds.north;
+  };
+
+  // Function to load auctions within current map bounds
+  const loadAuctions = async () => {
+    if (!map.current || !showAuctionLayer) {
+      // Clear auction markers if layer is disabled
+      const source = map.current?.getSource('auctions') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+      }
+      return;
+    }
+    
+    const bounds = map.current.getBounds();
+    const params = new URLSearchParams({
+      minLat: bounds.getSouth().toString(),
+      maxLat: bounds.getNorth().toString(),
+      minLon: bounds.getWest().toString(),
+      maxLon: bounds.getEast().toString()
+    });
+    
+    // Add filter params if provided
+    if (auctionFilters) {
+      if (auctionFilters.minAcreage) params.append('minAcreage', auctionFilters.minAcreage.toString());
+      if (auctionFilters.maxAcreage) params.append('maxAcreage', auctionFilters.maxAcreage.toString());
+      if (auctionFilters.minCSR2) params.append('minCSR2', auctionFilters.minCSR2.toString());
+      if (auctionFilters.maxCSR2) params.append('maxCSR2', auctionFilters.maxCSR2.toString());
+      if (auctionFilters.auctionDateRange && auctionFilters.auctionDateRange !== 'all') {
+        params.append('auctionDateRange', auctionFilters.auctionDateRange);
+      }
+      if (auctionFilters.propertyTypes?.length > 0) {
+        auctionFilters.propertyTypes.forEach((type: string) => params.append('landTypes[]', type));
+      }
+      if (auctionFilters.counties?.length > 0) {
+        auctionFilters.counties.forEach((county: string) => params.append('counties[]', county));
+      }
+      if (auctionFilters.minValue) params.append('minValue', auctionFilters.minValue.toString());
+      if (auctionFilters.maxValue) params.append('maxValue', auctionFilters.maxValue.toString());
+    }
+    
+    try {
+      const response = await fetch(`/api/auctions?${params}`);
+      const data = await response.json();
+      
+      if (data.success && data.auctions) {
+        setAuctions(data.auctions);
+        
+        // Convert auctions to GeoJSON features with color-coding based on urgency
+        const features = data.auctions
+          .filter((a: Auction) => a.latitude && a.longitude)
+          .map((auction: Auction) => {
+            // Determine marker color based on days until auction
+            let markerColor = '#10b981'; // green default (> 30 days)
+            if (auction.auctionDate) {
+              const daysUntil = Math.floor((new Date(auction.auctionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              if (daysUntil <= 7) {
+                markerColor = '#ef4444'; // red (< 7 days)
+              } else if (daysUntil <= 30) {
+                markerColor = '#f59e0b'; // orange (7-30 days)
+              }
+            }
+            
+            // Check if this is a county-level location (approximate)
+            const isCountyLevel = auction.rawData?.isCountyLevel || false;
+            
+            return {
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [auction.longitude, auction.latitude]
+              },
+              properties: {
+                id: auction.id,
+                title: auction.title,
+                acreage: auction.acreage,
+                county: auction.county,
+                state: auction.state,
+                markerColor,
+                isCountyLevel // Add flag for county-level locations
+              }
+            };
+          });
+        
+        const source = map.current?.getSource('auctions') as maplibregl.GeoJSONSource;
+        if (source) {
+          source.setData({
+            type: 'FeatureCollection',
+            features
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load auctions:', error);
+    }
   };
 
   // Function to load parcels based on current map bounds
@@ -199,8 +311,7 @@ export default function EnhancedMap({
     if (!mapContainer.current || map.current) return;
 
     try {
-      // Initialize map with satellite imagery
-      // Initialize map with satellite imagery as fallback
+      // Initialize map with satellite imagery and state borders
       map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -233,6 +344,15 @@ export default function EnhancedMap({
             ],
             minzoom: 0,
             maxzoom: 16
+          },
+          'state-borders': {
+            type: 'vector',
+            tiles: [
+              `https://a.tiles.mapbox.com/v4/dpolivka22.2i1mucgl/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
+              `https://b.tiles.mapbox.com/v4/dpolivka22.2i1mucgl/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
+            ],
+            minzoom: 0,
+            maxzoom: 16
           }
         },
         layers: [
@@ -252,6 +372,26 @@ export default function EnhancedMap({
             source: 'esri-satellite',
             minzoom: 0,
             maxzoom: 19
+          },
+          {
+            id: 'state-borders-fill',
+            type: 'fill',
+            source: 'state-borders',
+            'source-layer': 'us-states-2btm85',
+            paint: {
+              'fill-color': 'transparent'
+            }
+          },
+          {
+            id: 'state-borders-line',
+            type: 'line',
+            source: 'state-borders',
+            'source-layer': 'us-states-2btm85',
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': 2.5,
+              'line-opacity': 0.8
+            }
           }
         ]
       },
@@ -524,6 +664,20 @@ export default function EnhancedMap({
 
       // Function to handle Harrison County parcel clicks
       const handleHarrisonParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        // Check if an auction was just clicked - if so, ignore parcel click
+        if (auctionClickedRef.current) {
+          console.log('Ignoring parcel click - auction was clicked');
+          return;
+        }
+        
+        // Double-check by querying rendered features at click point
+        const auctionFeatures = map.current?.queryRenderedFeatures(e.point, {
+          layers: ['auction-markers', 'auction-markers-bg']
+        });
+        if (auctionFeatures && auctionFeatures.length > 0) {
+          return; // Auction marker takes priority
+        }
+        
         if (e.features && e.features.length > 0) {
           const clickedFeature = e.features[0];
           const props = clickedFeature.properties;
@@ -632,6 +786,20 @@ export default function EnhancedMap({
 
       // Function to handle parcel click (shared by both outline and fill)
       const handleParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        // Check if an auction was just clicked - if so, ignore parcel click
+        if (auctionClickedRef.current) {
+          console.log('Ignoring parcel click - auction was clicked');
+          return;
+        }
+        
+        // Double-check by querying rendered features at click point
+        const auctionFeatures = map.current?.queryRenderedFeatures(e.point, {
+          layers: ['auction-markers', 'auction-markers-bg']
+        });
+        if (auctionFeatures && auctionFeatures.length > 0) {
+          return; // Auction marker takes priority
+        }
+        
         if (e.features && e.features.length > 0) {
           const props = e.features[0].properties;
           const geometry = e.features[0].geometry;
@@ -695,13 +863,160 @@ export default function EnhancedMap({
         map.current!.getCanvas().style.cursor = '';
       });
 
+      // Add auction data source
+      map.current!.addSource('auctions', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: []
+        }
+      });
+
+      // Add auction marker layers with color-coding
+      // Background circle layer
+      map.current!.addLayer({
+        id: 'auction-markers-bg',
+        type: 'circle',
+        source: 'auctions',
+        paint: {
+          'circle-radius': 12,
+          'circle-color': ['get', 'markerColor'],
+          'circle-opacity': 0.9,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2
+        },
+        layout: {
+          'visibility': showAuctionLayer ? 'visible' : 'none'
+        }
+      });
+
+      // Load and add auction icon for overlay
+      const img = new Image(40, 40);
+      img.onload = () => {
+        if (map.current && !map.current.hasImage('auction-icon')) {
+          map.current.addImage('auction-icon', img);
+          
+          // Add auction marker icon layer on top of circles
+          map.current.addLayer({
+            id: 'auction-markers',
+            type: 'symbol',
+            source: 'auctions',
+            layout: {
+              'icon-image': 'auction-icon',
+              'icon-size': 0.5,
+              'icon-allow-overlap': true,
+              'visibility': showAuctionLayer ? 'visible' : 'none'
+            },
+            paint: {
+              'icon-color': ['get', 'markerColor'], // Use the dynamic color from feature properties
+              'icon-opacity': [
+                'case',
+                ['get', 'isCountyLevel'], 0.6, // 60% opacity for county-level (approximate) locations
+                1.0 // 100% opacity for specific addresses
+              ]
+            }
+          });
+
+          // Add auction click handlers for both layers
+          const handleAuctionClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+            // Set flag to prevent parcel click handlers from firing
+            auctionClickedRef.current = true;
+            
+            // Clear the flag after a short delay
+            setTimeout(() => {
+              auctionClickedRef.current = false;
+            }, 100);
+            
+            if (e.features && e.features.length > 0) {
+              const auctionId = e.features[0].properties?.id;
+              console.log('Auction clicked! ID:', auctionId);
+              console.log('Auctions in ref:', auctionsRef.current.length);
+              const auction = auctionsRef.current.find(a => a.id === auctionId);
+              if (auction) {
+                console.log('Found auction:', auction.title);
+                setSelectedAuction(auction);
+                // Also call prop callback if provided
+                if (onAuctionClick) {
+                  onAuctionClick(auction);
+                }
+              } else {
+                console.log('Auction not found in state! ID:', auctionId);
+              }
+            }
+          };
+
+          map.current.on('click', 'auction-markers', handleAuctionClick);
+          map.current.on('click', 'auction-markers-bg', handleAuctionClick);
+
+          // Add hover effects for auction markers
+          const handleAuctionMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+            if (map.current) {
+              map.current.getCanvas().style.cursor = 'pointer';
+              
+              // Show preview popup on hover
+              if (e.features && e.features.length > 0 && !drawModeEnabledRef.current) {
+                const props = e.features[0].properties;
+                const auction = auctions.find(a => a.id === props?.id);
+                
+                if (auction) {
+                  const isCountyLevel = auction.rawData?.isCountyLevel || props?.isCountyLevel || false;
+                  const html = `
+                    <div style="padding: 8px; min-width: 180px;">
+                      <strong style="display: block; margin-bottom: 6px; font-size: 13px;">${auction.acreage ? `${auction.acreage} Acres` : auction.title}</strong>
+                      ${auction.auctionDate ? `<div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">Auction: ${new Date(auction.auctionDate).toLocaleDateString()}</div>` : ''}
+                      ${auction.county ? `<div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">${auction.county} County${isCountyLevel ? ' <span style="color: #f59e0b;">(Approx.)</span>' : ''}</div>` : ''}
+                      ${auction.csr2Mean ? `<div style="font-size: 11px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e5e7eb;">CSR2: <strong>${auction.csr2Mean.toFixed(1)}</strong></div>` : ''}
+                      <div style="font-size: 10px; color: #9ca3af; margin-top: 6px; text-align: center;">Click for details</div>
+                    </div>
+                  `;
+                  new maplibregl.Popup({
+                    closeButton: false,
+                    closeOnClick: false,
+                    offset: 15
+                  })
+                    .setLngLat(e.lngLat)
+                    .setHTML(html)
+                    .addTo(map.current);
+                }
+              }
+            }
+          };
+
+          const handleAuctionMouseLeave = () => {
+            if (map.current) {
+              map.current.getCanvas().style.cursor = '';
+              // Remove hover popup
+              const popups = document.getElementsByClassName('maplibregl-popup');
+              if (popups.length) {
+                for (let i = popups.length - 1; i >= 0; i--) {
+                  const popup = popups[i];
+                  if (!popup.querySelector('.maplibregl-popup-close-button')) {
+                    popup.remove();
+                  }
+                }
+              }
+            }
+          };
+
+          map.current.on('mouseenter', 'auction-markers', handleAuctionMouseEnter);
+          map.current.on('mouseleave', 'auction-markers', handleAuctionMouseLeave);
+          map.current.on('mouseenter', 'auction-markers-bg', handleAuctionMouseEnter);
+          map.current.on('mouseleave', 'auction-markers-bg', handleAuctionMouseLeave);
+
+          // Initial auction load
+          loadAuctions();
+        }
+      };
+      img.src = '/auction-icon.svg';
+
       // Initial parcel load
       loadParcels();
     });
 
-      // Load parcels when map moves and update label visibility
+      // Load parcels and auctions when map moves and update label visibility
       map.current.on('moveend', () => {
         loadParcels();
+        loadAuctions();
         // Update label visibility based on new location
         updateLabelVisibility();
       });
@@ -916,5 +1231,51 @@ export default function EnhancedMap({
     }
   }, [showOwnershipHeatmap]);
 
-  return <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />;
+  // Toggle auction layer visibility
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const auctionLayer = map.current.getLayer('auction-markers');
+    const auctionBgLayer = map.current.getLayer('auction-markers-bg');
+    
+    if (auctionLayer) {
+      map.current.setLayoutProperty(
+        'auction-markers',
+        'visibility',
+        showAuctionLayer ? 'visible' : 'none'
+      );
+    }
+    
+    if (auctionBgLayer) {
+      map.current.setLayoutProperty(
+        'auction-markers-bg',
+        'visibility',
+        showAuctionLayer ? 'visible' : 'none'
+      );
+    }
+    
+    // Load or clear auctions based on visibility
+    if (showAuctionLayer) {
+      loadAuctions();
+    }
+  }, [showAuctionLayer]);
+
+  // Reload auctions when filters change
+  useEffect(() => {
+    if (map.current && showAuctionLayer) {
+      loadAuctions();
+    }
+  }, [auctionFilters]);
+
+  return (
+    <>
+      <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />
+      {selectedAuction && (
+        <AuctionDetailsPanel
+          auction={selectedAuction}
+          onClose={() => setSelectedAuction(null)}
+        />
+      )}
+    </>
+  );
 }

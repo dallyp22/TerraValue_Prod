@@ -1,40 +1,55 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Switch } from '@/components/ui/switch';
+import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Search, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
+import LeftSidebar, { type AuctionFilters } from './LeftSidebar';
+import MapControls from './MapControls';
 import PropertyFormOverlay from './PropertyFormOverlay';
 import ValuationPipelineOverlay from './ValuationPipelineOverlay';
 import ValuationReportOverlay from './ValuationReportOverlay';
-import OwnerInfoSidebar from './OwnerInfoSidebar';
 import { apiRequest } from '@/lib/queryClient';
-import type { PropertyForm as PropertyFormData, Valuation } from '@shared/schema';
-
+import type { PropertyForm as PropertyFormData, Valuation, Auction } from '@shared/schema';
 
 export default function MapCentricHome() {
+  // Map state
   const [drawModeEnabled, setDrawModeEnabled] = useState(false);
-  const [selectedParcel, setSelectedParcel] = useState<any>(null);
+  const [drawnPolygonData, setDrawnPolygonData] = useState<any>(null);
+  const [mapRef, setMapRef] = useState<any>(null);
+  const [showOwnerLabels, setShowOwnerLabels] = useState(false);
+  const [clearPolygons, setClearPolygons] = useState(false);
+  const [showAuctionLayer, setShowAuctionLayer] = useState(true);
+  
+  // Sidebar state
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+  
+  // Filter state
+  const [filters, setFilters] = useState<AuctionFilters>({
+    searchLocation: '',
+    auctionDateRange: 'all',
+    minAcreage: null,
+    maxAcreage: null,
+    minCSR2: 5,
+    maxCSR2: 100,
+    propertyTypes: [],
+    minValue: null,
+    maxValue: null,
+    counties: [],
+  });
+  const [auctionCount, setAuctionCount] = useState(0);
+  
+  // Valuation state
   const [showForm, setShowForm] = useState(false);
   const [showPipeline, setShowPipeline] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [currentValuationId, setCurrentValuationId] = useState<number | null>(null);
-  const [drawnPolygonData, setDrawnPolygonData] = useState<any>(null);
-  const [address, setAddress] = useState("");
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [mapRef, setMapRef] = useState<any>(null);
-  const [parcelData, setParcelData] = useState<any>(null); // For Option 1
-  const [showOwnerLabels, setShowOwnerLabels] = useState(false);
-  const [clearPolygons, setClearPolygons] = useState(false);
-  const [currentMapStyle, setCurrentMapStyle] = useState<'custom' | 'satellite' | 'street'>('satellite');
-  const [showOwnershipHeatmap, setShowOwnershipHeatmap] = useState(false);
+  const [parcelData, setParcelData] = useState<any>(null);
+
   const { toast } = useToast();
 
-  // Fetch valuation data with React Query
+  // Fetch valuation data
   const { data: currentValuation } = useQuery<{ success: boolean; valuation: Valuation }>({
     queryKey: [`/api/valuations/${currentValuationId}`],
     enabled: !!currentValuationId,
@@ -44,22 +59,19 @@ export default function MapCentricHome() {
 
   const valuation = currentValuation?.valuation;
 
-  // Auto-open Valuation Report when valuation is completed
+  // Auto-open Valuation Report when completed
   useEffect(() => {
     if (valuation?.status === 'completed' && !showReport) {
       setShowReport(true);
-      setShowPipeline(false); // Close pipeline when report opens
+      setShowPipeline(false);
     }
-  }, [valuation?.status]); // Remove showReport from dependency to prevent interference
+  }, [valuation?.status]);
 
+  // Handle polygon drawn
   const handlePolygonDrawn = async (polygon: any) => {
-    // Calculate area with Turf.js
     const area = turf.area(polygon);
-    const acres = Math.round((area / 4046.86) * 100) / 100; // Convert to acres with 2 decimal precision
+    const acres = Math.round((area / 4046.86) * 100) / 100;
     
-
-    
-    // Extract coordinates for CSR2 analysis
     const coordinates = polygon.geometry.coordinates[0];
     const wkt = `POLYGON((${coordinates.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
     
@@ -67,16 +79,13 @@ export default function MapCentricHome() {
       polygon,
       acres,
       wkt,
-      coordinates: coordinates[0] // Center point
+      coordinates: coordinates[0]
     });
     
-    // Trigger CSR2 analysis and reverse geocoding
     try {
-      // Get CSR2 data
       const response = await apiRequest('POST', '/api/csr2/polygon', { wkt });
       const csr2Data = await response.json();
       
-      // Reverse geocode the center point
       const reverseResponse = await apiRequest('POST', '/api/geocode/reverse', {
         latitude: coordinates[0][1],
         longitude: coordinates[0][0]
@@ -94,19 +103,39 @@ export default function MapCentricHome() {
     }
   };
 
+  // Handle parcel click
+  const handleParcelClick = (parcel: any) => {
+    if (!drawModeEnabled) {
+      setParcelData(parcel);
+      setShowForm(true);
+    }
+  };
+
+  // Handle auction click
+  const handleAuctionClick = (auction: Auction) => {
+    // Populate form with auction data
+    setParcelData({
+      ...auction,
+      coordinates: auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null
+    });
+    setShowForm(true);
+  };
+
+  // Handle valuation created
   const handleValuationCreated = (valuationId: number) => {
     setCurrentValuationId(valuationId);
     setShowForm(false);
     setShowPipeline(true);
   };
 
+  // Handle new valuation
   const handleNewValuation = () => {
-    // Reset all valuation-related state
     setCurrentValuationId(null);
     setShowForm(false);
     setShowPipeline(false);
     setShowReport(false);
-    setSelectedParcel(null);
+    setSelectedItem(null);
+    setSelectedItemType(null);
     setParcelData(null);
     setDrawnPolygonData(null);
     setDrawModeEnabled(false);
@@ -117,13 +146,10 @@ export default function MapCentricHome() {
     });
   };
 
-  const handleAddressSearch = async () => {
-    if (!address.trim()) return;
-
-    setIsGeocoding(true);
-    
+  // Handle location search
+  const handleLocationSearch = async (location: string) => {
     try {
-      const response = await apiRequest('POST', '/api/geocode', { address: address.trim() });
+      const response = await apiRequest('POST', '/api/geocode', { address: location });
       const data = await response.json();
       
       if (data.success && mapRef) {
@@ -135,122 +161,198 @@ export default function MapCentricHome() {
 
         toast({
           title: "Location Found",
-          description: "Map centered on address"
+          description: "Map centered on location"
         });
       }
     } catch (error) {
       console.error('Geocoding error:', error);
       toast({
-        title: "Address Not Found",
-        description: "Please check the address and try again",
+        title: "Location Not Found",
+        description: "Please check the location and try again",
         variant: "destructive"
       });
-    } finally {
-      setIsGeocoding(false);
     }
   };
 
+  // Fetch auction count when filters change
+  useEffect(() => {
+    const fetchAuctionCount = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (filters.minAcreage) params.append('minAcreage', filters.minAcreage.toString());
+        if (filters.maxAcreage) params.append('maxAcreage', filters.maxAcreage.toString());
+        if (filters.minCSR2) params.append('minCSR2', filters.minCSR2.toString());
+        if (filters.maxCSR2) params.append('maxCSR2', filters.maxCSR2.toString());
+        if (filters.auctionDateRange && filters.auctionDateRange !== 'all') {
+          params.append('auctionDateRange', filters.auctionDateRange);
+        }
+        filters.propertyTypes.forEach((type: string) => params.append('landTypes[]', type));
+        filters.counties.forEach((county: string) => params.append('counties[]', county));
+        if (filters.minValue) params.append('minValue', filters.minValue.toString());
+        if (filters.maxValue) params.append('maxValue', filters.maxValue.toString());
+        
+        const response = await fetch(`/api/auctions/count?${params}`);
+        const data = await response.json();
+        if (data.success) {
+          setAuctionCount(data.count || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching auction count:', error);
+      }
+    };
+    
+    fetchAuctionCount();
+  }, [filters]);
+
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
-      {/* Map as full-screen base */}
-      <EnhancedMap
-        drawModeEnabled={drawModeEnabled}
-        onParcelClick={(parcel) => {
-          // Only set selected parcel if not in draw mode
-          if (!drawModeEnabled) {
-            setSelectedParcel(parcel);
-          }
-        }}
-        onPolygonDrawn={handlePolygonDrawn}
-        drawnPolygonData={drawnPolygonData}
-        onMapReady={(map) => setMapRef(map)}
-        showOwnerLabels={showOwnerLabels}
-        showOwnershipHeatmap={showOwnershipHeatmap}
-        clearDrawnPolygons={clearPolygons}
-        onClearComplete={() => {
-          setClearPolygons(false);
-          setDrawnPolygonData(null);
-        }}
+    <div className="app-grid-layout">
+      {/* Left Sidebar - Search & Filters */}
+      <LeftSidebar
+        isOpen={leftSidebarOpen}
+        onClose={() => setLeftSidebarOpen(false)}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onLocationSearch={handleLocationSearch}
+        auctionCount={auctionCount}
       />
 
-      {/* Top-left Find Location module - aligned with zoom controls */}
-      <div className="absolute top-4 left-[10px] z-50 w-[calc(100vw-200px)] sm:w-72">
-        <Card className="bg-white/95 backdrop-blur-sm shadow-lg">
-          <CardHeader className="pb-2 pt-3 px-3 sm:px-6 sm:pb-3 sm:pt-4">
-            <CardTitle className="text-sm sm:text-base flex items-center space-x-2">
-              <MapPin className="h-4 w-4 text-emerald-600" />
-              <span>Find Location</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-3 sm:px-6 sm:pb-4">
-            <div className="flex space-x-2">
-              <Input
-                placeholder="City, State"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAddressSearch()}
-                className="flex-1 text-sm"
+      {/* Map Container */}
+      <div className="relative w-full h-screen overflow-hidden">
+        <EnhancedMap
+          drawModeEnabled={drawModeEnabled}
+          onParcelClick={handleParcelClick}
+          onAuctionClick={handleAuctionClick}
+          onPolygonDrawn={handlePolygonDrawn}
+          drawnPolygonData={drawnPolygonData}
+          onMapReady={(map) => setMapRef(map)}
+          showOwnerLabels={showOwnerLabels}
+          clearDrawnPolygons={clearPolygons}
+          onClearComplete={() => {
+            setClearPolygons(false);
+            setDrawnPolygonData(null);
+          }}
+          showAuctionLayer={showAuctionLayer}
+          auctionFilters={filters}
+        />
+
+        {/* Map Controls */}
+        <MapControls mapRef={mapRef} />
+
+        {/* Mobile Toggle Buttons */}
+        <div className="lg:hidden">
+          {/* Left Sidebar Toggle */}
+          <Button
+            onClick={() => setLeftSidebarOpen(true)}
+            className="fixed top-4 left-4 z-[998] bg-white hover:bg-slate-50 text-slate-800 shadow-lg"
+            size="icon"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Top-left controls - Desktop Only */}
+        <div className="hidden lg:block absolute top-4 left-4 z-50">
+          <div className="bg-white/95 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2">
+            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+              <input
+                type="checkbox"
+                checked={drawModeEnabled}
+                onChange={(e) => setDrawModeEnabled(e.target.checked)}
+                className="rounded"
               />
+              <span>Draw Polygon</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+              <input
+                type="checkbox"
+                checked={showOwnerLabels}
+                onChange={(e) => setShowOwnerLabels(e.target.checked)}
+                className="rounded"
+              />
+              <span>Owner Names</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+              <input
+                type="checkbox"
+                checked={showAuctionLayer}
+                onChange={(e) => setShowAuctionLayer(e.target.checked)}
+                className="rounded"
+              />
+              <span>Land Auctions</span>
+            </label>
+            
+            <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
               <Button 
-                onClick={handleAddressSearch}
-                disabled={isGeocoding || !address.trim()}
-                size="icon"
-                className="bg-emerald-600 hover:bg-emerald-700 min-w-[2.5rem]"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/auctions/refresh/landwatch', { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                      toast({
+                        title: "LandWatch Scrape Started",
+                        description: "Scraping LandWatch Iowa auctions...",
+                      });
+                    }
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to scrape LandWatch",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                size="sm"
+                variant="outline"
+                className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400 w-full text-xs"
               >
-                {isGeocoding ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
+                Scrape LandWatch
+              </Button>
+              <Button 
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/auctions/refresh', { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                      toast({
+                        title: "Auction Refresh Started",
+                        description: "Scraping all auction sites...",
+                      });
+                    }
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to refresh auctions",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                size="sm"
+                variant="outline"
+                className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 w-full text-xs"
+              >
+                Refresh All Auctions
               </Button>
             </div>
-            {/* Hidden toggle view button to reduce module height */}
-            <p className="text-xs text-slate-600 text-left hidden sm:block mt-2">
-              Input City, County or Address to pull CSR2 Data
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Top-right controls - mobile optimized with compact layout */}  
-      <div className="absolute top-4 right-4 z-50">
-        <div className="bg-white/95 backdrop-blur-sm p-1.5 sm:p-2 rounded-lg shadow-lg">
-          <div className="flex flex-col space-y-1.5">
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={drawModeEnabled}
-                onCheckedChange={setDrawModeEnabled}
-                className="data-[state=checked]:bg-emerald-600 scale-75 sm:scale-100"
-              />
-              <span className="text-[10px] sm:text-xs font-medium text-slate-700 whitespace-nowrap">Draw Polygon</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={showOwnerLabels}
-                onCheckedChange={setShowOwnerLabels}
-                className="data-[state=checked]:bg-blue-600 scale-75 sm:scale-100"
-              />
-              <span className="text-[10px] sm:text-xs font-medium text-slate-700 whitespace-nowrap">Owner Names</span>
-            </div>
-            {/* Hidden Ownership Map toggle - not needed for users */}
+            
             {drawnPolygonData && (
-              <div className="pt-1.5 border-t border-slate-200">
+              <div className="pt-2 border-t border-slate-200">
                 <Button 
                   onClick={() => setClearPolygons(true)}
                   size="sm"
                   variant="outline"
-                  className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 w-full text-xs"
+                  className="text-red-600 hover:text-red-700 border-red-300 w-full text-xs"
                 >
                   Clear Map
                 </Button>
               </div>
             )}
+            
             {currentValuationId && (
-              <div className="pt-1.5 border-t border-slate-200">
+              <div className="pt-2 border-t border-slate-200">
                 <Button 
                   onClick={handleNewValuation}
                   size="sm"
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white w-full text-xs"
+                  className="bg-blue-600 hover:bg-blue-700 w-full text-xs"
                 >
                   New Valuation
                 </Button>
@@ -258,91 +360,76 @@ export default function MapCentricHome() {
             )}
           </div>
         </div>
+
+        {/* Drawn polygon info with Start Valuation button */}
+        {drawnPolygonData && (
+          <div className="absolute right-4 bottom-32 z-50 bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-lg max-w-xs">
+            <h3 className="font-semibold text-slate-800 mb-2 text-sm">Polygon Data</h3>
+            <p className="text-sm text-slate-600">Acres: {drawnPolygonData.acres.toFixed(2)}</p>
+            {drawnPolygonData.csr2 && (
+              <p className="text-sm text-slate-600 mb-3">CSR2: {drawnPolygonData.csr2.mean?.toFixed(1) || 'N/A'}</p>
+            )}
+            <Button 
+              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm"
+              onClick={() => setShowForm(true)}
+            >
+              Start Valuation
+            </Button>
+          </div>
+        )}
+
+        {/* Floating action buttons for pipeline and report */}
+        {currentValuationId && !showForm && (
+          <div className="fixed bottom-8 right-4 z-50 flex flex-col space-y-2">
+            {!showPipeline && (
+              <Button 
+                onClick={() => setShowPipeline(true)} 
+                size="sm"
+                className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg"
+              >
+                View Pipeline
+              </Button>
+            )}
+            {valuation?.status === 'completed' && !showReport && (
+              <Button 
+                onClick={() => setShowReport(true)} 
+                size="sm"
+                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg"
+              >
+                View Report
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Drawn polygon info with Start Valuation button - mobile optimized positioning */}
-      {drawnPolygonData && (
-        <div className={`absolute right-4 z-50 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg transition-all duration-300 animate-fade-in ${
-          currentValuationId ? 'top-56 sm:top-72' : 'top-44 sm:top-52'
-        } ${!currentValuationId && !drawnPolygonData ? '' : 'max-w-[calc(100vw-6rem)]'}`}>
-          <h3 className="font-semibold text-slate-800 mb-2 text-sm sm:text-base">Polygon Data</h3>
-          <p className="text-xs sm:text-sm text-slate-600">Acres: {drawnPolygonData.acres.toFixed(2)}</p>
-          {drawnPolygonData.csr2 && (
-            <p className="text-xs sm:text-sm text-slate-600 mb-3">CSR2: {drawnPolygonData.csr2.mean?.toFixed(1) || 'N/A'}</p>
-          )}
-          <Button 
-            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs sm:text-sm"
-            onClick={() => setShowForm(true)}
-          >
-            Start Valuation
-          </Button>
-        </div>
-      )}
-
-      {/* Overlays: Floating panels/modals on top of map */}
+      {/* Overlays: Valuation Form, Pipeline, Report */}
       {showForm && (
         <PropertyFormOverlay 
           onClose={() => {
             setShowForm(false);
-            setParcelData(null); // Clear parcel data
-            setDrawnPolygonData(null); // Clear polygon data
+            setParcelData(null);
+            setDrawnPolygonData(null);
           }}
           onValuationCreated={handleValuationCreated}
           drawnPolygonData={drawnPolygonData}
           parcelData={parcelData}
         />
       )}
+      
       {showPipeline && valuation && (
         <ValuationPipelineOverlay 
           data={valuation} 
           onClose={() => setShowPipeline(false)} 
         />
       )}
+      
       {showReport && valuation && (
         <ValuationReportOverlay 
           data={valuation} 
           onClose={() => setShowReport(false)} 
         />
       )}
-
-      {/* Sidebar for owner info - only show when a parcel is clicked and not drawing */}
-      {selectedParcel && !drawModeEnabled && (
-        <OwnerInfoSidebar 
-          parcel={selectedParcel} 
-          onClose={() => setSelectedParcel(null)} 
-          onStartValuation={(parcel) => {
-            // Use original parcel data without recalculation
-            setParcelData(parcel);
-            setShowForm(true);
-            setSelectedParcel(null);
-          }}
-        />
-      )}
-
-      {/* Floating action buttons for pipeline and report - mobile optimized */}
-      {currentValuationId && !showForm && (
-        <div className="fixed bottom-20 sm:bottom-8 right-4 z-50 flex flex-col space-y-2">
-          {!showPipeline && (
-            <Button 
-              onClick={() => setShowPipeline(true)} 
-              size="sm"
-              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-lg shadow-lg whitespace-nowrap text-xs sm:text-sm px-3 sm:px-4 py-2"
-            >
-              View Pipeline
-            </Button>
-          )}
-          {valuation?.status === 'completed' && !showReport && (
-            <Button 
-              onClick={() => setShowReport(true)} 
-              size="sm"
-              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-lg shadow-lg whitespace-nowrap text-xs sm:text-sm px-3 sm:px-4 py-2"
-            >
-              View Report
-            </Button>
-          )}
-        </div>
-      )}
-      
     </div>
   );
 }
