@@ -6,11 +6,36 @@ import { cleanupOpenAI } from "./services/openai";
 
 const app = express();
 
+// CORS middleware - allow Vercel frontend to access Railway backend
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://terra-value-prod.vercel.app',
+    'http://localhost:5001',
+    'http://localhost:5173'
+  ];
+  
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 // Security middleware
 app.use((req, res, next) => {
   // Security headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // Changed from DENY to allow embedding
   res.setHeader('X-XSS-Protection', '1; mode=block');
   next();
 });
