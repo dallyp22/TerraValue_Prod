@@ -199,7 +199,7 @@ export class AuctionScraperService {
     
     // Step 2: Scrape each individual auction page
     const savedAuctions = [];
-    const uniqueAuctionUrls = [...new Set(allAuctionUrls)].slice(0, 20); // Limit to 20
+    const uniqueAuctionUrls = Array.from(new Set(allAuctionUrls)).slice(0, 20); // Limit to 20
     
     for (const auctionUrl of uniqueAuctionUrls) {
       try {

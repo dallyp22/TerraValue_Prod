@@ -27,6 +27,9 @@ export class MemStorage implements IStorage {
       state: insertValuation.state,
       landType: insertValuation.landType,
       acreage: insertValuation.acreage,
+      tillableAcres: insertValuation.tillableAcres || null,
+      cashRentPerAcre: insertValuation.cashRentPerAcre || null,
+      capRate: insertValuation.capRate || 0.03,
       additionalDetails: insertValuation.additionalDetails || null,
       // CSR2 and field data
       fieldId: insertValuation.fieldId || null,

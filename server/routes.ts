@@ -810,16 +810,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         success: true,
-        total: parseInt(totalCount[0].count),
-        withCoordinates: parseInt(withCoords[0].count),
-        withoutCoordinates: parseInt(withoutCoords[0].count),
+        total: parseInt(totalCount[0].count as string),
+        withCoordinates: parseInt(withCoords[0].count as string),
+        withoutCoordinates: parseInt(withoutCoords[0].count as string),
         canBeFixed: canBeFixed,
-        potentialTotal: parseInt(withCoords[0].count) + canBeFixed,
+        potentialTotal: parseInt(withCoords[0].count as string) + canBeFixed,
         bySource: bySource.map(s => ({
           source: s.source,
-          total: parseInt(s.total),
-          withCoords: parseInt(s.withCoords),
-          coverage: ((parseInt(s.withCoords) / parseInt(s.total)) * 100).toFixed(1)
+          total: parseInt(s.total as string),
+          withCoords: parseInt(s.withCoords as string),
+          coverage: ((parseInt(s.withCoords as string) / parseInt(s.total as string)) * 100).toFixed(1)
         }))
       });
     } catch (error) {

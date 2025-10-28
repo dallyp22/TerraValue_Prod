@@ -253,7 +253,7 @@ export class ValuationService {
         const marketCompsContext = `\n\nIOWA MARKET ANALYSIS WITH SALES COMPS:
 - Recent Sales Comps: ${marketCompsUsed.length} comparable sales (${marketCompsExcludedCount} excluded as outliers below $${COMPS_MIN_PRICE_PER_ACRE}/acre)
 - Average Comp Price: $${Math.round(avgCompPrice).toLocaleString()}/acre
-- Market Summary: ${iowaMarketAnalysis.summary}
+- Market Summary: ${iowaMarketAnalysis?.summary}
 - Sales Data: ${marketCompsUsed.slice(0, 3).map((comp: any) => 
   `${comp.date}: $${comp.price_per_acre.toLocaleString()}/acre (${comp.details})`
 ).join('; ')}
