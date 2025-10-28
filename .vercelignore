@@ -1,10 +1,2 @@
-# Ignore TypeScript source files in api/ - use built .js files instead
-api/*.ts
-api/**/*.ts
-
-# Ignore server directory - code is bundled into api/index.js
-server/
-
-# Build artifacts already bundled
-dist/index.js
+# Don't ignore anything - let Vercel build everything
 
