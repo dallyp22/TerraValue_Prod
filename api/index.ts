@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "../server/routes";
-import { serveStatic } from "../server/vite";
 
 // Create app at module level
 const app = express();
@@ -38,8 +37,8 @@ async function initializeApp() {
       console.log('🔧 Initializing routes...');
       await registerRoutes(app);
       
-      // Serve static files in production
-      serveStatic(app);
+      // NOTE: Static file serving is handled by Vercel automatically
+      // Do NOT call serveStatic(app) in serverless environment
       
       // Error handler MUST be registered AFTER all routes
       app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
