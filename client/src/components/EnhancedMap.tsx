@@ -141,7 +141,7 @@ export default function EnhancedMap({
     }
     
     try {
-      const response = await fetch(`/api/auctions?${params}`);
+      const response = await fetch(`https://web-production-51e54.up.railway.app/api/auctions?${params}`);
       const data = await response.json();
       
       if (data.success && data.auctions) {

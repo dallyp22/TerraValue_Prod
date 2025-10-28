@@ -385,7 +385,7 @@ export function MapParcelPicker({
         
         // Get CSR2 data for the polygon
         try {
-          const response = await fetch('/api/average-csr2', {
+          const response = await fetch('https://web-production-51e54.up.railway.app/api/average-csr2', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ polygon: feature.geometry })
@@ -534,7 +534,7 @@ export function MapParcelPicker({
       const acres = Number((areaSqM / 4046.86).toFixed(2)); // 1 acre = 4046.86 sq m
 
       // Fetch average CSR2 from backend
-      const response = await fetch('/api/average-csr2', {
+      const response = await fetch('https://web-production-51e54.up.railway.app/api/average-csr2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ polygon: polygon.geometry })
@@ -1086,7 +1086,7 @@ export function MapParcelPicker({
     
     try {
       // Fetch CSR2 data for this point
-      const response = await fetch('/api/csr2/point', {
+      const response = await fetch('https://web-production-51e54.up.railway.app/api/csr2/point', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1147,7 +1147,7 @@ export function MapParcelPicker({
     setIsGeocoding(true);
     
     try {
-      const response = await fetch('/api/geocode', {
+      const response = await fetch('https://web-production-51e54.up.railway.app/api/geocode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: address.trim() })

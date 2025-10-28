@@ -121,7 +121,7 @@ export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLoc
     // Reverse geocode to get county and state
     if (parcelData.coordinates && parcelData.coordinates.length === 2) {
       try {
-        const response = await fetch("/api/geocode/reverse", {
+        const response = await fetch("https://web-production-51e54.up.railway.app/api/geocode/reverse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

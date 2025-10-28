@@ -22,7 +22,7 @@ export function AuctionDetailsPanel({ auction, onClose }: AuctionDetailsPanelPro
     setError(null);
     
     try {
-      const response = await fetch(`/api/auctions/${auction.id}/valuation`, {
+      const response = await fetch(`https://web-production-51e54.up.railway.app/api/auctions/${auction.id}/valuation`, {
         method: 'POST',
       });
       

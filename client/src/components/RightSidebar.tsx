@@ -34,7 +34,7 @@ export default function RightSidebar({
     
     setCalculating(true);
     try {
-      const response = await fetch(`/api/auctions/${selectedItem.id}/valuation`, {
+      const response = await fetch(`https://web-production-51e54.up.railway.app/api/auctions/${selectedItem.id}/valuation`, {
         method: 'POST',
       });
       const data = await response.json();

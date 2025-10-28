@@ -45,7 +45,7 @@ export default function Home() {
   const { data: currentValuation, isLoading } = useQuery<{ success: boolean; valuation: Valuation }>({
     queryKey: currentValuationId ? ['/api/valuations', currentValuationId] : ['/api/valuations'],
     queryFn: currentValuationId ? async () => {
-      const response = await fetch(`/api/valuations/${currentValuationId}`);
+      const response = await fetch(`https://web-production-51e54.up.railway.app/api/valuations/${currentValuationId}`);
       return response.json();
     } : undefined,
     enabled: !!currentValuationId,
