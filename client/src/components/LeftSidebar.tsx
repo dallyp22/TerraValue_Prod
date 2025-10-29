@@ -34,6 +34,7 @@ export interface AuctionFilters {
 }
 
 export interface MapOverlays {
+  showAuctions: boolean;
   showSubstations: boolean;
   showDatacenters: boolean;
 }
@@ -430,6 +431,15 @@ export default function LeftSidebar({
               <span className="text-xs text-slate-500">{filterSectionsOpen.overlays ? '−' : '+'}</span>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer py-2">
+                <Checkbox
+                  checked={mapOverlays.showAuctions}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showAuctions: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Auctions</span>
+              </label>
               <label className="flex items-center gap-2 cursor-pointer py-2">
                 <Checkbox
                   checked={mapOverlays.showSubstations}

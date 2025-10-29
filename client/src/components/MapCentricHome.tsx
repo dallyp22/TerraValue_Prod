@@ -44,10 +44,16 @@ export default function MapCentricHome() {
   
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
+    showAuctions: true,
     showSubstations: true,
     showDatacenters: true,
   });
-  
+
+  // Sync auction layer visibility with map overlays
+  useEffect(() => {
+    setShowAuctionLayer(mapOverlays.showAuctions);
+  }, [mapOverlays.showAuctions]);
+
   // Valuation state
   const [showForm, setShowForm] = useState(false);
   const [showPipeline, setShowPipeline] = useState(false);
