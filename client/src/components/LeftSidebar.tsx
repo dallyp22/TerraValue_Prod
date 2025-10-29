@@ -39,6 +39,12 @@ export interface MapOverlays {
   showDatacenters: boolean;
 }
 
+export interface MapInfo {
+  showScrapingModule: boolean;
+  showLegend: boolean;
+  showLayerSwitcher: boolean;
+}
+
 interface LeftSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,6 +55,8 @@ interface LeftSidebarProps {
   onShowList?: () => void;
   mapOverlays: MapOverlays;
   onMapOverlaysChange: (overlays: MapOverlays) => void;
+  mapInfo: MapInfo;
+  onMapInfoChange: (mapInfo: MapInfo) => void;
 }
 
 const PROPERTY_TYPES = [
@@ -73,7 +81,9 @@ export default function LeftSidebar({
   auctionCount,
   onShowList,
   mapOverlays,
-  onMapOverlaysChange
+  onMapOverlaysChange,
+  mapInfo,
+  onMapInfoChange
 }: LeftSidebarProps) {
   const [searchInput, setSearchInput] = useState('');
   const [countySearch, setCountySearch] = useState('');
@@ -85,6 +95,7 @@ export default function LeftSidebar({
     type: false,
     value: false,
     overlays: true,
+    mapInfo: true,
   });
 
   const handleSearch = () => {
@@ -474,6 +485,64 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">Data Centers</span>
+              </label>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Map Info Controls */}
+          <Collapsible
+            open={filterSectionsOpen.mapInfo}
+            onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, mapInfo: open })}
+            className="filter-group mb-6"
+          >
+            <CollapsibleTrigger className="w-full flex justify-between items-center">
+              <h4 className="text-sm font-semibold text-slate-700">Map Info</h4>
+              <span className="text-xs text-slate-500">{filterSectionsOpen.mapInfo ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-2">
+              {/* Master Toggle for All Map Info */}
+              <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
+                <Checkbox
+                  checked={mapInfo.showScrapingModule && mapInfo.showLegend && mapInfo.showLayerSwitcher}
+                  onCheckedChange={(checked) => {
+                    const allEnabled = checked as boolean;
+                    onMapInfoChange({
+                      showScrapingModule: allEnabled,
+                      showLegend: allEnabled,
+                      showLayerSwitcher: allEnabled
+                    });
+                  }}
+                />
+                <span className="text-sm font-semibold text-slate-800">Show All Info</span>
+              </label>
+
+              {/* Individual Info Toggles */}
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapInfo.showScrapingModule}
+                  onCheckedChange={(checked) =>
+                    onMapInfoChange({ ...mapInfo, showScrapingModule: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Scraping Controls</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapInfo.showLegend}
+                  onCheckedChange={(checked) =>
+                    onMapInfoChange({ ...mapInfo, showLegend: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Legend</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapInfo.showLayerSwitcher}
+                  onCheckedChange={(checked) =>
+                    onMapInfoChange({ ...mapInfo, showLayerSwitcher: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Satellite/Street View</span>
               </label>
             </CollapsibleContent>
           </Collapsible>

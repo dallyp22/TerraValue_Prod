@@ -6,9 +6,11 @@ interface MapControlsProps {
   mapRef: any;
   onLayerChange?: (layer: 'satellite' | 'street' | 'soil') => void;
   currentLayer?: 'satellite' | 'street' | 'soil';
+  showLegend?: boolean;
+  showLayerSwitcher?: boolean;
 }
 
-export default function MapControls({ mapRef, onLayerChange, currentLayer = 'satellite' }: MapControlsProps) {
+export default function MapControls({ mapRef, onLayerChange, currentLayer = 'satellite', showLegend = true, showLayerSwitcher = true }: MapControlsProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleZoomIn = () => {
@@ -88,8 +90,9 @@ export default function MapControls({ mapRef, onLayerChange, currentLayer = 'sat
       </div>
 
       {/* Bottom Right - Layer Switcher */}
-      <div className="map-controls-bottom-right absolute bottom-20 right-4 z-[1000]">
-        <div className="layer-switcher flex gap-2 bg-white p-2 rounded-lg shadow-lg border border-slate-200">
+      {showLayerSwitcher && (
+        <div className="map-controls-bottom-right absolute bottom-20 right-4 z-[1000]">
+          <div className="layer-switcher flex gap-2 bg-white p-2 rounded-lg shadow-lg border border-slate-200">
           <button
             onClick={() => onLayerChange?.('satellite')}
             className={`layer-option w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
@@ -116,9 +119,11 @@ export default function MapControls({ mapRef, onLayerChange, currentLayer = 'sat
           </button>
         </div>
       </div>
+      )}
 
       {/* Bottom Left - Legend */}
-      <div className="map-legend absolute bottom-4 left-4 z-[1000] bg-white p-4 rounded-lg shadow-lg border border-slate-200 max-w-xs">
+      {showLegend && (
+        <div className="map-legend absolute bottom-4 left-4 z-[1000] bg-white p-4 rounded-lg shadow-lg border border-slate-200 max-w-xs">
         <h4 className="text-xs font-semibold mb-3 text-slate-800">Legend</h4>
         <div className="space-y-2">
           <div className="legend-item flex items-center gap-2 text-xs text-slate-700">
@@ -139,6 +144,7 @@ export default function MapControls({ mapRef, onLayerChange, currentLayer = 'sat
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }

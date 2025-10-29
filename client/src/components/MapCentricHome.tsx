@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
-import LeftSidebar, { type AuctionFilters, type MapOverlays } from './LeftSidebar';
+import LeftSidebar, { type AuctionFilters, type MapOverlays, type MapInfo } from './LeftSidebar';
 import MapControls from './MapControls';
 import PropertyFormOverlay from './PropertyFormOverlay';
 import ValuationPipelineOverlay from './ValuationPipelineOverlay';
@@ -53,6 +53,13 @@ export default function MapCentricHome() {
   useEffect(() => {
     setShowAuctionLayer(mapOverlays.showAuctions);
   }, [mapOverlays.showAuctions]);
+
+  // Map info state (UI controls visibility)
+  const [mapInfo, setMapInfo] = useState<MapInfo>({
+    showScrapingModule: true,
+    showLegend: true,
+    showLayerSwitcher: true,
+  });
 
   // Valuation state
   const [showForm, setShowForm] = useState(false);
@@ -230,6 +237,8 @@ export default function MapCentricHome() {
         auctionCount={auctionCount}
         mapOverlays={mapOverlays}
         onMapOverlaysChange={setMapOverlays}
+        mapInfo={mapInfo}
+        onMapInfoChange={setMapInfo}
       />
 
       {/* Map Container */}
@@ -254,7 +263,11 @@ export default function MapCentricHome() {
         />
 
         {/* Map Controls */}
-        <MapControls mapRef={mapRef} />
+        <MapControls 
+          mapRef={mapRef} 
+          showLegend={mapInfo.showLegend}
+          showLayerSwitcher={mapInfo.showLayerSwitcher}
+        />
 
         {/* Mobile Toggle Buttons */}
         <div className="lg:hidden">
@@ -269,6 +282,7 @@ export default function MapCentricHome() {
         </div>
 
         {/* Top-left controls - Desktop Only */}
+        {mapInfo.showScrapingModule && (
         <div className="hidden lg:block absolute top-4 left-4 z-50">
           <div className="bg-white/95 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2">
             <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
@@ -378,6 +392,7 @@ export default function MapCentricHome() {
             )}
           </div>
         </div>
+        )}
 
         {/* Drawn polygon info with Start Valuation button */}
         {drawnPolygonData && (
