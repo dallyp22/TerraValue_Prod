@@ -39,7 +39,7 @@ export function DataCenterInfoPanel({ datacenter, onClose }: DataCenterInfoPanel
   const properties = datacenter;
 
   return (
-    <Card className="absolute top-4 right-4 z-10 w-80 shadow-lg">
+    <Card className="absolute top-4 right-4 z-10 w-80 shadow-lg bg-white">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-lg font-medium flex items-center gap-2">
           <Server className="h-5 w-5 text-blue-500" />
