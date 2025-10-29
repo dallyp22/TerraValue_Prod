@@ -944,6 +944,8 @@ export default function EnhancedMap({
               const auction = auctionsRef.current.find(a => a.id === auctionId);
               if (auction) {
                 console.log('Found auction:', auction.title);
+                // Close substation panel when auction is clicked
+                setSelectedSubstation(null);
                 setSelectedAuction(auction);
                 // Also call prop callback if provided
                 if (onAuctionClick) {
@@ -1013,6 +1015,8 @@ export default function EnhancedMap({
               const handleSubstationClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
                 if (e.features && e.features.length > 0) {
                   const properties = e.features[0].properties;
+                  // Close auction panel when substation is clicked
+                  setSelectedAuction(null);
                   setSelectedSubstation(properties);
                   console.log('Substation clicked:', properties);
                 }
