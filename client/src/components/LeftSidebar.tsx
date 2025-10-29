@@ -431,7 +431,24 @@ export default function LeftSidebar({
               <span className="text-xs text-slate-500">{filterSectionsOpen.overlays ? '−' : '+'}</span>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer py-2">
+              {/* Master Toggle for All Overlays */}
+              <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
+                <Checkbox
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters}
+                  onCheckedChange={(checked) => {
+                    const allEnabled = checked as boolean;
+                    onMapOverlaysChange({
+                      showAuctions: allEnabled,
+                      showSubstations: allEnabled,
+                      showDatacenters: allEnabled
+                    });
+                  }}
+                />
+                <span className="text-sm font-semibold text-slate-800">Show All Layers</span>
+              </label>
+
+              {/* Individual Layer Toggles */}
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
                   checked={mapOverlays.showAuctions}
                   onCheckedChange={(checked) =>
@@ -440,7 +457,7 @@ export default function LeftSidebar({
                 />
                 <span className="text-sm text-slate-700">Auctions</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer py-2">
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
                   checked={mapOverlays.showSubstations}
                   onCheckedChange={(checked) =>
@@ -449,7 +466,7 @@ export default function LeftSidebar({
                 />
                 <span className="text-sm text-slate-700">Power Substations</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer py-2">
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
                   checked={mapOverlays.showDatacenters}
                   onCheckedChange={(checked) =>
