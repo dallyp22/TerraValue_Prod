@@ -45,6 +45,7 @@ export default function MapCentricHome() {
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showSubstations: true,
+    showDatacenters: true,
   });
   
   // Valuation state
@@ -243,6 +244,7 @@ export default function MapCentricHome() {
           showAuctionLayer={showAuctionLayer}
           auctionFilters={filters}
           showSubstations={mapOverlays.showSubstations}
+          showDatacenters={mapOverlays.showDatacenters}
         />
 
         {/* Map Controls */}

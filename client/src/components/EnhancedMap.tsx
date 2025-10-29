@@ -7,6 +7,7 @@ import * as turf from '@turf/turf';
 import { useToast } from '@/hooks/use-toast';
 import { AuctionDetailsPanel } from './AuctionDetailsPanel';
 import { SubstationInfoPanel } from './SubstationInfoPanel';
+import { DataCenterInfoPanel } from './DataCenterInfoPanel';
 import type { Auction } from '@shared/schema';
 
 interface EnhancedMapProps {
@@ -23,6 +24,7 @@ interface EnhancedMapProps {
   showAuctionLayer?: boolean;
   auctionFilters?: any;
   showSubstations?: boolean;
+  showDatacenters?: boolean;
 }
 
 export default function EnhancedMap({ 
@@ -38,7 +40,8 @@ export default function EnhancedMap({
   onClearComplete,
   showAuctionLayer = true,
   auctionFilters,
-  showSubstations = true
+  showSubstations = true,
+  showDatacenters = true
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -49,6 +52,7 @@ export default function EnhancedMap({
   
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
+  const [selectedDatacenter, setSelectedDatacenter] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
 
@@ -882,6 +886,12 @@ export default function EnhancedMap({
         data: '/substations.geojson'
       });
 
+      // Add datacenters data source
+      map.current!.addSource('datacenters', {
+        type: 'geojson',
+        data: '/datacentersIowa.geojson'
+      });
+
       // Add auction marker layers with color-coding
       // Background circle layer
       map.current!.addLayer({
@@ -944,8 +954,9 @@ export default function EnhancedMap({
               const auction = auctionsRef.current.find(a => a.id === auctionId);
               if (auction) {
                 console.log('Found auction:', auction.title);
-                // Close substation panel when auction is clicked
+                // Close other panels when auction is clicked
                 setSelectedSubstation(null);
+                setSelectedDatacenter(null);
                 setSelectedAuction(auction);
                 // Also call prop callback if provided
                 if (onAuctionClick) {
@@ -1040,6 +1051,95 @@ export default function EnhancedMap({
               });
             }
           };
+
+          // Add datacenter layers
+          map.current!.addLayer({
+            id: 'datacenters-fill',
+            type: 'fill',
+            source: 'datacenters',
+            paint: {
+              'fill-color': '#2563eb',
+              'fill-opacity': 0.3
+            },
+            layout: {
+              'visibility': showDatacenters ? 'visible' : 'none'
+            }
+          });
+
+          map.current!.addLayer({
+            id: 'datacenters-outline',
+            type: 'line',
+            source: 'datacenters',
+            paint: {
+              'line-color': '#1e40af',
+              'line-width': 2,
+              'line-opacity': 0.8
+            },
+            layout: {
+              'visibility': showDatacenters ? 'visible' : 'none'
+            }
+          });
+
+          // Create a fun server icon for datacenters
+          const serverIconSVG = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="18" height="14" rx="2" fill="#3b82f6" stroke="#1e40af" stroke-width="2"/>
+              <rect x="7" y="7" width="10" height="2" fill="#ffffff"/>
+              <rect x="7" y="11" width="10" height="2" fill="#ffffff"/>
+              <rect x="7" y="15" width="6" height="2" fill="#ffffff"/>
+              <circle cx="18" cy="6" r="2" fill="#10b981"/>
+            </svg>
+          `;
+
+          const serverImg = new Image(24, 24);
+          serverImg.onload = () => {
+            if (map.current && !map.current.hasImage('server-icon')) {
+              map.current.addImage('server-icon', serverImg);
+
+              map.current.addLayer({
+                id: 'datacenters-markers',
+                type: 'symbol',
+                source: 'datacenters',
+                layout: {
+                  'icon-image': 'server-icon',
+                  'icon-size': 1,
+                  'icon-allow-overlap': true,
+                  'visibility': showDatacenters ? 'visible' : 'none'
+                }
+              });
+
+              // Add click handlers for datacenters
+              const handleDatacenterClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+                if (e.features && e.features.length > 0) {
+                  const properties = e.features[0].properties;
+                  // Close other panels when datacenter is clicked
+                  setSelectedAuction(null);
+                  setSelectedSubstation(null);
+                  setSelectedDatacenter(properties);
+                  console.log('Datacenter clicked:', properties);
+                }
+              };
+
+              map.current.on('click', 'datacenters-markers', handleDatacenterClick);
+              map.current.on('click', 'datacenters-fill', handleDatacenterClick);
+
+              // Add hover effects
+              map.current.on('mouseenter', 'datacenters-markers', () => {
+                if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+              });
+              map.current.on('mouseleave', 'datacenters-markers', () => {
+                if (map.current) map.current.getCanvas().style.cursor = '';
+              });
+              map.current.on('mouseenter', 'datacenters-fill', () => {
+                if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+              });
+              map.current.on('mouseleave', 'datacenters-fill', () => {
+                if (map.current) map.current.getCanvas().style.cursor = '';
+              });
+            }
+          };
+          serverImg.src = 'data:image/svg+xml;base64,' + btoa(serverIconSVG);
+
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
 
           // Add hover effects for auction markers
@@ -1379,6 +1479,24 @@ export default function EnhancedMap({
     });
   }, [showSubstations]);
 
+  // Toggle datacenter layer visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['datacenters-fill', 'datacenters-outline', 'datacenters-markers'];
+
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showDatacenters ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showDatacenters]);
+
   return (
     <>
       <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />
@@ -1392,6 +1510,12 @@ export default function EnhancedMap({
         <SubstationInfoPanel
           substation={selectedSubstation}
           onClose={() => setSelectedSubstation(null)}
+        />
+      )}
+      {selectedDatacenter && (
+        <DataCenterInfoPanel
+          datacenter={selectedDatacenter}
+          onClose={() => setSelectedDatacenter(null)}
         />
       )}
     </>

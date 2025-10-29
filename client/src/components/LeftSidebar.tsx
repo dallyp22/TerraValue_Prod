@@ -35,6 +35,7 @@ export interface AuctionFilters {
 
 export interface MapOverlays {
   showSubstations: boolean;
+  showDatacenters: boolean;
 }
 
 interface LeftSidebarProps {
@@ -432,11 +433,20 @@ export default function LeftSidebar({
               <label className="flex items-center gap-2 cursor-pointer py-2">
                 <Checkbox
                   checked={mapOverlays.showSubstations}
-                  onCheckedChange={(checked) => 
+                  onCheckedChange={(checked) =>
                     onMapOverlaysChange({ ...mapOverlays, showSubstations: checked as boolean })
                   }
                 />
                 <span className="text-sm text-slate-700">Power Substations</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2">
+                <Checkbox
+                  checked={mapOverlays.showDatacenters}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showDatacenters: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Data Centers</span>
               </label>
             </CollapsibleContent>
           </Collapsible>
