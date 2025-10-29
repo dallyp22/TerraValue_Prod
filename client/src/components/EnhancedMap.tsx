@@ -872,6 +872,12 @@ export default function EnhancedMap({
         }
       });
 
+      // Add substations/infrastructure data source
+      map.current!.addSource('substations', {
+        type: 'geojson',
+        data: '/substations.geojson'
+      });
+
       // Add auction marker layers with color-coding
       // Background circle layer
       map.current!.addLayer({
@@ -947,6 +953,45 @@ export default function EnhancedMap({
 
           map.current.on('click', 'auction-markers', handleAuctionClick);
           map.current.on('click', 'auction-markers-bg', handleAuctionClick);
+
+          // Add substations layer
+          map.current.addLayer({
+            id: 'substations-fill',
+            type: 'fill',
+            source: 'substations',
+            paint: {
+              'fill-color': '#ff9800',
+              'fill-opacity': 0.3
+            }
+          });
+
+          map.current.addLayer({
+            id: 'substations-outline',
+            type: 'line',
+            source: 'substations',
+            paint: {
+              'line-color': '#ff6f00',
+              'line-width': 2
+            }
+          });
+
+          // Add substations labels
+          map.current.addLayer({
+            id: 'substations-labels',
+            type: 'symbol',
+            source: 'substations',
+            layout: {
+              'text-field': ['get', 'name'],
+              'text-size': 12,
+              'text-offset': [0, 1.5],
+              'text-anchor': 'top'
+            },
+            paint: {
+              'text-color': '#ff6f00',
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 1
+            }
+          });
 
           // Add hover effects for auction markers
           const handleAuctionMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
