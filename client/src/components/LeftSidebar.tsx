@@ -37,6 +37,11 @@ export interface MapOverlays {
   showAuctions: boolean;
   showSubstations: boolean;
   showDatacenters: boolean;
+  showLakes: boolean;
+  lakeTypes: {
+    lakes: boolean;
+    reservoirs: boolean;
+  };
 }
 
 export interface MapInfo {
@@ -445,13 +450,18 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
                       showAuctions: allEnabled,
                       showSubstations: allEnabled,
-                      showDatacenters: allEnabled
+                      showDatacenters: allEnabled,
+                      showLakes: allEnabled,
+                      lakeTypes: {
+                        lakes: allEnabled,
+                        reservoirs: allEnabled
+                      }
                     });
                   }}
                 />
@@ -486,6 +496,49 @@ export default function LeftSidebar({
                 />
                 <span className="text-sm text-slate-700">Data Centers</span>
               </label>
+              
+              {/* Lakes Toggle */}
+              <div className="pl-4 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer py-2">
+                  <Checkbox
+                    checked={mapOverlays.showLakes}
+                    onCheckedChange={(checked) =>
+                      onMapOverlaysChange({ ...mapOverlays, showLakes: checked as boolean })
+                    }
+                  />
+                  <span className="text-sm text-slate-700">Lakes & Reservoirs</span>
+                </label>
+                
+                {/* Lake Type Filters - only show when lakes are enabled */}
+                {mapOverlays.showLakes && (
+                  <div className="ml-6 space-y-1 pb-2 border-l-2 border-blue-200 pl-3">
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.lakeTypes.lakes}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            lakeTypes: { ...mapOverlays.lakeTypes, lakes: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Lakes</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.lakeTypes.reservoirs}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            lakeTypes: { ...mapOverlays.lakeTypes, reservoirs: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Reservoirs</span>
+                    </label>
+                  </div>
+                )}
+              </div>
             </CollapsibleContent>
           </Collapsible>
 

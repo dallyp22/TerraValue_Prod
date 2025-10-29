@@ -47,6 +47,11 @@ export default function MapCentricHome() {
     showAuctions: true,
     showSubstations: true,
     showDatacenters: true,
+    showLakes: true,
+    lakeTypes: {
+      lakes: true,
+      reservoirs: true
+    }
   });
 
   // Sync auction layer visibility with map overlays
@@ -260,6 +265,8 @@ export default function MapCentricHome() {
           auctionFilters={filters}
           showSubstations={mapOverlays.showSubstations}
           showDatacenters={mapOverlays.showDatacenters}
+          showLakes={mapOverlays.showLakes}
+          lakeTypes={mapOverlays.lakeTypes}
         />
 
         {/* Map Controls */}

@@ -25,6 +25,11 @@ interface EnhancedMapProps {
   auctionFilters?: any;
   showSubstations?: boolean;
   showDatacenters?: boolean;
+  showLakes?: boolean;
+  lakeTypes?: {
+    lakes: boolean;
+    reservoirs: boolean;
+  };
 }
 
 export default function EnhancedMap({ 
@@ -41,7 +46,9 @@ export default function EnhancedMap({
   showAuctionLayer = true,
   auctionFilters,
   showSubstations = true,
-  showDatacenters = true
+  showDatacenters = true,
+  showLakes = true,
+  lakeTypes = { lakes: true, reservoirs: true }
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -892,6 +899,12 @@ export default function EnhancedMap({
         data: '/datacentersIowa.geojson'
       });
 
+      // Add lakes data source
+      map.current!.addSource('lakes', {
+        type: 'geojson',
+        data: '/lakes.geojson'
+      });
+
       // Add auction marker layers with color-coding
       // Background circle layer
       map.current!.addLayer({
@@ -1138,7 +1151,37 @@ export default function EnhancedMap({
               });
             }
           };
-          serverImg.src = 'data:image/svg+xml;base64,' + btoa(serverIconSVG);
+          serverImg.src = 'data:image/svg+xml;base64' + btoa(serverIconSVG);
+
+          // Add lakes layer with filtering
+          map.current!.addLayer({
+            id: 'lakes-fill',
+            type: 'fill',
+            source: 'lakes',
+            paint: {
+              'fill-color': '#4299e1',
+              'fill-opacity': 0.4
+            },
+            layout: {
+              'visibility': showLakes ? 'visible' : 'none'
+            },
+            filter: ['in', ['get', 'water'], ['literal', []]] // Will be updated dynamically
+          });
+
+          map.current!.addLayer({
+            id: 'lakes-outline',
+            type: 'line',
+            source: 'lakes',
+            paint: {
+              'line-color': '#2b6cb0',
+              'line-width': 1.5,
+              'line-opacity': 0.8
+            },
+            layout: {
+              'visibility': showLakes ? 'visible' : 'none'
+            },
+            filter: ['in', ['get', 'water'], ['literal', []]] // Will be updated dynamically
+          });
 
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
 
@@ -1496,6 +1539,54 @@ export default function EnhancedMap({
       }
     });
   }, [showDatacenters]);
+
+  // Toggle lakes layer visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['lakes-fill', 'lakes-outline'];
+
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showLakes ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showLakes]);
+
+  // Filter lakes by type (lake vs reservoir)
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['lakes-fill', 'lakes-outline'];
+    const allowedTypes = [];
+    
+    if (lakeTypes.lakes) allowedTypes.push('lake');
+    if (lakeTypes.reservoirs) allowedTypes.push('reservoir');
+
+    // If no types selected, hide all lakes
+    if (allowedTypes.length === 0) {
+      layers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setFilter(layerId, ['in', ['get', 'water'], ['literal', []]]);
+        }
+      });
+      return;
+    }
+
+    // Filter by selected types
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setFilter(layerId, ['in', ['get', 'water'], ['literal', allowedTypes]]);
+      }
+    });
+  }, [lakeTypes]);
 
   return (
     <>
