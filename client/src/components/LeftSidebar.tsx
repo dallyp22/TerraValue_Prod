@@ -31,6 +31,10 @@ export interface AuctionFilters {
   counties: string[];
 }
 
+export interface MapOverlays {
+  showSubstations: boolean;
+}
+
 interface LeftSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -39,6 +43,8 @@ interface LeftSidebarProps {
   onLocationSearch: (location: string) => void;
   auctionCount: number;
   onShowList?: () => void;
+  mapOverlays: MapOverlays;
+  onMapOverlaysChange: (overlays: MapOverlays) => void;
 }
 
 const PROPERTY_TYPES = [
@@ -61,7 +67,9 @@ export default function LeftSidebar({
   onFiltersChange,
   onLocationSearch,
   auctionCount,
-  onShowList
+  onShowList,
+  mapOverlays,
+  onMapOverlaysChange
 }: LeftSidebarProps) {
   const [searchInput, setSearchInput] = useState('');
   const [countySearch, setCountySearch] = useState('');
@@ -71,7 +79,7 @@ export default function LeftSidebar({
     csr2: false,
     type: false,
     value: false,
-    county: false,
+    overlays: true,
   });
 
   const handleSearch = () => {
@@ -384,45 +392,26 @@ export default function LeftSidebar({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* County Filter */}
+          {/* Map Overlays */}
           <Collapsible
-            open={filterSectionsOpen.county}
-            onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, county: open })}
+            open={filterSectionsOpen.overlays}
+            onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, overlays: open })}
             className="filter-group mb-6"
           >
             <CollapsibleTrigger className="w-full flex justify-between items-center">
-              <h4 className="text-sm font-semibold text-slate-700">Counties</h4>
-              <span className="text-xs text-slate-500">{filterSectionsOpen.county ? '−' : '+'}</span>
+              <h4 className="text-sm font-semibold text-slate-700">Map Overlays</h4>
+              <span className="text-xs text-slate-500">{filterSectionsOpen.overlays ? '−' : '+'}</span>
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-3">
-              <Input
-                type="text"
-                placeholder="Search counties..."
-                value={countySearch}
-                onChange={(e) => setCountySearch(e.target.value)}
-                className="county-search"
-              />
-              <div className="county-list max-h-48 overflow-y-auto space-y-2">
-                {filteredCounties.slice(0, 10).map((county) => (
-                  <label key={county} className="flex items-center gap-2 cursor-pointer py-1">
-                    <Checkbox
-                      checked={filters.counties.includes(county)}
-                      onCheckedChange={() => toggleCounty(county)}
-                    />
-                    <span className="text-sm text-slate-700">{county}</span>
-                  </label>
-                ))}
-                {filteredCounties.length > 10 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-xs text-blue-600"
-                    onClick={() => setFilterSectionsOpen({ ...filterSectionsOpen, county: true })}
-                  >
-                    Show All ({filteredCounties.length - 10} more)
-                  </Button>
-                )}
-              </div>
+            <CollapsibleContent className="mt-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer py-2">
+                <Checkbox
+                  checked={mapOverlays.showSubstations}
+                  onCheckedChange={(checked) => 
+                    onMapOverlaysChange({ ...mapOverlays, showSubstations: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Power Substations</span>
+              </label>
             </CollapsibleContent>
           </Collapsible>
         </div>

@@ -6,6 +6,7 @@ import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import * as turf from '@turf/turf';
 import { useToast } from '@/hooks/use-toast';
 import { AuctionDetailsPanel } from './AuctionDetailsPanel';
+import { SubstationInfoPanel } from './SubstationInfoPanel';
 import type { Auction } from '@shared/schema';
 
 interface EnhancedMapProps {
@@ -21,6 +22,7 @@ interface EnhancedMapProps {
   onClearComplete?: () => void;
   showAuctionLayer?: boolean;
   auctionFilters?: any;
+  showSubstations?: boolean;
 }
 
 export default function EnhancedMap({ 
@@ -35,7 +37,8 @@ export default function EnhancedMap({
   clearDrawnPolygons = false,
   onClearComplete,
   showAuctionLayer = true,
-  auctionFilters
+  auctionFilters,
+  showSubstations = true
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -45,6 +48,7 @@ export default function EnhancedMap({
   const auctionClickedRef = useRef<boolean>(false); // Track if auction was just clicked
   
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
+  const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
 
@@ -954,7 +958,7 @@ export default function EnhancedMap({
           map.current.on('click', 'auction-markers', handleAuctionClick);
           map.current.on('click', 'auction-markers-bg', handleAuctionClick);
 
-          // Add substations layer
+          // Add substations polygon layer
           map.current.addLayer({
             id: 'substations-fill',
             type: 'fill',
@@ -962,6 +966,9 @@ export default function EnhancedMap({
             paint: {
               'fill-color': '#ff9800',
               'fill-opacity': 0.3
+            },
+            layout: {
+              'visibility': showSubstations ? 'visible' : 'none'
             }
           });
 
@@ -972,26 +979,64 @@ export default function EnhancedMap({
             paint: {
               'line-color': '#ff6f00',
               'line-width': 2
+            },
+            layout: {
+              'visibility': showSubstations ? 'visible' : 'none'
             }
           });
 
-          // Add substations labels
-          map.current.addLayer({
-            id: 'substations-labels',
-            type: 'symbol',
-            source: 'substations',
-            layout: {
-              'text-field': ['get', 'name'],
-              'text-size': 12,
-              'text-offset': [0, 1.5],
-              'text-anchor': 'top'
-            },
-            paint: {
-              'text-color': '#ff6f00',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 1
+          // Create lightning bolt SVG and add to map
+          const lightningBoltSVG = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="#ffa726" stroke="#ff6f00" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          `;
+          const lightningImg = new Image(24, 24);
+          lightningImg.onload = () => {
+            if (map.current && !map.current.hasImage('lightning-bolt')) {
+              map.current.addImage('lightning-bolt', lightningImg);
+              
+              // Add substations markers with lightning bolt icon
+              map.current.addLayer({
+                id: 'substations-markers',
+                type: 'symbol',
+                source: 'substations',
+                layout: {
+                  'icon-image': 'lightning-bolt',
+                  'icon-size': 1,
+                  'icon-allow-overlap': true,
+                  'visibility': showSubstations ? 'visible' : 'none'
+                }
+              });
+
+              // Add click handlers for substations
+              const handleSubstationClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+                if (e.features && e.features.length > 0) {
+                  const properties = e.features[0].properties;
+                  setSelectedSubstation(properties);
+                  console.log('Substation clicked:', properties);
+                }
+              };
+
+              map.current.on('click', 'substations-markers', handleSubstationClick);
+              map.current.on('click', 'substations-fill', handleSubstationClick);
+
+              // Add hover effects
+              map.current.on('mouseenter', 'substations-markers', () => {
+                if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+              });
+              map.current.on('mouseleave', 'substations-markers', () => {
+                if (map.current) map.current.getCanvas().style.cursor = '';
+              });
+              map.current.on('mouseenter', 'substations-fill', () => {
+                if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+              });
+              map.current.on('mouseleave', 'substations-fill', () => {
+                if (map.current) map.current.getCanvas().style.cursor = '';
+              });
             }
-          });
+          };
+          lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
 
           // Add hover effects for auction markers
           const handleAuctionMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
@@ -1312,6 +1357,24 @@ export default function EnhancedMap({
     }
   }, [auctionFilters]);
 
+  // Toggle substations layer visibility
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const layers = ['substations-fill', 'substations-outline', 'substations-markers'];
+    
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showSubstations ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showSubstations]);
+
   return (
     <>
       <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />
@@ -1319,6 +1382,12 @@ export default function EnhancedMap({
         <AuctionDetailsPanel
           auction={selectedAuction}
           onClose={() => setSelectedAuction(null)}
+        />
+      )}
+      {selectedSubstation && (
+        <SubstationInfoPanel
+          substation={selectedSubstation}
+          onClose={() => setSelectedSubstation(null)}
         />
       )}
     </>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
-import LeftSidebar, { type AuctionFilters } from './LeftSidebar';
+import LeftSidebar, { type AuctionFilters, type MapOverlays } from './LeftSidebar';
 import MapControls from './MapControls';
 import PropertyFormOverlay from './PropertyFormOverlay';
 import ValuationPipelineOverlay from './ValuationPipelineOverlay';
@@ -39,6 +39,11 @@ export default function MapCentricHome() {
     counties: [],
   });
   const [auctionCount, setAuctionCount] = useState(0);
+  
+  // Map overlays state
+  const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
+    showSubstations: true,
+  });
   
   // Valuation state
   const [showForm, setShowForm] = useState(false);
@@ -214,6 +219,8 @@ export default function MapCentricHome() {
         onFiltersChange={setFilters}
         onLocationSearch={handleLocationSearch}
         auctionCount={auctionCount}
+        mapOverlays={mapOverlays}
+        onMapOverlaysChange={setMapOverlays}
       />
 
       {/* Map Container */}
@@ -233,6 +240,7 @@ export default function MapCentricHome() {
           }}
           showAuctionLayer={showAuctionLayer}
           auctionFilters={filters}
+          showSubstations={mapOverlays.showSubstations}
         />
 
         {/* Map Controls */}
