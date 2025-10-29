@@ -21,10 +21,12 @@ import {
 export interface AuctionFilters {
   searchLocation: string;
   auctionDateRange: '7' | '30' | '90' | 'custom' | 'all';
-  minAcreage: number | null;
-  maxAcreage: number | null;
+  minAcreage: number;
+  maxAcreage: number;
   minCSR2: number;
   maxCSR2: number;
+  minTillablePercent: number;
+  maxTillablePercent: number;
   propertyTypes: string[];
   minValue: number | null;
   maxValue: number | null;
@@ -77,6 +79,7 @@ export default function LeftSidebar({
     date: true,
     acreage: true,
     csr2: false,
+    tillable: false,
     type: false,
     value: false,
     overlays: true,
@@ -121,9 +124,6 @@ export default function LeftSidebar({
     });
   };
 
-  const setAcreageQuick = (min: number | null, max: number | null) => {
-    updateFilters({ minAcreage: min, maxAcreage: max });
-  };
 
   const filteredCounties = IOWA_COUNTIES.filter(county =>
     county.toLowerCase().includes(countySearch.toLowerCase())
@@ -261,28 +261,23 @@ export default function LeftSidebar({
               <span className="text-xs text-slate-500">{filterSectionsOpen.acreage ? '−' : '+'}</span>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3 space-y-3">
-              <div className="range-inputs flex items-center gap-3">
-                <Input
-                  type="number"
-                  placeholder="Min"
-                  value={filters.minAcreage ?? ''}
-                  onChange={(e) => updateFilters({ minAcreage: e.target.value ? Number(e.target.value) : null })}
-                  className="flex-1"
-                />
-                <span className="text-xs text-slate-500">to</span>
-                <Input
-                  type="number"
-                  placeholder="Max"
-                  value={filters.maxAcreage ?? ''}
-                  onChange={(e) => updateFilters({ maxAcreage: e.target.value ? Number(e.target.value) : null })}
-                  className="flex-1"
-                />
+              <Slider
+                min={0}
+                max={1000}
+                step={10}
+                value={[filters.minAcreage, filters.maxAcreage]}
+                onValueChange={([min, max]) => updateFilters({ minAcreage: min, maxAcreage: max })}
+                className="py-4"
+              />
+              <div className="flex justify-between text-xs text-slate-600 font-medium">
+                <span>Min: {filters.minAcreage.toLocaleString()} acres</span>
+                <span>Max: {filters.maxAcreage === 1000 ? 'Any' : `${filters.maxAcreage.toLocaleString()} acres`}</span>
               </div>
-              <div className="quick-acres flex gap-2">
+              <div className="quick-acres flex gap-2 mt-3">
                 <Button
                   variant={filters.minAcreage === 0 && filters.maxAcreage === 40 ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setAcreageQuick(0, 40)}
+                  onClick={() => updateFilters({ minAcreage: 0, maxAcreage: 40 })}
                   className="flex-1 text-xs"
                 >
                   0-40
@@ -290,15 +285,15 @@ export default function LeftSidebar({
                 <Button
                   variant={filters.minAcreage === 40 && filters.maxAcreage === 160 ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setAcreageQuick(40, 160)}
+                  onClick={() => updateFilters({ minAcreage: 40, maxAcreage: 160 })}
                   className="flex-1 text-xs"
                 >
                   40-160
                 </Button>
                 <Button
-                  variant={filters.minAcreage === 160 && filters.maxAcreage === null ? 'default' : 'outline'}
+                  variant={filters.minAcreage === 160 && filters.maxAcreage === 1000 ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setAcreageQuick(160, null)}
+                  onClick={() => updateFilters({ minAcreage: 160, maxAcreage: 1000 })}
                   className="flex-1 text-xs"
                 >
                   160+
@@ -326,7 +321,7 @@ export default function LeftSidebar({
                 onValueChange={([min, max]) => updateFilters({ minCSR2: min, maxCSR2: max })}
                 className="py-4"
               />
-              <div className="flex justify-between text-xs text-slate-600">
+              <div className="flex justify-between text-xs text-slate-600 font-medium">
                 <span>Min: {filters.minCSR2}</span>
                 <span>Max: {filters.maxCSR2}</span>
               </div>
@@ -334,6 +329,35 @@ export default function LeftSidebar({
                 <div>Poor (5-65)</div>
                 <div>Good (65-82)</div>
                 <div>Excellent (82+)</div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* % Tillable Filter */}
+          <Collapsible
+            open={filterSectionsOpen.tillable}
+            onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, tillable: open })}
+            className="filter-group mb-6 pb-6 border-b border-slate-100"
+          >
+            <CollapsibleTrigger className="w-full flex justify-between items-center">
+              <h4 className="text-sm font-semibold text-slate-700">% Tillable</h4>
+              <span className="text-xs text-slate-500">{filterSectionsOpen.tillable ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-3">
+              <Slider
+                min={0}
+                max={100}
+                step={5}
+                value={[filters.minTillablePercent, filters.maxTillablePercent]}
+                onValueChange={([min, max]) => updateFilters({ minTillablePercent: min, maxTillablePercent: max })}
+                className="py-4"
+              />
+              <div className="flex justify-between text-xs text-slate-600 font-medium">
+                <span>Min: {filters.minTillablePercent}%</span>
+                <span>Max: {filters.maxTillablePercent}%</span>
+              </div>
+              <div className="text-xs text-slate-500">
+                Filter properties by percentage of tillable land
               </div>
             </CollapsibleContent>
           </Collapsible>
