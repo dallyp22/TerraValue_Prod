@@ -49,8 +49,8 @@ export default function MapControls({ mapRef, onLayerChange, currentLayer = 'sat
 
   return (
     <>
-      {/* Top Right Controls */}
-      <div className="map-controls-top-right absolute top-20 right-4 flex flex-col gap-2 z-[1000]">
+      {/* Top Left Controls - Next to Scraping Module */}
+      <div className="map-controls-top-left absolute top-4 left-[280px] flex flex-col gap-2 z-[1000]">
         <Button
           onClick={handleZoomIn}
           size="icon"
