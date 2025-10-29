@@ -137,8 +137,15 @@ export default function MapCentricHome() {
     }
   };
 
-  // Handle auction click
+  // Handle auction click - just shows info panel, does NOT open valuation form
   const handleAuctionClick = (auction: Auction) => {
+    // Info panel will be shown by EnhancedMap's selectedAuction state
+    // This callback can be used for additional logic if needed
+    console.log('Auction info panel opened:', auction.title);
+  };
+
+  // Handle starting valuation from auction info panel
+  const handleStartAuctionValuation = (auction: Auction) => {
     // Populate form with auction data
     setParcelData({
       ...auction,
@@ -252,6 +259,7 @@ export default function MapCentricHome() {
           drawModeEnabled={drawModeEnabled}
           onParcelClick={handleParcelClick}
           onAuctionClick={handleAuctionClick}
+          onStartAuctionValuation={handleStartAuctionValuation}
           onPolygonDrawn={handlePolygonDrawn}
           drawnPolygonData={drawnPolygonData}
           onMapReady={(map) => setMapRef(map)}

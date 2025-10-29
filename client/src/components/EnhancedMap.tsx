@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AuctionDetailsPanel } from './AuctionDetailsPanel';
 import { SubstationInfoPanel } from './SubstationInfoPanel';
 import { DataCenterInfoPanel } from './DataCenterInfoPanel';
+import { LakeInfoPanel } from './LakeInfoPanel';
 import type { Auction } from '@shared/schema';
 
 interface EnhancedMapProps {
@@ -15,6 +16,7 @@ interface EnhancedMapProps {
   onParcelClick: (parcel: any) => void;
   onPolygonDrawn: (polygon: any) => void;
   onAuctionClick?: (auction: Auction) => void;
+  onStartAuctionValuation?: (auction: Auction) => void;
   drawnPolygonData?: any;
   onMapReady?: (map: maplibregl.Map) => void;
   showOwnerLabels?: boolean;
@@ -37,6 +39,7 @@ export default function EnhancedMap({
   onParcelClick, 
   onPolygonDrawn,
   onAuctionClick,
+  onStartAuctionValuation,
   drawnPolygonData,
   onMapReady,
   showOwnerLabels = false,
@@ -55,11 +58,12 @@ export default function EnhancedMap({
   const map = useRef<maplibregl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
   const drawModeEnabledRef = useRef(drawModeEnabled);
-  const auctionClickedRef = useRef<boolean>(false); // Track if auction was just clicked
+  const featureClickedRef = useRef<boolean>(false); // Track if any feature (auction, substation, datacenter, lake) was just clicked
   
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
   const [selectedDatacenter, setSelectedDatacenter] = useState<any>(null);
+  const [selectedLake, setSelectedLake] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
 
@@ -679,8 +683,8 @@ export default function EnhancedMap({
 
       // Function to handle Harrison County parcel clicks
       const handleHarrisonParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        // Check if an auction was just clicked - if so, ignore parcel click
-        if (auctionClickedRef.current) {
+        // Check if a feature (auction, substation, datacenter, lake) was just clicked - if so, ignore parcel click
+        if (featureClickedRef.current) {
           console.log('Ignoring parcel click - auction was clicked');
           return;
         }
@@ -952,12 +956,15 @@ export default function EnhancedMap({
 
           // Add auction click handlers for both layers
           const handleAuctionClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+            // Prevent event from bubbling to parcel layer
+            e.originalEvent.stopPropagation();
+            
             // Set flag to prevent parcel click handlers from firing
-            auctionClickedRef.current = true;
+            featureClickedRef.current = true;
             
             // Clear the flag after a short delay
             setTimeout(() => {
-              auctionClickedRef.current = false;
+              featureClickedRef.current = false;
             }, 100);
             
             if (e.features && e.features.length > 0) {
@@ -967,9 +974,10 @@ export default function EnhancedMap({
               const auction = auctionsRef.current.find(a => a.id === auctionId);
               if (auction) {
                 console.log('Found auction:', auction.title);
-                // Close other panels when auction is clicked
+                // Close ALL other panels when auction is clicked
                 setSelectedSubstation(null);
                 setSelectedDatacenter(null);
+                setSelectedLake(null);
                 setSelectedAuction(auction);
                 // Also call prop callback if provided
                 if (onAuctionClick) {
@@ -1037,10 +1045,21 @@ export default function EnhancedMap({
 
               // Add click handlers for substations
               const handleSubstationClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+                // Prevent event from bubbling to parcel layer
+                e.originalEvent.stopPropagation();
+                
+                // Set flag to prevent parcel click handlers from firing
+                featureClickedRef.current = true;
+                setTimeout(() => {
+                  featureClickedRef.current = false;
+                }, 100);
+                
                 if (e.features && e.features.length > 0) {
                   const properties = e.features[0].properties;
-                  // Close auction panel when substation is clicked
+                  // Close ALL other panels when substation is clicked
                   setSelectedAuction(null);
+                  setSelectedDatacenter(null);
+                  setSelectedLake(null);
                   setSelectedSubstation(properties);
                   console.log('Substation clicked:', properties);
                 }
@@ -1123,11 +1142,21 @@ export default function EnhancedMap({
 
               // Add click handlers for datacenters
               const handleDatacenterClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+                // Prevent event from bubbling to parcel layer
+                e.originalEvent.stopPropagation();
+                
+                // Set flag to prevent parcel click handlers from firing
+                featureClickedRef.current = true;
+                setTimeout(() => {
+                  featureClickedRef.current = false;
+                }, 100);
+                
                 if (e.features && e.features.length > 0) {
                   const properties = e.features[0].properties;
-                  // Close other panels when datacenter is clicked
+                  // Close ALL other panels when datacenter is clicked
                   setSelectedAuction(null);
                   setSelectedSubstation(null);
+                  setSelectedLake(null);
                   setSelectedDatacenter(properties);
                   console.log('Datacenter clicked:', properties);
                 }
@@ -1181,6 +1210,39 @@ export default function EnhancedMap({
               'visibility': showLakes ? 'visible' : 'none'
             },
             filter: ['in', ['get', 'water'], ['literal', []]] // Will be updated dynamically
+          });
+
+          // Add click handlers for lakes
+          const handleLakeClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+            // Prevent event from bubbling to parcel layer
+            e.originalEvent.stopPropagation();
+            
+            // Set flag to prevent parcel click handlers from firing
+            featureClickedRef.current = true;
+            setTimeout(() => {
+              featureClickedRef.current = false;
+            }, 100);
+            
+            if (e.features && e.features.length > 0) {
+              const properties = e.features[0].properties;
+              // Close ALL other panels when lake is clicked
+              setSelectedAuction(null);
+              setSelectedSubstation(null);
+              setSelectedDatacenter(null);
+              setSelectedLake(properties);
+              console.log('Lake clicked:', properties);
+            }
+          };
+
+          map.current!.on('click', 'lakes-fill', handleLakeClick);
+          map.current!.on('click', 'lakes-outline', handleLakeClick);
+
+          // Add hover effects for lakes
+          map.current!.on('mouseenter', 'lakes-fill', () => {
+            if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+          });
+          map.current!.on('mouseleave', 'lakes-fill', () => {
+            if (map.current) map.current.getCanvas().style.cursor = '';
           });
 
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
@@ -1595,6 +1657,7 @@ export default function EnhancedMap({
         <AuctionDetailsPanel
           auction={selectedAuction}
           onClose={() => setSelectedAuction(null)}
+          onStartValuation={onStartAuctionValuation ? () => onStartAuctionValuation(selectedAuction) : undefined}
         />
       )}
       {selectedSubstation && (
@@ -1607,6 +1670,12 @@ export default function EnhancedMap({
         <DataCenterInfoPanel
           datacenter={selectedDatacenter}
           onClose={() => setSelectedDatacenter(null)}
+        />
+      )}
+      {selectedLake && (
+        <LakeInfoPanel
+          lake={selectedLake}
+          onClose={() => setSelectedLake(null)}
         />
       )}
     </>

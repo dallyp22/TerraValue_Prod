@@ -3,16 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { X, MapPin, Calendar, Ruler, TrendingUp, ExternalLink, Calculator } from 'lucide-react';
+import { X, MapPin, Calendar, Ruler, TrendingUp, ExternalLink, Calculator, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Auction } from '@shared/schema';
 
 interface AuctionDetailsPanelProps {
   auction: Auction;
   onClose: () => void;
+  onStartValuation?: () => void;
 }
 
-export function AuctionDetailsPanel({ auction, onClose }: AuctionDetailsPanelProps) {
+export function AuctionDetailsPanel({ auction, onClose, onStartValuation }: AuctionDetailsPanelProps) {
   const [calculating, setCalculating] = useState(false);
   const [valuation, setValuation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +201,17 @@ export function AuctionDetailsPanel({ auction, onClose }: AuctionDetailsPanelPro
             View Full Auction Details
           </a>
         </Button>
+
+        {/* Start Property Valuation Button */}
+        {onStartValuation && (
+          <Button
+            onClick={onStartValuation}
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Start Property Valuation
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
