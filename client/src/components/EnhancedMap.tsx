@@ -1194,7 +1194,7 @@ export default function EnhancedMap({
             layout: {
               'visibility': showLakes ? 'visible' : 'none'
             },
-            filter: ['in', ['get', 'water'], ['literal', []]] // Will be updated dynamically
+            filter: ['in', ['get', 'water'], ['literal', ['lake', 'reservoir']]] // Show both by default
           });
 
           map.current!.addLayer({
@@ -1209,7 +1209,7 @@ export default function EnhancedMap({
             layout: {
               'visibility': showLakes ? 'visible' : 'none'
             },
-            filter: ['in', ['get', 'water'], ['literal', []]] // Will be updated dynamically
+            filter: ['in', ['get', 'water'], ['literal', ['lake', 'reservoir']]] // Show both by default
           });
 
           // Add click handlers for lakes
