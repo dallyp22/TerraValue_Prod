@@ -107,7 +107,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
           const response = await apiRequest('POST', '/api/csr2/enhanced/polygon', { wkt });
           const data = await response.json();
           
-          if (data.success && data.data && data.data.summary.weightedAverageCSR2 > 0) {
+          if (data.success && data.data) {
             const enhancedData = data.data;
             
             // Format result data with enhanced information, but use ACTUAL parcel acres
@@ -140,6 +140,11 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
             
             setParcelCSR2Data(resultData);
             setIsLoadingCSR2(false);
+            
+            toast({
+              title: "Enhanced Soil Analysis Complete",
+              description: `Analyzed ${enhancedData.summary.soilUnitCount} soil units. CSR2: ${enhancedData.summary.weightedAverageCSR2.toFixed(1)}`,
+            });
             return;
           }
         } catch (enhancedError) {
