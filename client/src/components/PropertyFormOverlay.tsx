@@ -107,10 +107,10 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
           const response = await apiRequest('POST', '/api/csr2/enhanced/polygon', { wkt });
           const data = await response.json();
           
-          if (data.success && data.data) {
+          if (data.success && data.data && data.data.summary.weightedAverageCSR2 > 0) {
             const enhancedData = data.data;
             
-            // Format result data with enhanced information
+            // Format result data with enhanced information, but use ACTUAL parcel acres
             const resultData = {
               wkt,
               csr2: {
@@ -120,11 +120,14 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
                 max: enhancedData.statistics.csr2.max,
                 count: enhancedData.summary.soilUnitCount
               },
-              acres: parcelData.acres,
+              acres: parcelData.acres, // Use actual parcel acres, not USDA calculation
               originalAcres: parcelData.acres,
               // Enhanced properties
               enhanced: {
-                summary: enhancedData.summary,
+                summary: {
+                  ...enhancedData.summary,
+                  totalAcres: parcelData.acres // Override with actual parcel acres
+                },
                 soilComposition: enhancedData.soilComposition,
                 statistics: enhancedData.statistics
               }
@@ -140,7 +143,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
             return;
           }
         } catch (enhancedError) {
-          console.warn('Enhanced polygon analysis failed, falling back to point sampling:', enhancedError);
+          console.warn('Enhanced polygon analysis failed or returned no CSR2 data, falling back to point sampling:', enhancedError);
           // Fall through to original point sampling method
         }
       }
