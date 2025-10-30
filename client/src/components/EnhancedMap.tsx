@@ -1196,7 +1196,7 @@ export default function EnhancedMap({
               });
             }
           };
-          serverImg.src = 'data:image/svg+xml;base64' + btoa(serverIconSVG);
+          serverImg.src = 'data:image/svg+xml;base64,' + btoa(serverIconSVG);
 
           // Add lakes layer with filtering
           map.current!.addLayer({
