@@ -556,13 +556,13 @@ export default function LeftSidebar({
               {/* Master Toggle for All Map Info */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapInfo.showScrapingModule && mapInfo.showLegend && mapInfo.showLayerSwitcher}
+                  checked={mapInfo.showScrapingModule && mapInfo.showLegend}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapInfoChange({
                       showScrapingModule: allEnabled,
                       showLegend: allEnabled,
-                      showLayerSwitcher: allEnabled
+                      showLayerSwitcher: false
                     });
                   }}
                 />
@@ -587,15 +587,6 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">Legend</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
-                <Checkbox
-                  checked={mapInfo.showLayerSwitcher}
-                  onCheckedChange={(checked) =>
-                    onMapInfoChange({ ...mapInfo, showLayerSwitcher: checked as boolean })
-                  }
-                />
-                <span className="text-sm text-slate-700">Satellite/Street View</span>
               </label>
             </CollapsibleContent>
           </Collapsible>

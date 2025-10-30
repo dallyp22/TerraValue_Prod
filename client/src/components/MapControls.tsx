@@ -89,38 +89,6 @@ export default function MapControls({ mapRef, onLayerChange, currentLayer = 'sat
         </Button>
       </div>
 
-      {/* Bottom Right - Layer Switcher */}
-      {showLayerSwitcher && (
-        <div className="map-controls-bottom-right absolute bottom-20 right-4 z-[1000]">
-          <div className="layer-switcher flex gap-2 bg-white p-2 rounded-lg shadow-lg border border-slate-200">
-            <button
-              onClick={() => onLayerChange?.('satellite')}
-              className={`layer-option w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
-                currentLayer === 'satellite' ? 'border-blue-600 ring-2 ring-blue-200' : 'border-transparent hover:border-slate-300'
-              }`}
-              title="Satellite View"
-            >
-              <div className="w-full h-full bg-gradient-to-br from-blue-900 via-green-800 to-green-900 flex items-center justify-center">
-                <Layers className="h-6 w-6 text-white/70" />
-              </div>
-              <div className="text-[10px] text-center py-0.5 bg-white/90 absolute bottom-0 left-0 right-0">Satellite</div>
-            </button>
-            <button
-              onClick={() => onLayerChange?.('street')}
-              className={`layer-option w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
-                currentLayer === 'street' ? 'border-blue-600 ring-2 ring-blue-200' : 'border-transparent hover:border-slate-300'
-              }`}
-              title="Street View"
-            >
-              <div className="w-full h-full bg-gradient-to-br from-slate-100 via-slate-200 to-slate-300 flex items-center justify-center">
-                <Layers className="h-6 w-6 text-slate-600/70" />
-              </div>
-              <div className="text-[10px] text-center py-0.5 bg-white/90 absolute bottom-0 left-0 right-0">Street</div>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Bottom Left - Legend */}
       {showLegend && (
         <div className="map-legend absolute bottom-4 left-4 z-[1000] bg-white p-4 rounded-lg shadow-lg border border-slate-200 max-w-xs">
