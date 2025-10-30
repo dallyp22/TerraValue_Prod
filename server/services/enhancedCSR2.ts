@@ -222,9 +222,9 @@ class EnhancedCSR2Service {
         ch.om_r as organicMatter
       FROM 
         mapunit m
+        LEFT JOIN component c ON m.mukey = c.mukey
         LEFT JOIN mucropyld mp ON m.mukey = mp.mukey AND mp.cropname = 'Corn'
         LEFT JOIN mucropyld mp2 ON m.mukey = mp2.mukey AND mp2.cropname = 'Soybeans'
-        LEFT JOIN component c ON m.mukey = c.mukey
         LEFT JOIN chorizon ch ON c.cokey = ch.cokey AND ch.hzdept_r = 0
       WHERE 
         m.mukey IN (
@@ -280,22 +280,23 @@ class EnhancedCSR2Service {
     summary: PolygonAnalysisResult['summary'];
     soilComposition: SoilComposition[];
   }> {
-    // Simplified query without CTE - USDA's SQL parser is limited
+    // Query using cointerp table for CSR2 (attributekey 189 = Iowa Corn Suitability Rating)
     const query = `
       SELECT 
         m.mukey,
         m.musym,
         m.muname,
         m.muacres,
-        mp.csr2corn as csr2,
+        cri.interplr as csr2,
         mp.nonirryield_r as cornYield,
         c.slope_r as slope,
         c.drainagecl as drainageClass,
         c.comppct_r as component_pct
       FROM 
         mapunit m
-        LEFT JOIN mucropyld mp ON m.mukey = mp.mukey AND mp.cropname = 'Corn'
         LEFT JOIN component c ON m.mukey = c.mukey
+        LEFT JOIN cointerp cri ON c.cokey = cri.cokey AND cri.mrulename = 'Iowa Corn Suitability Rating'
+        LEFT JOIN mucropyld mp ON m.mukey = mp.mukey AND mp.cropname = 'Corn'
       WHERE 
         m.mukey IN (
           SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
