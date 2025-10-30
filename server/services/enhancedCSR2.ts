@@ -280,32 +280,27 @@ class EnhancedCSR2Service {
     summary: PolygonAnalysisResult['summary'];
     soilComposition: SoilComposition[];
   }> {
+    // Simplified query without CTE - USDA's SQL parser is limited
     const query = `
-      WITH ParcelSoils AS (
-        SELECT 
-          m.mukey,
-          m.muname,
-          SDA_Get_Mukey_WktWgs84_Intersection_Acres(m.mukey, '${wkt}') as acres
-        FROM mapunit m
-        WHERE m.mukey IN (
-          SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
-        )
-      )
       SELECT 
-        ps.mukey,
-        ps.muname,
-        ps.acres,
+        m.mukey,
+        m.musym,
+        m.muname,
+        m.muacres,
         mp.csr2corn as csr2,
         mp.nonirryield_r as cornYield,
         c.slope_r as slope,
-        c.drainagecl as drainageClass
-      FROM ParcelSoils ps
-        LEFT JOIN mucropyld mp ON ps.mukey = mp.mukey AND mp.cropname = 'Corn'
-        LEFT JOIN component c ON ps.mukey = c.mukey
-      WHERE c.comppct_r = (
-        SELECT MAX(c2.comppct_r) FROM component c2 WHERE c2.mukey = ps.mukey
-      )
-      ORDER BY ps.acres DESC
+        c.drainagecl as drainageClass,
+        c.comppct_r as component_pct
+      FROM 
+        mapunit m
+        LEFT JOIN mucropyld mp ON m.mukey = mp.mukey AND mp.cropname = 'Corn'
+        LEFT JOIN component c ON m.mukey = c.mukey
+      WHERE 
+        m.mukey IN (
+          SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
+        )
+      ORDER BY m.muacres DESC, c.comppct_r DESC
     `;
 
     const response = await axios.post(
@@ -329,8 +324,23 @@ class EnhancedCSR2Service {
 
     const data = response.data.Table;
 
-    // Calculate total acres and weighted CSR2
-    const totalAcres = data.reduce((sum: number, row: any) => sum + (parseFloat(row[2]) || 0), 0);
+    // Group by mukey to get unique soil map units with dominant component
+    const soilMap: { [mukey: string]: any } = {};
+    
+    data.forEach((row: any) => {
+      const mukey = row[0];
+      const componentPct = parseFloat(row[8]) || 0;
+      
+      // Keep only the dominant component for each map unit
+      if (!soilMap[mukey] || componentPct > (parseFloat(soilMap[mukey][8]) || 0)) {
+        soilMap[mukey] = row;
+      }
+    });
+
+    const uniqueSoils = Object.values(soilMap);
+
+    // Calculate total acres and weighted values
+    const totalAcres = uniqueSoils.reduce((sum: number, row: any) => sum + (parseFloat(row[3]) || 0), 0);
     
     let weightedCSR2 = 0;
     let totalCSR2Weight = 0;
@@ -339,33 +349,33 @@ class EnhancedCSR2Service {
     const drainageClasses: { [key: string]: number } = {};
 
     // Build soil composition and calculate weighted values
-    const soilComposition: SoilComposition[] = data.map((row: any) => {
-      const acres = parseFloat(row[2]) || 0;
-      const csr2 = parseFloat(row[3]) || 0;
-      const cornYield = parseFloat(row[4]) || undefined;
-      const slope = parseFloat(row[5]) || undefined;
-      const drainageClass = row[6] || undefined;
+    const soilComposition: SoilComposition[] = uniqueSoils.map((row: any) => {
+      const acres = parseFloat(row[3]) || 0;
+      const csr2 = parseFloat(row[4]) || 0;
+      const cornYield = parseFloat(row[5]) || undefined;
+      const slope = parseFloat(row[6]) || undefined;
+      const drainageClass = row[7] || undefined;
 
       // Calculate weighted CSR2
-      if (csr2 > 0) {
+      if (csr2 > 0 && acres > 0) {
         weightedCSR2 += csr2 * acres;
         totalCSR2Weight += acres;
       }
 
       // Calculate weighted slope
-      if (slope !== undefined) {
+      if (slope !== undefined && acres > 0) {
         weightedSlope += slope * acres;
         totalSlopeWeight += acres;
       }
 
       // Track drainage classes
-      if (drainageClass) {
+      if (drainageClass && acres > 0) {
         drainageClasses[drainageClass] = (drainageClasses[drainageClass] || 0) + acres;
       }
 
       return {
         mukey: row[0],
-        name: row[1],
+        name: row[2],
         acres: Math.round(acres * 10) / 10,
         percentage: totalAcres > 0 ? Math.round((acres / totalAcres) * 1000) / 10 : 0,
         csr2: Math.round(csr2 * 10) / 10,
@@ -373,7 +383,7 @@ class EnhancedCSR2Service {
         drainageClass,
         cornYield: cornYield !== undefined ? Math.round(cornYield) : undefined
       };
-    });
+    }).sort((a, b) => b.acres - a.acres); // Sort by acres descending
 
     // Calculate final weighted averages
     const finalWeightedCSR2 = totalCSR2Weight > 0 ? weightedCSR2 / totalCSR2Weight : 0;
