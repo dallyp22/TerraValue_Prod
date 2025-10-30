@@ -8,21 +8,8 @@ const cache = new NodeCache({ stdTTL: 3600 });
 // Rate limiting - be courteous to the public server
 const limit = pLimit(3);
 
-// Iowa CSR2 raster endpoint (Public API - No authentication required)
+// Iowa CSR2 raster endpoint
 const CSR2_ENDPOINT = "https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer";
-
-// Service health tracking
-let msuServiceStatus: {
-  lastSuccess: Date | null;
-  lastFailure: Date | null;
-  consecutiveFailures: number;
-  requiresAuth: boolean;
-} = {
-  lastSuccess: null,
-  lastFailure: null,
-  consecutiveFailures: 0,
-  requiresAuth: false
-};
 
 export interface CSR2Stats {
   mean: number | null;
@@ -51,83 +38,32 @@ export async function csr2PointValue(longitude: number, latitude: number): Promi
 
   try {
     // Try Michigan State ImageServer first (original working approach)
-    // Skip if we've detected auth requirements or too many failures
-    if (!msuServiceStatus.requiresAuth && msuServiceStatus.consecutiveFailures < 10) {
-      try {
-        const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
-          params: {
-            f: 'json',
-            geometry: `${longitude},${latitude}`,
-            geometryType: 'esriGeometryPoint',
-            sr: 4326,
-            returnGeometry: false
-          },
-          headers: {
-            'User-Agent': 'TerraValue/1.0 (Agricultural Land Valuation Tool)'
-          },
-          timeout: 10000,
-          validateStatus: (status) => status < 500 // Don't throw on 4xx errors
-        });
+    try {
+      const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
+        params: {
+          f: 'json',
+          geometry: `${longitude},${latitude}`,
+          geometryType: 'esriGeometryPoint',
+          sr: 4326,
+          returnGeometry: false
+        },
+        timeout: 10000
+      });
 
-        // Detect authentication requirements (401/403)
-        if (response.status === 401 || response.status === 403) {
-          msuServiceStatus.requiresAuth = true;
-          msuServiceStatus.consecutiveFailures++;
-          msuServiceStatus.lastFailure = new Date();
-          console.warn('⚠️ MSU CSR2 service now requires authentication (status ' + response.status + ')');
-          throw new Error('MSU service requires authentication');
-        }
-
-        // Detect other errors
-        if (response.status >= 400) {
-          throw new Error(`MSU service returned status ${response.status}`);
-        }
-
-        const value = response.data?.value;
+      const value = response.data?.value;
+      
+      if (value && value !== "NoData" && value !== -128) {
+        const csr2Value = typeof value === 'string' ? parseFloat(value) : value;
         
-        if (value && value !== "NoData" && value !== -128) {
-          const csr2Value = typeof value === 'string' ? parseFloat(value) : value;
-          
-          if (!isNaN(csr2Value)) {
-            const result = Number(csr2Value.toFixed(1));
-            console.log(`✅ CSR2 from MSU ImageServer for (${longitude}, ${latitude}): ${result}`);
-            
-            // Track success
-            msuServiceStatus.lastSuccess = new Date();
-            msuServiceStatus.consecutiveFailures = 0;
-            
-            cache.set(cacheKey, result);
-            return result;
-          }
-        }
-      } catch (msuError: any) {
-        // Track failures
-        msuServiceStatus.consecutiveFailures++;
-        msuServiceStatus.lastFailure = new Date();
-        
-        // Log specific error types
-        if (msuError.response?.status === 401 || msuError.response?.status === 403) {
-          msuServiceStatus.requiresAuth = true;
-          console.warn('⚠️ MSU CSR2 service authentication required - switching to USDA fallback');
-        } else if (msuError.code === 'ECONNABORTED' || msuError.code === 'ETIMEDOUT') {
-          console.log('⏱️ MSU ImageServer timeout, falling back to USDA...');
-        } else if (msuError.response?.status >= 500) {
-          console.log('🔴 MSU ImageServer server error, falling back to USDA...');
-        } else {
-          console.log('⚠️ MSU ImageServer unavailable, falling back to USDA...');
-        }
-        
-        // If too many failures, skip MSU for a while
-        if (msuServiceStatus.consecutiveFailures >= 10) {
-          console.warn('⚠️ MSU service has failed 10+ times consecutively - temporarily disabled');
+        if (!isNaN(csr2Value)) {
+          const result = Number(csr2Value.toFixed(1));
+          console.log(`✅ CSR2 from MSU ImageServer for (${longitude}, ${latitude}): ${result}`);
+          cache.set(cacheKey, result);
+          return result;
         }
       }
-    } else {
-      if (msuServiceStatus.requiresAuth) {
-        console.log('ℹ️ MSU service requires auth, using USDA fallback...');
-      } else {
-        console.log('ℹ️ MSU service temporarily disabled due to failures, using USDA fallback...');
-      }
+    } catch (msuError) {
+      console.log('MSU ImageServer unavailable, falling back to USDA...');
     }
 
     // Fallback to USDA Soil Data Access Interpretation Service
@@ -728,32 +664,6 @@ export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
   }
 }
 
-/**
- * Get MSU service health status
- * Useful for monitoring and debugging
- */
-export function getMSUServiceStatus() {
-  return {
-    ...msuServiceStatus,
-    lastSuccess: msuServiceStatus.lastSuccess?.toISOString() || null,
-    lastFailure: msuServiceStatus.lastFailure?.toISOString() || null,
-    isHealthy: msuServiceStatus.consecutiveFailures < 10 && !msuServiceStatus.requiresAuth
-  };
-}
-
-/**
- * Reset MSU service status (useful for recovery/testing)
- */
-export function resetMSUServiceStatus() {
-  msuServiceStatus = {
-    lastSuccess: null,
-    lastFailure: null,
-    consecutiveFailures: 0,
-    requiresAuth: false
-  };
-  console.log('✅ MSU service status reset');
-}
-
 export const csr2Service = {
   csr2PointValue,
   csr2PolygonMean,
@@ -765,7 +675,5 @@ export const csr2Service = {
   geocodeAddress,
   reverseGeocode,
   createCircularPolygon,
-  calculateAverageCSR2,
-  getMSUServiceStatus,
-  resetMSUServiceStatus
+  calculateAverageCSR2
 };

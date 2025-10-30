@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { valuationService } from "./services/valuation.js";
 import { csr2Service } from "./services/csr2.js";
-import { enhancedCSR2Service } from "./services/enhancedCSR2.js";
 import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
 import { propertyFormSchema, auctions } from "@shared/schema";
@@ -48,9 +47,6 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       // Test database connection
       const dbCheck = await storage.listValuations();
       
-      // Get CSR2 service status
-      const csr2Status = csr2Service.getMSUServiceStatus();
-      
       res.json({
         success: true,
         status: "healthy",
@@ -58,14 +54,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         environment: process.env.NODE_ENV || "development",
         services: {
           database: "connected",
-          api: "operational",
-          csr2: {
-            msuService: csr2Status.isHealthy ? "operational" : "degraded",
-            requiresAuth: csr2Status.requiresAuth,
-            consecutiveFailures: csr2Status.consecutiveFailures,
-            lastSuccess: csr2Status.lastSuccess,
-            lastFailure: csr2Status.lastFailure
-          }
+          api: "operational"
         }
       });
     } catch (error) {
@@ -280,110 +269,6 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : "Failed to calculate average CSR2"
-      });
-    }
-  });
-
-  // ========================================
-  // Enhanced CSR2 endpoints with soil properties
-  // ========================================
-
-  // Enhanced single point with comprehensive soil properties
-  app.post("/api/csr2/enhanced/point", generalRateLimiter, async (req, res) => {
-    try {
-      const { latitude, longitude } = req.body;
-      
-      if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-        return res.status(400).json({
-          success: false,
-          message: "Valid latitude and longitude are required"
-        });
-      }
-
-      const result = await enhancedCSR2Service.getCSR2WithSoilProperties(latitude, longitude);
-      res.json({
-        success: true,
-        data: result
-      });
-    } catch (error) {
-      console.error("Enhanced CSR2 point error:", error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Failed to fetch enhanced CSR2 data"
-      });
-    }
-  });
-
-  // Batch processing for multiple coordinates
-  app.post("/api/csr2/enhanced/batch", generalRateLimiter, async (req, res) => {
-    try {
-      const { coordinates } = req.body;
-      
-      if (!Array.isArray(coordinates) || coordinates.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Valid coordinates array is required"
-        });
-      }
-
-      // Validate coordinate format
-      const validCoords = coordinates.every(
-        (coord: any) => Array.isArray(coord) && coord.length === 2 && 
-        typeof coord[0] === 'number' && typeof coord[1] === 'number'
-      );
-
-      if (!validCoords) {
-        return res.status(400).json({
-          success: false,
-          message: "Each coordinate must be an array of [latitude, longitude]"
-        });
-      }
-
-      const result = await enhancedCSR2Service.batchGetCSR2(coordinates);
-      res.json({
-        success: true,
-        data: result
-      });
-    } catch (error) {
-      console.error("Enhanced CSR2 batch error:", error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Failed to batch process CSR2 data"
-      });
-    }
-  });
-
-  // Enhanced polygon analysis with soil composition
-  app.post("/api/csr2/enhanced/polygon", generalRateLimiter, async (req, res) => {
-    try {
-      const { wkt } = req.body;
-      
-      if (!wkt || typeof wkt !== 'string') {
-        return res.status(400).json({
-          success: false,
-          message: "Valid WKT geometry is required"
-        });
-      }
-
-      // Validate WKT format
-      const wktRegex = /^(POINT|LINESTRING|POLYGON|MULTIPOINT|MULTILINESTRING|MULTIPOLYGON|GEOMETRYCOLLECTION)\s*\(.+\)$/i;
-      if (!wktRegex.test(wkt)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid WKT geometry format"
-        });
-      }
-
-      const analysis = await enhancedCSR2Service.analyzePolygonEnhanced(wkt);
-      res.json({
-        success: true,
-        data: analysis
-      });
-    } catch (error) {
-      console.error("Enhanced CSR2 polygon analysis error:", error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : "Failed to analyze polygon"
       });
     }
   });
