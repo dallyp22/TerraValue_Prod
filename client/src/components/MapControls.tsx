@@ -1,94 +1,11 @@
-import { Plus, Minus, Locate, Maximize2, Layers } from 'lucide-react';
-import { Button } from './ui/button';
-import { useState } from 'react';
-
 interface MapControlsProps {
-  mapRef: any;
-  onLayerChange?: (layer: 'satellite' | 'street' | 'soil') => void;
-  currentLayer?: 'satellite' | 'street' | 'soil';
   showLegend?: boolean;
-  showLayerSwitcher?: boolean;
 }
 
-export default function MapControls({ mapRef, onLayerChange, currentLayer = 'satellite', showLegend = true, showLayerSwitcher = true }: MapControlsProps) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const handleZoomIn = () => {
-    if (mapRef) {
-      mapRef.zoomIn();
-    }
-  };
-
-  const handleZoomOut = () => {
-    if (mapRef) {
-      mapRef.zoomOut();
-    }
-  };
-
-  const handleMyLocation = () => {
-    if (navigator.geolocation && mapRef) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        mapRef.flyTo({
-          center: [position.coords.longitude, position.coords.latitude],
-          zoom: 14,
-          duration: 2000,
-        });
-      });
-    }
-  };
-
-  const handleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
+export default function MapControls({ showLegend = true }: MapControlsProps) {
 
   return (
     <>
-      {/* Top Left Controls - Next to Scraping Module */}
-      <div className="map-controls-top-left absolute top-4 left-[212px] flex flex-col gap-2 z-[1000]">
-        <Button
-          onClick={handleZoomIn}
-          size="icon"
-          variant="secondary"
-          className="map-control-btn w-10 h-10 bg-white hover:bg-slate-50 shadow-lg border border-slate-200"
-          title="Zoom In"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-        <Button
-          onClick={handleZoomOut}
-          size="icon"
-          variant="secondary"
-          className="map-control-btn w-10 h-10 bg-white hover:bg-slate-50 shadow-lg border border-slate-200"
-          title="Zoom Out"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <Button
-          onClick={handleMyLocation}
-          size="icon"
-          variant="secondary"
-          className="map-control-btn w-10 h-10 bg-white hover:bg-slate-50 shadow-lg border border-slate-200"
-          title="My Location"
-        >
-          <Locate className="h-4 w-4" />
-        </Button>
-        <Button
-          onClick={handleFullscreen}
-          size="icon"
-          variant="secondary"
-          className="map-control-btn w-10 h-10 bg-white hover:bg-slate-50 shadow-lg border border-slate-200"
-          title="Fullscreen"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </Button>
-      </div>
-
       {/* Bottom Left - Legend */}
       {showLegend && (
         <div className="map-legend absolute bottom-4 left-4 z-[1000] bg-white p-4 rounded-lg shadow-lg border border-slate-200 max-w-xs">

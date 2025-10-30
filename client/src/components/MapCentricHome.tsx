@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Menu } from 'lucide-react';
+import { Menu, Plus, Minus, Locate, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
@@ -74,6 +74,39 @@ export default function MapCentricHome() {
   const [parcelData, setParcelData] = useState<any>(null);
 
   const { toast } = useToast();
+
+  // Zoom control handlers
+  const handleZoomIn = () => {
+    if (mapRef) {
+      mapRef.zoomIn();
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (mapRef) {
+      mapRef.zoomOut();
+    }
+  };
+
+  const handleMyLocation = () => {
+    if (navigator.geolocation && mapRef) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        mapRef.flyTo({
+          center: [position.coords.longitude, position.coords.latitude],
+          zoom: 14,
+          duration: 2000,
+        });
+      });
+    }
+  };
+
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   // Fetch valuation data
   const { data: currentValuation } = useQuery<{ success: boolean; valuation: Valuation }>({
@@ -279,9 +312,7 @@ export default function MapCentricHome() {
 
         {/* Map Controls */}
         <MapControls 
-          mapRef={mapRef} 
           showLegend={mapInfo.showLegend}
-          showLayerSwitcher={mapInfo.showLayerSwitcher}
         />
 
         {/* Mobile Toggle Buttons */}
@@ -296,90 +327,108 @@ export default function MapCentricHome() {
           </Button>
         </div>
 
-        {/* Top-left controls - Desktop Only */}
+        {/* Unified Top-Left Control Panel - Desktop Only */}
         {mapInfo.showScrapingModule && (
         <div className="hidden lg:block absolute top-4 left-4 z-50">
-          <div className="bg-white/95 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2">
-            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-              <input
-                type="checkbox"
-                checked={drawModeEnabled}
-                onChange={(e) => setDrawModeEnabled(e.target.checked)}
-                className="rounded"
-              />
-              <span>Draw Polygon</span>
-            </label>
-            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-              <input
-                type="checkbox"
-                checked={showOwnerLabels}
-                onChange={(e) => setShowOwnerLabels(e.target.checked)}
-                className="rounded"
-              />
-              <span>Owner Names</span>
-            </label>
-            <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-              <input
-                type="checkbox"
-                checked={showAuctionLayer}
-                onChange={(e) => setShowAuctionLayer(e.target.checked)}
-                className="rounded"
-              />
-              <span>Land Auctions</span>
-            </label>
-            
-            <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
-              <Button 
-                onClick={async () => {
-                  try {
-                    const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
-                    const data = await response.json();
-                    if (data.success) {
+          <div className="bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg flex gap-3">
+            {/* Left side - Scraping Controls */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+                <input
+                  type="checkbox"
+                  checked={drawModeEnabled}
+                  onChange={(e) => setDrawModeEnabled(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Draw Polygon</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+                <input
+                  type="checkbox"
+                  checked={showOwnerLabels}
+                  onChange={(e) => setShowOwnerLabels(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Owner Names</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+                <input
+                  type="checkbox"
+                  checked={showAuctionLayer}
+                  onChange={(e) => setShowAuctionLayer(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Land Auctions</span>
+              </label>
+              
+              <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
+                <Button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
+                      const data = await response.json();
+                      if (data.success) {
+                        toast({
+                          title: "Auction Scrape Started",
+                          description: "Scraping all 15 auction sites. This may take several minutes...",
+                        });
+                      }
+                    } catch (error) {
                       toast({
-                        title: "Auction Scrape Started",
-                        description: "Scraping all 15 auction sites. This may take several minutes...",
+                        title: "Error",
+                        description: "Failed to scrape auctions",
+                        variant: "destructive"
                       });
                     }
-                  } catch (error) {
-                    toast({
-                      title: "Error",
-                      description: "Failed to scrape auctions",
-                      variant: "destructive"
-                    });
-                  }
-                }}
-                size="sm"
-                variant="outline"
-                className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400 w-full text-xs"
-              >
-                Scrape Auctions
-              </Button>
-            </div>
-            
-            {drawnPolygonData && (
-              <div className="pt-2 border-t border-slate-200">
-                <Button 
-                  onClick={() => setClearPolygons(true)}
+                  }}
                   size="sm"
                   variant="outline"
-                  className="text-red-600 hover:text-red-700 border-red-300 w-full text-xs"
+                  className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400 w-full text-xs"
                 >
-                  Clear Map
+                  Scrape Auctions
                 </Button>
               </div>
-            )}
-            
-            {currentValuationId && (
-              <div className="pt-2 border-t border-slate-200">
-                <Button 
-                  onClick={handleNewValuation}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 w-full text-xs"
-                >
-                  New Valuation
-                </Button>
-              </div>
-            )}
+            </div>
+
+            {/* Right side - Zoom Controls */}
+            <div className="flex flex-col gap-2 border-l border-slate-200 pl-3">
+              <Button
+                onClick={handleZoomIn}
+                size="icon"
+                variant="secondary"
+                className="w-10 h-10 bg-white hover:bg-slate-50 shadow-sm border border-slate-200"
+                title="Zoom In"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={handleZoomOut}
+                size="icon"
+                variant="secondary"
+                className="w-10 h-10 bg-white hover:bg-slate-50 shadow-sm border border-slate-200"
+                title="Zoom Out"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={handleMyLocation}
+                size="icon"
+                variant="secondary"
+                className="w-10 h-10 bg-white hover:bg-slate-50 shadow-sm border border-slate-200"
+                title="My Location"
+              >
+                <Locate className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={handleFullscreen}
+                size="icon"
+                variant="secondary"
+                className="w-10 h-10 bg-white hover:bg-slate-50 shadow-sm border border-slate-200"
+                title="Fullscreen"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
         )}
