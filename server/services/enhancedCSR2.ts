@@ -280,13 +280,39 @@ class EnhancedCSR2Service {
     summary: PolygonAnalysisResult['summary'];
     soilComposition: SoilComposition[];
   }> {
-    // Query using cointerp table for CSR2 (attributekey 189 = Iowa Corn Suitability Rating)
+    // First, get the mukeys that intersect with the polygon
+    const mukeyQuery = `
+      SELECT DISTINCT mukey 
+      FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
+    `;
+    
+    const mukeyResponse = await axios.post(
+      USDA_ENDPOINT,
+      new URLSearchParams({
+        query: mukeyQuery,
+        format: 'JSON'
+      }),
+      {
+        timeout: 15000,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'TerraValue/1.0 (Agricultural Land Valuation Tool)'
+        }
+      }
+    );
+
+    if (!mukeyResponse.data || !mukeyResponse.data.Table || mukeyResponse.data.Table.length === 0) {
+      throw new Error('No soil map units found for polygon');
+    }
+
+    const mukeys = mukeyResponse.data.Table.map((row: any) => `'${row[0]}'`).join(',');
+
+    // Now get detailed soil data with CSR2 from cointerp
     const query = `
       SELECT 
         m.mukey,
         m.musym,
         m.muname,
-        m.muacres,
         cri.interplr as csr2,
         mp.nonirryield_r as cornYield,
         c.slope_r as slope,
@@ -298,10 +324,8 @@ class EnhancedCSR2Service {
         LEFT JOIN cointerp cri ON c.cokey = cri.cokey AND cri.mrulename = 'Iowa Corn Suitability Rating'
         LEFT JOIN mucropyld mp ON m.mukey = mp.mukey AND mp.cropname = 'Corn'
       WHERE 
-        m.mukey IN (
-          SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')
-        )
-      ORDER BY m.muacres DESC, c.comppct_r DESC
+        m.mukey IN (${mukeys})
+      ORDER BY c.comppct_r DESC
     `;
 
     const response = await axios.post(
@@ -330,18 +354,52 @@ class EnhancedCSR2Service {
     
     data.forEach((row: any) => {
       const mukey = row[0];
-      const componentPct = parseFloat(row[8]) || 0;
+      const componentPct = parseFloat(row[7]) || 0; // component_pct is now at index 7
       
       // Keep only the dominant component for each map unit
-      if (!soilMap[mukey] || componentPct > (parseFloat(soilMap[mukey][8]) || 0)) {
+      if (!soilMap[mukey] || componentPct > (parseFloat(soilMap[mukey][7]) || 0)) {
         soilMap[mukey] = row;
       }
     });
 
     const uniqueSoils = Object.values(soilMap);
 
-    // Calculate total acres and weighted values
-    const totalAcres = uniqueSoils.reduce((sum: number, row: any) => sum + (parseFloat(row[3]) || 0), 0);
+    // Get actual intersection acres for each mukey using the polygon
+    const acresPromises = uniqueSoils.map(async (row: any) => {
+      const mukey = row[0];
+      const acresQuery = `
+        SELECT SDA_Get_Mukey_WktWgs84_Intersection_Acres('${mukey}', '${wkt}') as intersection_acres
+      `;
+      
+      try {
+        const acresResponse = await axios.post(
+          USDA_ENDPOINT,
+          new URLSearchParams({
+            query: acresQuery,
+            format: 'JSON'
+          }),
+          {
+            timeout: 5000,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'TerraValue/1.0 (Agricultural Land Valuation Tool)'
+            }
+          }
+        );
+        
+        if (acresResponse.data && acresResponse.data.Table && acresResponse.data.Table.length > 0) {
+          return parseFloat(acresResponse.data.Table[0][0]) || 0;
+        }
+      } catch (error) {
+        console.warn(`Failed to get intersection acres for mukey ${mukey}:`, error);
+      }
+      return 0;
+    });
+
+    const intersectionAcres = await Promise.all(acresPromises);
+
+    // Calculate total acres from intersections
+    const totalAcres = intersectionAcres.reduce((sum, acres) => sum + acres, 0);
     
     let weightedCSR2 = 0;
     let totalCSR2Weight = 0;
@@ -350,12 +408,12 @@ class EnhancedCSR2Service {
     const drainageClasses: { [key: string]: number } = {};
 
     // Build soil composition and calculate weighted values
-    const soilComposition: SoilComposition[] = uniqueSoils.map((row: any) => {
-      const acres = parseFloat(row[3]) || 0;
-      const csr2 = parseFloat(row[4]) || 0;
-      const cornYield = parseFloat(row[5]) || undefined;
-      const slope = parseFloat(row[6]) || undefined;
-      const drainageClass = row[7] || undefined;
+    const soilComposition: SoilComposition[] = uniqueSoils.map((row: any, index: number) => {
+      const acres = intersectionAcres[index];
+      const csr2 = parseFloat(row[3]) || 0; // csr2 is now at index 3
+      const cornYield = parseFloat(row[4]) || undefined;
+      const slope = parseFloat(row[5]) || undefined;
+      const drainageClass = row[6] || undefined;
 
       // Calculate weighted CSR2
       if (csr2 > 0 && acres > 0) {
