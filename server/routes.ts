@@ -47,6 +47,9 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       // Test database connection
       const dbCheck = await storage.listValuations();
       
+      // Get CSR2 service status
+      const csr2Status = csr2Service.getMSUServiceStatus();
+      
       res.json({
         success: true,
         status: "healthy",
@@ -54,7 +57,14 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         environment: process.env.NODE_ENV || "development",
         services: {
           database: "connected",
-          api: "operational"
+          api: "operational",
+          csr2: {
+            msuService: csr2Status.isHealthy ? "operational" : "degraded",
+            requiresAuth: csr2Status.requiresAuth,
+            consecutiveFailures: csr2Status.consecutiveFailures,
+            lastSuccess: csr2Status.lastSuccess,
+            lastFailure: csr2Status.lastFailure
+          }
         }
       });
     } catch (error) {
