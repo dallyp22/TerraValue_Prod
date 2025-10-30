@@ -51,6 +51,14 @@ export default function MapCentricHome() {
     lakeTypes: {
       lakes: true,
       reservoirs: true
+    },
+    showPowerLines: true,
+    powerLineVoltages: {
+      kv345: true,
+      kv161: true,
+      kv138: true,
+      kv115: true,
+      kv69: true
     }
   });
 
@@ -308,6 +316,8 @@ export default function MapCentricHome() {
           showDatacenters={mapOverlays.showDatacenters}
           showLakes={mapOverlays.showLakes}
           lakeTypes={mapOverlays.lakeTypes}
+          showPowerLines={mapOverlays.showPowerLines}
+          powerLineVoltages={mapOverlays.powerLineVoltages}
         />
 
         {/* Map Controls */}

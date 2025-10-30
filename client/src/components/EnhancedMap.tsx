@@ -32,6 +32,14 @@ interface EnhancedMapProps {
     lakes: boolean;
     reservoirs: boolean;
   };
+  showPowerLines?: boolean;
+  powerLineVoltages?: {
+    kv345: boolean;
+    kv161: boolean;
+    kv138: boolean;
+    kv115: boolean;
+    kv69: boolean;
+  };
 }
 
 export default function EnhancedMap({ 
@@ -51,7 +59,9 @@ export default function EnhancedMap({
   showSubstations = true,
   showDatacenters = true,
   showLakes = true,
-  lakeTypes = { lakes: true, reservoirs: true }
+  lakeTypes = { lakes: true, reservoirs: true },
+  showPowerLines = true,
+  powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true }
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -909,6 +919,12 @@ export default function EnhancedMap({
         data: '/lakes.geojson'
       });
 
+      // Add power lines data source
+      map.current!.addSource('powerlines', {
+        type: 'geojson',
+        data: '/powerlines.geojson'
+      });
+
       // Add auction marker layers with color-coding
       // Background circle layer
       map.current!.addLayer({
@@ -1243,6 +1259,103 @@ export default function EnhancedMap({
           });
           map.current!.on('mouseleave', 'lakes-fill', () => {
             if (map.current) map.current.getCanvas().style.cursor = '';
+          });
+
+          // Add power lines layers with orange gradient (darkest to lightest by voltage)
+          
+          // 345 kV - Darkest Orange (highest voltage)
+          map.current!.addLayer({
+            id: 'powerlines-345kv',
+            type: 'line',
+            source: 'powerlines',
+            paint: {
+              'line-color': '#c2410c',
+              'line-width': 3,
+              'line-opacity': 0.8
+            },
+            layout: {
+              'visibility': showPowerLines && powerLineVoltages.kv345 ? 'visible' : 'none'
+            },
+            filter: ['any',
+              ['==', ['get', 'voltage'], '345000'],
+              ['in', '345000', ['split', ['get', 'voltage'], ';']]
+            ]
+          });
+
+          // 161 kV - Dark Orange
+          map.current!.addLayer({
+            id: 'powerlines-161kv',
+            type: 'line',
+            source: 'powerlines',
+            paint: {
+              'line-color': '#ea580c',
+              'line-width': 2.5,
+              'line-opacity': 0.7
+            },
+            layout: {
+              'visibility': showPowerLines && powerLineVoltages.kv161 ? 'visible' : 'none'
+            },
+            filter: ['any',
+              ['==', ['get', 'voltage'], '161000'],
+              ['in', '161000', ['split', ['get', 'voltage'], ';']]
+            ]
+          });
+
+          // 138 kV - Medium Orange
+          map.current!.addLayer({
+            id: 'powerlines-138kv',
+            type: 'line',
+            source: 'powerlines',
+            paint: {
+              'line-color': '#f97316',
+              'line-width': 2,
+              'line-opacity': 0.6
+            },
+            layout: {
+              'visibility': showPowerLines && powerLineVoltages.kv138 ? 'visible' : 'none'
+            },
+            filter: ['any',
+              ['==', ['get', 'voltage'], '138000'],
+              ['in', '138000', ['split', ['get', 'voltage'], ';']]
+            ]
+          });
+
+          // 115 kV - Light Orange
+          map.current!.addLayer({
+            id: 'powerlines-115kv',
+            type: 'line',
+            source: 'powerlines',
+            paint: {
+              'line-color': '#fb923c',
+              'line-width': 1.5,
+              'line-opacity': 0.5
+            },
+            layout: {
+              'visibility': showPowerLines && powerLineVoltages.kv115 ? 'visible' : 'none'
+            },
+            filter: ['any',
+              ['==', ['get', 'voltage'], '115000'],
+              ['in', '115000', ['split', ['get', 'voltage'], ';']]
+            ]
+          });
+
+          // 69 kV - Lightest Orange (lowest voltage)
+          map.current!.addLayer({
+            id: 'powerlines-69kv',
+            type: 'line',
+            source: 'powerlines',
+            paint: {
+              'line-color': '#fdba74',
+              'line-width': 1,
+              'line-opacity': 0.4
+            },
+            layout: {
+              'visibility': showPowerLines && powerLineVoltages.kv69 ? 'visible' : 'none'
+            },
+            filter: ['any',
+              ['==', ['get', 'voltage'], '69000'],
+              ['in', '69000', ['split', ['get', 'voltage'], ';']]
+            ]
           });
 
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
@@ -1649,6 +1762,30 @@ export default function EnhancedMap({
       }
     });
   }, [lakeTypes]);
+
+  // Toggle power lines layer visibility based on voltage selections
+  useEffect(() => {
+    if (!map.current) return;
+
+    const voltageLayerMap = [
+      { id: 'powerlines-345kv', enabled: powerLineVoltages.kv345 },
+      { id: 'powerlines-161kv', enabled: powerLineVoltages.kv161 },
+      { id: 'powerlines-138kv', enabled: powerLineVoltages.kv138 },
+      { id: 'powerlines-115kv', enabled: powerLineVoltages.kv115 },
+      { id: 'powerlines-69kv', enabled: powerLineVoltages.kv69 }
+    ];
+
+    voltageLayerMap.forEach(({ id, enabled }) => {
+      const layer = map.current?.getLayer(id);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          id,
+          'visibility',
+          showPowerLines && enabled ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showPowerLines, powerLineVoltages]);
 
   return (
     <>

@@ -42,6 +42,14 @@ export interface MapOverlays {
     lakes: boolean;
     reservoirs: boolean;
   };
+  showPowerLines: boolean;
+  powerLineVoltages: {
+    kv345: boolean;
+    kv161: boolean;
+    kv138: boolean;
+    kv115: boolean;
+    kv69: boolean;
+  };
 }
 
 export interface MapInfo {
@@ -450,7 +458,7 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showPowerLines}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
@@ -461,6 +469,14 @@ export default function LeftSidebar({
                       lakeTypes: {
                         lakes: allEnabled,
                         reservoirs: allEnabled
+                      },
+                      showPowerLines: allEnabled,
+                      powerLineVoltages: {
+                        kv345: allEnabled,
+                        kv161: allEnabled,
+                        kv138: allEnabled,
+                        kv115: allEnabled,
+                        kv69: allEnabled
                       }
                     });
                   }}
@@ -536,6 +552,86 @@ export default function LeftSidebar({
                       />
                       <span className="text-xs text-slate-600">Reservoirs</span>
                     </label>
+                  </div>
+                )}
+              </div>
+              
+              {/* Power Lines Toggle */}
+              <div className="pl-4 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer py-2">
+                  <Checkbox
+                    checked={mapOverlays.showPowerLines}
+                    onCheckedChange={(checked) =>
+                      onMapOverlaysChange({ ...mapOverlays, showPowerLines: checked as boolean })
+                    }
+                  />
+                  <span className="text-sm text-slate-700">High Voltage Lines</span>
+                </label>
+                
+                {/* Voltage Level Filters - only show when power lines are enabled */}
+                {mapOverlays.showPowerLines && (
+                  <div className="ml-6 space-y-1 pb-2 border-l-2 border-orange-300 pl-3">
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.powerLineVoltages.kv345}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            powerLineVoltages: { ...mapOverlays.powerLineVoltages, kv345: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">345 kV</span>
+                      <span className="text-[10px] text-slate-400">(highest)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.powerLineVoltages.kv161}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            powerLineVoltages: { ...mapOverlays.powerLineVoltages, kv161: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">161 kV</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.powerLineVoltages.kv138}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            powerLineVoltages: { ...mapOverlays.powerLineVoltages, kv138: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">138 kV</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.powerLineVoltages.kv115}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            powerLineVoltages: { ...mapOverlays.powerLineVoltages, kv115: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">115 kV</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                    <Checkbox
+                        checked={mapOverlays.powerLineVoltages.kv69}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            powerLineVoltages: { ...mapOverlays.powerLineVoltages, kv69: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">69 kV</span>
+                  </label>
                   </div>
                 )}
               </div>
