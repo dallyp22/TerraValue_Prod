@@ -1278,7 +1278,7 @@ export default function EnhancedMap({
             },
             filter: ['any',
               ['==', ['get', 'voltage'], '345000'],
-              ['in', '345000', ['split', ['get', 'voltage'], ';']]
+              ['in', '345000', ['get', 'voltage']]
             ]
           });
 
@@ -1297,7 +1297,7 @@ export default function EnhancedMap({
             },
             filter: ['any',
               ['==', ['get', 'voltage'], '161000'],
-              ['in', '161000', ['split', ['get', 'voltage'], ';']]
+              ['in', '161000', ['get', 'voltage']]
             ]
           });
 
@@ -1316,7 +1316,7 @@ export default function EnhancedMap({
             },
             filter: ['any',
               ['==', ['get', 'voltage'], '138000'],
-              ['in', '138000', ['split', ['get', 'voltage'], ';']]
+              ['in', '138000', ['get', 'voltage']]
             ]
           });
 
@@ -1335,7 +1335,7 @@ export default function EnhancedMap({
             },
             filter: ['any',
               ['==', ['get', 'voltage'], '115000'],
-              ['in', '115000', ['split', ['get', 'voltage'], ';']]
+              ['in', '115000', ['get', 'voltage']]
             ]
           });
 
@@ -1354,7 +1354,7 @@ export default function EnhancedMap({
             },
             filter: ['any',
               ['==', ['get', 'voltage'], '69000'],
-              ['in', '69000', ['split', ['get', 'voltage'], ';']]
+              ['in', '69000', ['get', 'voltage']]
             ]
           });
 
