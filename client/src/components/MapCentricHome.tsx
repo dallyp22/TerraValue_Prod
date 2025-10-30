@@ -332,18 +332,18 @@ export default function MapCentricHome() {
               <Button 
                 onClick={async () => {
                   try {
-                    const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh/landwatch', { method: 'POST' });
+                    const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
                     const data = await response.json();
                     if (data.success) {
                       toast({
-                        title: "LandWatch Scrape Started",
-                        description: "Scraping LandWatch Iowa auctions...",
+                        title: "Auction Scrape Started",
+                        description: "Scraping all 15 auction sites. This may take several minutes...",
                       });
                     }
                   } catch (error) {
                     toast({
                       title: "Error",
-                      description: "Failed to scrape LandWatch",
+                      description: "Failed to scrape auctions",
                       variant: "destructive"
                     });
                   }
@@ -352,32 +352,7 @@ export default function MapCentricHome() {
                 variant="outline"
                 className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400 w-full text-xs"
               >
-                Scrape LandWatch
-              </Button>
-              <Button 
-                onClick={async () => {
-                  try {
-                    const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
-                    const data = await response.json();
-                    if (data.success) {
-                      toast({
-                        title: "Auction Refresh Started",
-                        description: "Scraping all auction sites...",
-                      });
-                    }
-                  } catch (error) {
-                    toast({
-                      title: "Error",
-                      description: "Failed to refresh auctions",
-                      variant: "destructive"
-                    });
-                  }
-                }}
-                size="sm"
-                variant="outline"
-                className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 w-full text-xs"
-              >
-                Refresh All Auctions
+                Scrape Auctions
               </Button>
             </div>
             
