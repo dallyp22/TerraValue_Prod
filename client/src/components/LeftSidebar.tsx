@@ -51,6 +51,7 @@ export interface MapOverlays {
     kv69: boolean;
   };
   showCityLabels: boolean;
+  showHighways: boolean;
 }
 
 export interface MapInfo {
@@ -459,7 +460,7 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showPowerLines && mapOverlays.showCityLabels}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showPowerLines && mapOverlays.showCityLabels && mapOverlays.showHighways}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
@@ -479,7 +480,8 @@ export default function LeftSidebar({
                         kv115: allEnabled,
                         kv69: allEnabled
                       },
-                      showCityLabels: allEnabled
+                      showCityLabels: allEnabled,
+                      showHighways: allEnabled
                     });
                   }}
                 />
@@ -504,6 +506,15 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">City & Town Labels</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapOverlays.showHighways}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showHighways: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Highways & Interstates</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox

@@ -41,6 +41,7 @@ interface EnhancedMapProps {
     kv69: boolean;
   };
   showCityLabels?: boolean;
+  showHighways?: boolean;
 }
 
 export default function EnhancedMap({ 
@@ -63,7 +64,8 @@ export default function EnhancedMap({
   lakeTypes = { lakes: true, reservoirs: true },
   showPowerLines = true,
   powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true },
-  showCityLabels = true
+  showCityLabels = true,
+  showHighways = true
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -484,6 +486,112 @@ export default function EnhancedMap({
               'text-halo-color': '#000000',
               'text-halo-width': 1.5,
               'text-halo-blur': 1
+            }
+          },
+          // Interstate highways (thick, prominent)
+          {
+            id: 'road-motorway-trunk',
+            type: 'line',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['in', 'class', 'motorway', 'trunk'],
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#fbbf24', // Yellow/gold for interstates
+              'line-width': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                6, 1,
+                10, 3,
+                14, 6,
+                18, 10
+              ],
+              'line-opacity': 0.9
+            }
+          },
+          // Interstate highway outlines
+          {
+            id: 'road-motorway-trunk-case',
+            type: 'line',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['in', 'class', 'motorway', 'trunk'],
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                6, 2,
+                10, 5,
+                14, 8,
+                18, 12
+              ],
+              'line-gap-width': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                6, 1,
+                10, 3,
+                14, 6,
+                18, 10
+              ],
+              'line-opacity': 0.7
+            }
+          },
+          // Primary roads (US routes, state highways)
+          {
+            id: 'road-primary',
+            type: 'line',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['==', 'class', 'primary'],
+            minzoom: 8,
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#fcd34d', // Lighter yellow for primary roads
+              'line-width': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                8, 0.5,
+                12, 2,
+                16, 4
+              ],
+              'line-opacity': 0.8
+            }
+          },
+          // Highway shields/labels
+          {
+            id: 'road-label-motorway',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'road_label',
+            filter: ['in', 'class', 'motorway', 'trunk'],
+            minzoom: 8,
+            layout: {
+              'text-field': ['get', 'ref'],
+              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+              'text-size': 10,
+              'symbol-placement': 'line',
+              'symbol-spacing': 300,
+              'text-rotation-alignment': 'viewport'
+            },
+            paint: {
+              'text-color': '#000000',
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 2
             }
           }
         ]
@@ -1814,6 +1922,24 @@ export default function EnhancedMap({
       }
     });
   }, [showCityLabels]);
+
+  // Toggle highways/interstates visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['road-motorway-trunk', 'road-motorway-trunk-case', 'road-primary', 'road-label-motorway'];
+
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showHighways ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showHighways]);
 
   // Filter lakes by type (lake vs reservoir)
   useEffect(() => {

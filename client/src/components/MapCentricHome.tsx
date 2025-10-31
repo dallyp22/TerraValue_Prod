@@ -60,7 +60,8 @@ export default function MapCentricHome() {
       kv115: true,
       kv69: true
     },
-    showCityLabels: true
+    showCityLabels: true,
+    showHighways: true
   });
 
   // Sync auction layer visibility with map overlays
@@ -320,6 +321,7 @@ export default function MapCentricHome() {
           showPowerLines={mapOverlays.showPowerLines}
           powerLineVoltages={mapOverlays.powerLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
+          showHighways={mapOverlays.showHighways}
         />
 
         {/* Map Controls */}
