@@ -488,110 +488,60 @@ export default function EnhancedMap({
               'text-halo-blur': 1
             }
           },
-          // Interstate highways (thick, prominent)
+          // All highways and major roads (single color, simple)
           {
-            id: 'road-motorway-trunk',
+            id: 'road-all-highways',
             type: 'line',
             source: 'mapbox-streets',
             'source-layer': 'road',
-            filter: ['in', 'class', 'motorway', 'trunk'],
+            filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
             layout: {
               'line-cap': 'round',
               'line-join': 'round'
             },
             paint: {
-              'line-color': '#fbbf24', // Yellow/gold for interstates
+              'line-color': '#fbbf24', // Yellow/gold
               'line-width': [
                 'interpolate',
                 ['linear'],
                 ['zoom'],
-                6, 1,
+                6, 1.5,
                 10, 3,
-                14, 6,
-                18, 10
+                14, 5,
+                18, 8
               ],
-              'line-opacity': 0.9
+              'line-opacity': 0.85
             }
           },
-          // Interstate highway outlines
+          // Highway labels (I-80, US-20, etc.)
           {
-            id: 'road-motorway-trunk-case',
-            type: 'line',
-            source: 'mapbox-streets',
-            'source-layer': 'road',
-            filter: ['in', 'class', 'motorway', 'trunk'],
-            layout: {
-              'line-cap': 'round',
-              'line-join': 'round'
-            },
-            paint: {
-              'line-color': '#ffffff',
-              'line-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                6, 2,
-                10, 5,
-                14, 8,
-                18, 12
-              ],
-              'line-gap-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                6, 1,
-                10, 3,
-                14, 6,
-                18, 10
-              ],
-              'line-opacity': 0.7
-            }
-          },
-          // Primary roads (US routes, state highways)
-          {
-            id: 'road-primary',
-            type: 'line',
-            source: 'mapbox-streets',
-            'source-layer': 'road',
-            filter: ['==', 'class', 'primary'],
-            minzoom: 8,
-            layout: {
-              'line-cap': 'round',
-              'line-join': 'round'
-            },
-            paint: {
-              'line-color': '#fcd34d', // Lighter yellow for primary roads
-              'line-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                8, 0.5,
-                12, 2,
-                16, 4
-              ],
-              'line-opacity': 0.8
-            }
-          },
-          // Highway shields/labels
-          {
-            id: 'road-label-motorway',
+            id: 'road-label-highways',
             type: 'symbol',
             source: 'mapbox-streets',
             'source-layer': 'road_label',
-            filter: ['in', 'class', 'motorway', 'trunk'],
-            minzoom: 8,
+            filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
+            minzoom: 9,
             layout: {
-              'text-field': ['get', 'ref'],
+              'text-field': ['coalesce', ['get', 'ref'], ['get', 'name']],
               'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-              'text-size': 10,
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                9, 9,
+                12, 11,
+                16, 13
+              ],
               'symbol-placement': 'line',
-              'symbol-spacing': 300,
-              'text-rotation-alignment': 'viewport'
+              'symbol-spacing': 400,
+              'text-rotation-alignment': 'viewport',
+              'text-letter-spacing': 0.05
             },
             paint: {
-              'text-color': '#000000',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 2
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 2.5,
+              'text-halo-blur': 0.5
             }
           }
         ]
@@ -1927,7 +1877,7 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
 
-    const layers = ['road-motorway-trunk', 'road-motorway-trunk-case', 'road-primary', 'road-label-motorway'];
+    const layers = ['road-all-highways', 'road-label-highways'];
 
     layers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
