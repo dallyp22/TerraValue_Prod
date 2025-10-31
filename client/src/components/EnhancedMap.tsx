@@ -40,6 +40,7 @@ interface EnhancedMapProps {
     kv115: boolean;
     kv69: boolean;
   };
+  showCityLabels?: boolean;
 }
 
 export default function EnhancedMap({ 
@@ -61,7 +62,8 @@ export default function EnhancedMap({
   showLakes = true,
   lakeTypes = { lakes: true, reservoirs: true },
   showPowerLines = true,
-  powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true }
+  powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true },
+  showCityLabels = true
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -345,7 +347,7 @@ export default function EnhancedMap({
       container: mapContainer.current,
       style: {
         version: 8,
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        glyphs: `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
         sources: {
           'esri-satellite': {
             type: 'raster',
@@ -435,7 +437,7 @@ export default function EnhancedMap({
             filter: ['in', 'type', 'city', 'town'],
             layout: {
               'text-field': ['get', 'name_en'],
-              'text-font': ['Noto Sans Bold', 'Arial Unicode MS Bold'],
+              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
               'text-size': [
                 'interpolate',
                 ['linear'],
@@ -465,7 +467,7 @@ export default function EnhancedMap({
             minzoom: 10,
             layout: {
               'text-field': ['get', 'name_en'],
-              'text-font': ['Noto Sans Regular', 'Arial Unicode MS Regular'],
+              'text-font': ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
               'text-size': [
                 'interpolate',
                 ['linear'],
@@ -1794,6 +1796,24 @@ export default function EnhancedMap({
       }
     });
   }, [showLakes]);
+
+  // Toggle city/town labels visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['place-labels-city', 'place-labels-village'];
+
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showCityLabels ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showCityLabels]);
 
   // Filter lakes by type (lake vs reservoir)
   useEffect(() => {

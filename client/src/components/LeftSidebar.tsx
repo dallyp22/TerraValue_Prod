@@ -50,6 +50,7 @@ export interface MapOverlays {
     kv115: boolean;
     kv69: boolean;
   };
+  showCityLabels: boolean;
 }
 
 export interface MapInfo {
@@ -458,7 +459,7 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showPowerLines}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showPowerLines && mapOverlays.showCityLabels}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
@@ -477,7 +478,8 @@ export default function LeftSidebar({
                         kv138: allEnabled,
                         kv115: allEnabled,
                         kv69: allEnabled
-                      }
+                      },
+                      showCityLabels: allEnabled
                     });
                   }}
                 />
@@ -493,6 +495,15 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">Auctions</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapOverlays.showCityLabels}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showCityLabels: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">City & Town Labels</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox

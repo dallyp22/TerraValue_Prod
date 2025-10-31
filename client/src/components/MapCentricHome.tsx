@@ -59,7 +59,8 @@ export default function MapCentricHome() {
       kv138: true,
       kv115: true,
       kv69: true
-    }
+    },
+    showCityLabels: true
   });
 
   // Sync auction layer visibility with map overlays
@@ -318,6 +319,7 @@ export default function MapCentricHome() {
           lakeTypes={mapOverlays.lakeTypes}
           showPowerLines={mapOverlays.showPowerLines}
           powerLineVoltages={mapOverlays.powerLineVoltages}
+          showCityLabels={mapOverlays.showCityLabels}
         />
 
         {/* Map Controls */}
