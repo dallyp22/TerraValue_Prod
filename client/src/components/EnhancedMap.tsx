@@ -513,37 +513,6 @@ export default function EnhancedMap({
               'line-opacity': 0.85
             }
           },
-          // Highway labels (I-80, US-20, etc.)
-          {
-            id: 'road-label-highways',
-            type: 'symbol',
-            source: 'mapbox-streets',
-            'source-layer': 'road_label',
-            filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
-            minzoom: 9,
-            layout: {
-              'text-field': ['coalesce', ['get', 'ref'], ['get', 'name']],
-              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-              'text-size': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                9, 9,
-                12, 11,
-                16, 13
-              ],
-              'symbol-placement': 'line',
-              'symbol-spacing': 400,
-              'text-rotation-alignment': 'viewport',
-              'text-letter-spacing': 0.05
-            },
-            paint: {
-              'text-color': '#ffffff',
-              'text-halo-color': '#000000',
-              'text-halo-width': 2.5,
-              'text-halo-blur': 0.5
-            }
-          }
         ]
       },
       center: [-93.5, 42.0], // Iowa center
@@ -1877,7 +1846,7 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
 
-    const layers = ['road-all-highways', 'road-label-highways'];
+    const layers = ['road-all-highways'];
 
     layers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);

@@ -144,6 +144,23 @@ export const propertyFormSchema = z.object({
   longitude: z.number().optional(),
   // Non-tillable land type for valuation adjustments
   nonTillableType: z.enum(["CRP", "Timber", "Other"]).optional(),
+  // Owner & Parcel Information (populated by parcel selection)
+  ownerName: z.string().optional(),
+  parcelNumber: z.string().optional(),
+  // Soil Data (populated from local database)
+  mukey: z.string().optional(),
+  soilSeries: z.string().optional(),
+  soilSlope: z.number().optional(),
+  soilDrainage: z.string().optional(),
+  soilHydrologicGroup: z.string().optional(),
+  soilFarmlandClass: z.string().optional(),
+  soilTexture: z.string().optional(),
+  soilSandPct: z.number().optional(),
+  soilSiltPct: z.number().optional(),
+  soilClayPct: z.number().optional(),
+  soilPH: z.number().optional(),
+  soilOrganicMatter: z.number().optional(),
+  soilComponents: z.any().optional(), // JSON array
 }).refine((data) => {
   // Validate that tillable acres doesn't exceed total acres
   if (data.tillableAcres && data.tillableAcres > data.acreage) {
