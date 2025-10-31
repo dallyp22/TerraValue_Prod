@@ -29,6 +29,23 @@ export const valuations = pgTable("valuations", {
   csr2Count: integer("csr2_count"),
   latitude: real("latitude"),
   longitude: real("longitude"),
+  // Owner & Parcel Information
+  ownerName: text("owner_name"),
+  parcelNumber: text("parcel_number"),
+  // Soil Data (from local database)
+  mukey: text("mukey"), // Map unit key
+  soilSeries: text("soil_series"), // e.g., "Clarion"
+  soilSlope: real("soil_slope"), // Percentage
+  soilDrainage: text("soil_drainage"), // e.g., "Well drained"
+  soilHydrologicGroup: text("soil_hydrologic_group"), // e.g., "B"
+  soilFarmlandClass: text("soil_farmland_class"), // e.g., "Prime farmland"
+  soilTexture: text("soil_texture"), // e.g., "Silt loam"
+  soilSandPct: real("soil_sand_pct"),
+  soilSiltPct: real("soil_silt_pct"),
+  soilClayPct: real("soil_clay_pct"),
+  soilPH: real("soil_ph"),
+  soilOrganicMatter: real("soil_organic_matter"),
+  soilComponents: json("soil_components"), // Full component breakdown
   // Valuation results
   baseValue: real("base_value"),
   adjustedValue: real("adjusted_value"),

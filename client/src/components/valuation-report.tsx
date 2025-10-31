@@ -1,11 +1,12 @@
 import { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Database, Brain, TrendingUp, Activity, DollarSign, Check } from "lucide-react";
+import { FileText, Download, Database, Brain, TrendingUp, Activity, DollarSign, Check, MapPin, User, Sprout } from "lucide-react";
 import { motion } from "framer-motion";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { Valuation, ValuationBreakdown } from "@shared/schema";
+import { SoilDataReadOnly } from "./SoilDataReadOnly";
 
 interface ValuationReportProps {
   valuation?: Valuation;
@@ -158,9 +159,9 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
       // Add professional header to first page
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Terra Value Property Valuation Report', margin, margin - 5);
+      pdf.text('TerraValue Property Valuation Report', margin, margin - 5);
       
-      // Add date and property info
+      // Add date
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       const currentDate = new Date().toLocaleDateString('en-US', {
@@ -169,6 +170,22 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
         day: 'numeric'
       });
       pdf.text(`Generated: ${currentDate}`, pdfWidth - margin - 50, margin - 5);
+      
+      // Add parcel info if available (small text under header)
+      if (valuation.parcelNumber || valuation.ownerName) {
+        let yPos = margin + 2;
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(100, 100, 100);
+        if (valuation.parcelNumber) {
+          pdf.text(`Parcel #${valuation.parcelNumber}`, margin, yPos);
+          yPos += 3;
+        }
+        if (valuation.ownerName) {
+          pdf.text(`Owner: ${valuation.ownerName}`, margin, yPos);
+        }
+        pdf.setTextColor(0, 0, 0); // Reset to black
+      }
       
       if (pagesNeeded === 1) {
         // Single page - center vertically if there's space
@@ -398,6 +415,72 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
           )}
         </div>
 
+        {/* Parcel Information */}
+        {(valuation.ownerName || valuation.parcelNumber) && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.15 }}
+            className="bg-slate-50 rounded-2xl p-6 border border-slate-200 print:break-inside-avoid"
+          >
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2 flex items-center">
+                <MapPin className="h-5 w-5 mr-2 text-slate-600" />
+                Parcel Information
+              </h3>
+              <div className="h-px bg-slate-200"></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {valuation.ownerName && (
+                <div className="flex items-start gap-3">
+                  <User className="h-4 w-4 text-slate-500 mt-1" />
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Owner</div>
+                    <div className="text-sm font-medium text-slate-900">{valuation.ownerName}</div>
+                  </div>
+                </div>
+              )}
+              {valuation.parcelNumber && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-4 w-4 text-slate-500 mt-1" />
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Parcel Number</div>
+                    <div className="text-sm font-medium font-mono text-slate-900">{valuation.parcelNumber}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Soil Analysis from Local Database */}
+        {valuation.soilSeries && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.17 }}
+            className="print:break-inside-avoid"
+          >
+            <SoilDataReadOnly
+              ownerName={valuation.ownerName}
+              parcelNumber={valuation.parcelNumber}
+              mukey={valuation.mukey}
+              soilSeries={valuation.soilSeries}
+              soilSlope={valuation.soilSlope}
+              soilDrainage={valuation.soilDrainage}
+              soilHydrologicGroup={valuation.soilHydrologicGroup}
+              soilFarmlandClass={valuation.soilFarmlandClass}
+              soilTexture={valuation.soilTexture}
+              soilSandPct={valuation.soilSandPct}
+              soilSiltPct={valuation.soilSiltPct}
+              soilClayPct={valuation.soilClayPct}
+              soilPH={valuation.soilPH}
+              soilOrganicMatter={valuation.soilOrganicMatter}
+              soilComponents={valuation.soilComponents as any}
+            />
+          </motion.div>
+        )}
+
         {/* CSR2 Soil Productivity Analysis */}
         {breakdown?.csr2Mean && (
           <motion.div
@@ -409,7 +492,7 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-slate-900 mb-2 flex items-center">
                 <Database className="h-5 w-5 mr-2 text-green-600" />
-                Soil Productivity Analysis
+                CSR2 Soil Productivity Rating
               </h3>
               <div className="h-px bg-green-200"></div>
             </div>

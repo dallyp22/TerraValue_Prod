@@ -52,12 +52,14 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   const [isLoadingCSR2, setIsLoadingCSR2] = useState(false);
   const [parcelCSR2Data, setParcelCSR2Data] = useState<any>(null);
   const [mukey, setMukey] = useState<string | null>(null);
+  const [soilData, setSoilData] = useState<any>(null);
 
-  // Fetch mukey when parcel is selected
+  // Fetch mukey and soil data when parcel is selected
   useEffect(() => {
-    const fetchMukey = async () => {
+    const fetchSoilData = async () => {
       if (!parcelData || !parcelData.coordinates) {
         setMukey(null);
+        setSoilData(null);
         return;
       }
 
@@ -65,19 +67,32 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       console.log(`🔍 Fetching mukey for parcel at: lon=${lon}, lat=${lat}`);
 
       try {
-        const response = await fetch(`/api/mukey/point?lon=${lon}&lat=${lat}`);
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Mukey response:', data);
-          setMukey(data.mukey || null);
+        // Get mukey
+        const mukeyResponse = await fetch(`/api/mukey/point?lon=${lon}&lat=${lat}`);
+        if (mukeyResponse.ok) {
+          const mukeyData = await mukeyResponse.json();
+          console.log('✅ Mukey response:', mukeyData);
+          const fetchedMukey = mukeyData.mukey || null;
+          setMukey(fetchedMukey);
+
+          // If we have a mukey, fetch soil data
+          if (fetchedMukey) {
+            const soilResponse = await fetch(`/api/soil/mukey/${fetchedMukey}`);
+            if (soilResponse.ok) {
+              const soilResponseData = await soilResponse.json();
+              console.log('✅ Soil data fetched for valuation:', soilResponseData);
+              setSoilData(soilResponseData.data || null);
+            }
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch mukey:', error);
+        console.error('Failed to fetch mukey/soil data:', error);
         setMukey(null);
+        setSoilData(null);
       }
     };
 
-    fetchMukey();
+    fetchSoilData();
   }, [parcelData]);
 
 
@@ -319,7 +334,25 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         csr2Max: parcelCSR2Data.csr2?.max,
         csr2Count: parcelCSR2Data.csr2?.count,
         latitude: parcelData.coordinates[1],
-        longitude: parcelData.coordinates[0]
+        longitude: parcelData.coordinates[0],
+        // Add owner & parcel info
+        ownerName: parcelData.owner_name,
+        parcelNumber: parcelData.parcel_number,
+        // Add soil data
+        mukey: mukey,
+        soilSeries: soilData?.soilSeries,
+        soilSlope: soilData?.slope,
+        soilDrainage: soilData?.drainage,
+        soilHydrologicGroup: soilData?.hydrologicGroup,
+        soilFarmlandClass: soilData?.farmlandClass,
+        soilTexture: soilData?.texture ? 
+          `${soilData.texture.sand?.toFixed(0)}% sand, ${soilData.texture.silt?.toFixed(0)}% silt, ${soilData.texture.clay?.toFixed(0)}% clay` : null,
+        soilSandPct: soilData?.texture?.sand,
+        soilSiltPct: soilData?.texture?.silt,
+        soilClayPct: soilData?.texture?.clay,
+        soilPH: soilData?.texture?.ph,
+        soilOrganicMatter: soilData?.texture?.organicMatter,
+        soilComponents: soilData?.components
       };
     }
     startValuationMutation.mutate(data);
