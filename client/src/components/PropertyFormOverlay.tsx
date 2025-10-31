@@ -309,6 +309,10 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   });
 
   const handlePropertySubmit = (data: PropertyFormData) => {
+    console.log('📝 Form submission - parcelData:', parcelData);
+    console.log('📝 Form submission - soilData:', soilData);
+    console.log('📝 Form submission - mukey:', mukey);
+    
     // Merge drawn polygon data if available (Option 2)
     if (drawnPolygonData) {
       data = {
@@ -355,6 +359,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         soilComponents: soilData?.components
       };
     }
+    
+    console.log('📤 Submitting valuation with data:', data);
     startValuationMutation.mutate(data);
   };
 

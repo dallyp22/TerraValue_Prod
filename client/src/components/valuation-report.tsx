@@ -17,6 +17,12 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
   const breakdown = valuation?.breakdown as ValuationBreakdown | null;
   const reportRef = useRef<HTMLDivElement>(null);
   
+  // Debug: Log valuation data to see what's available
+  console.log('📊 Valuation Report - Full valuation data:', valuation);
+  console.log('📊 Owner Name:', valuation?.ownerName);
+  console.log('📊 Parcel Number:', valuation?.parcelNumber);
+  console.log('📊 Soil Series:', valuation?.soilSeries);
+  
   // State for selected valuation method
   const [selectedMethod, setSelectedMethod] = useState<"csr2" | "income" | "ai_market">("csr2");
   const [isExporting, setIsExporting] = useState(false);
