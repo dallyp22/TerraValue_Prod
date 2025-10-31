@@ -815,9 +815,9 @@ export default function EnhancedMap({
 
       // Function to handle parcel click (shared by both outline and fill)
       const handleParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        // Check if an auction was just clicked - if so, ignore parcel click
-        if (auctionClickedRef.current) {
-          console.log('Ignoring parcel click - auction was clicked');
+        // Check if a feature (auction, substation, etc.) was just clicked - if so, ignore parcel click
+        if (featureClickedRef.current) {
+          console.log('Ignoring parcel click - feature was clicked');
           return;
         }
         

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import pLimit from 'p-limit';
+import { isSoilDbAvailable, executeSoilQuery } from '../soil-db';
 
 // Cache for 1 hour (3600 seconds)
 const cache = new NodeCache({ stdTTL: 3600 });
@@ -10,6 +11,109 @@ const limit = pLimit(3);
 
 // Iowa CSR2 raster endpoint
 const CSR2_ENDPOINT = "https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer";
+
+/**
+ * Query local soil database for CSR2 value at a point
+ */
+async function csr2PointValueFromLocalDb(longitude: number, latitude: number): Promise<number | null> {
+  try {
+    if (!isSoilDbAvailable()) {
+      return null;
+    }
+
+    // Query for CSR2 value using PostGIS point intersection
+    // Uses weighted average if multiple components overlap
+    const sql = `
+      SELECT 
+        AVG(csr.csr2_value * COALESCE(c.comppct_r, 100) / 100.0) as weighted_csr2
+      FROM soil_component c
+      JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
+      WHERE c.mukey IN (
+        SELECT DISTINCT mukey 
+        FROM soil_mapunit_spatial
+        WHERE ST_Intersects(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+        OR ST_Intersects(centroid, ST_Buffer(ST_SetSRID(ST_MakePoint($1, $2), 4326), 0.001))
+      )
+      AND c.majcompflag = 'Yes'
+    `;
+
+    const result = await executeSoilQuery<{ weighted_csr2: number }>(sql, [longitude, latitude]);
+    
+    if (result.length > 0 && result[0].weighted_csr2 != null) {
+      const csr2Value = Number(result[0].weighted_csr2.toFixed(1));
+      console.log(`✅ CSR2 from local DB for (${longitude}, ${latitude}): ${csr2Value}`);
+      return csr2Value;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Local DB CSR2 query failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Query local soil database for CSR2 statistics for a polygon
+ */
+async function csr2PolygonStatsFromLocalDb(wkt: string): Promise<CSR2Stats | null> {
+  try {
+    if (!isSoilDbAvailable()) {
+      return null;
+    }
+
+    // Query for CSR2 statistics using PostGIS intersection and area-weighted averaging
+    const sql = `
+      WITH intersecting_units AS (
+        SELECT 
+          ms.mukey,
+          c.cokey,
+          c.comppct_r,
+          csr.csr2_value,
+          ST_Area(ST_Intersection(ms.geom, ST_GeomFromText($1, 4326))) as overlap_area
+        FROM soil_mapunit_spatial ms
+        JOIN soil_component c ON ms.mukey = c.mukey
+        JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
+        WHERE ST_Intersects(ms.geom, ST_GeomFromText($1, 4326))
+        AND c.majcompflag = 'Yes'
+        AND csr.csr2_value IS NOT NULL
+      ),
+      weighted_values AS (
+        SELECT 
+          csr2_value,
+          (overlap_area * COALESCE(comppct_r, 100) / 100.0) as weight
+        FROM intersecting_units
+      )
+      SELECT 
+        SUM(csr2_value * weight) / NULLIF(SUM(weight), 0) as weighted_mean,
+        MIN(csr2_value) as min_csr2,
+        MAX(csr2_value) as max_csr2,
+        COUNT(*) as count
+      FROM weighted_values
+    `;
+
+    const result = await executeSoilQuery<{
+      weighted_mean: number;
+      min_csr2: number;
+      max_csr2: number;
+      count: number;
+    }>(sql, [wkt]);
+
+    if (result.length > 0 && result[0].weighted_mean != null) {
+      console.log(`✅ CSR2 stats from local DB - mean: ${result[0].weighted_mean.toFixed(1)}`);
+      return {
+        mean: Number(result[0].weighted_mean.toFixed(1)),
+        min: Math.round(result[0].min_csr2),
+        max: Math.round(result[0].max_csr2),
+        count: result[0].count
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Local DB CSR2 polygon query failed:', error);
+    return null;
+  }
+}
 
 export interface CSR2Stats {
   mean: number | null;
@@ -37,7 +141,14 @@ export async function csr2PointValue(longitude: number, latitude: number): Promi
   }
 
   try {
-    // Try Michigan State ImageServer first (original working approach)
+    // Try local database first (fastest)
+    const localResult = await csr2PointValueFromLocalDb(longitude, latitude);
+    if (localResult !== null) {
+      cache.set(cacheKey, localResult);
+      return localResult;
+    }
+
+    // Fallback to Michigan State ImageServer
     try {
       const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
         params: {
@@ -253,7 +364,13 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         };
       }
       
-      // Handle POLYGON format (existing code)
+      // Try local database first for polygon queries
+      const localStats = await csr2PolygonStatsFromLocalDb(wkt);
+      if (localStats !== null) {
+        return localStats;
+      }
+      
+      // Handle POLYGON format with fallback to sampling (existing code)
       const coordsMatch = /POLYGON\(\((.*)\)\)/.exec(wkt);
       if (!coordsMatch) {
         throw new Error('Invalid WKT format - must be POINT or POLYGON');
@@ -557,6 +674,15 @@ export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
   const coordPairs = coordinates.map((coord: [number, number]) => `${coord[0]} ${coord[1]}`).join(', ');
   const wkt = `POLYGON((${coordPairs}))`;
 
+  // Try local database first
+  if (isSoilDbAvailable()) {
+    const localStats = await csr2PolygonStatsFromLocalDb(wkt);
+    if (localStats !== null) {
+      return localStats;
+    }
+  }
+
+  // Fallback to USDA SDA query
   const sql = `
     SELECT 
       m.mukey,

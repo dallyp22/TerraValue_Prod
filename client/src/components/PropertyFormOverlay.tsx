@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
 import * as turf from '@turf/turf';
 import type { PropertyForm as PropertyFormData } from '@shared/schema';
+import { SoilDataPanel } from './SoilDataPanel';
 
 interface ParcelData {
   owner_name: string;
@@ -50,6 +51,34 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   const { toast } = useToast();
   const [isLoadingCSR2, setIsLoadingCSR2] = useState(false);
   const [parcelCSR2Data, setParcelCSR2Data] = useState<any>(null);
+  const [mukey, setMukey] = useState<string | null>(null);
+
+  // Fetch mukey when parcel is selected
+  useEffect(() => {
+    const fetchMukey = async () => {
+      if (!parcelData || !parcelData.coordinates) {
+        setMukey(null);
+        return;
+      }
+
+      const [lon, lat] = parcelData.coordinates;
+      console.log(`🔍 Fetching mukey for parcel at: lon=${lon}, lat=${lat}`);
+
+      try {
+        const response = await fetch(`/api/mukey/point?lon=${lon}&lat=${lat}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Mukey response:', data);
+          setMukey(data.mukey || null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch mukey:', error);
+        setMukey(null);
+      }
+    };
+
+    fetchMukey();
+  }, [parcelData]);
 
 
 
@@ -318,7 +347,22 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <div className="p-4 sm:p-6 overflow-y-auto h-[calc(100%-4rem)] sm:h-[calc(100%-5rem)]">
+        <div className="p-4 sm:p-6 overflow-y-auto h-[calc(100%-4rem)] sm:h-[calc(100%-5rem)] space-y-6">
+          {/* Soil Data Panel - Shows Iowa soil properties */}
+          {mukey && parcelData && (
+            <div className="mb-6">
+              <SoilDataPanel 
+                mukey={mukey}
+                parcelInfo={{
+                  ownerName: parcelData.owner_name,
+                  parcelNumber: parcelData.parcel_number,
+                  county: parcelData.county,
+                  acres: parcelData.acres
+                }}
+              />
+            </div>
+          )}
+          
           <PropertyForm 
             onSubmit={handlePropertySubmit}
             isLoading={startValuationMutation.isPending || isLoadingCSR2}

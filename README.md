@@ -27,6 +27,7 @@ A sophisticated agricultural land valuation platform combining AI-powered analys
 - County-specific base values
 - Weighted soil component analysis
 - Comprehensive PDF reports
+- **Optional local soil database for 10-100x faster CSR2 queries**
 
 ## 🚀 Quick Start
 
@@ -59,6 +60,18 @@ npm run dev
 
 The application will be available at `http://localhost:5001`
 
+### Optional: Iowa Soil Database Setup
+
+For **10-100x faster** CSR2 queries, set up a local soil database:
+
+```bash
+# Quick setup (see SOIL_DATABASE_QUICK_START.md for details)
+npm run db:soil:push     # Create tables
+npm run db:soil:load     # Load Iowa data (30-60 min)
+```
+
+This is **optional** - the app works with external APIs if not configured.
+
 ### Environment Variables
 
 Create a `.env` file with the following:
@@ -66,6 +79,10 @@ Create a `.env` file with the following:
 ```env
 # Database Configuration (REQUIRED)
 DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
+
+# Soil Database (OPTIONAL - for 10-100x faster CSR2 queries)
+# See SOIL_DATABASE_QUICK_START.md for setup
+DATABASE_URL_SOIL=postgresql://user:password@host:port/soildb?sslmode=require
 
 # OpenAI API Key (REQUIRED for AI valuations)
 OPENAI_API_KEY=sk-your-openai-api-key-here
@@ -82,38 +99,56 @@ IOWA_VECTOR_STORE_ID=vs_xxxxx
 
 ## 📊 CSR2 Integration
 
-TerraValue uses a robust fallback system for CSR2 (Corn Suitability Rating) data:
+TerraValue uses a multi-tier fallback system for CSR2 (Corn Suitability Rating) data:
 
 ### Data Sources (in order of preference):
-1. **Michigan State ImageServer** (primary, if available)
+
+**For Soil Properties (slope, drainage, texture, soil series):**
+1. **Local PostgreSQL Database** (optional, recommended)
+   - Instant access (50-200ms) to comprehensive soil data
+   - 125,960 soil horizons with texture, pH, organic matter
+   - 29,924 soil components with slope and drainage
+   - See `SOIL_DATABASE_QUICK_START.md` for setup
+   - **Performance: 50-200ms per query**
+
+**For CSR2 Ratings:**
+1. **Michigan State ImageServer** (external API)
    - Endpoint: `https://enterprise.rsgis.msu.edu/imageserver/.../Iowa_Corn_Suitability_Rating`
    - Direct raster value queries
-   - Fast and accurate
+   - Fast when available
+   - **Performance: 2-5s per point**
 
-2. **USDA Soil Data Access API** (fallback, currently active)
+3. **USDA Soil Data Access API** (final fallback)
    - Creates persistent Area of Interest (AOI)
    - Runs Iowa CSR2 interpretation (attributekey: 189)
    - Queries WFS thematic layer for rating values
    - Fully functional and tested
+   - **Performance: 3-8s per point**
 
 ### CSR2 Workflow
 ```
-User clicks parcel → Generate grid points → Query each point → 
-Calculate weighted average → Display CSR2 rating
+User clicks parcel → 
+Try local DB (if configured) → 
+Fallback to ImageServer → 
+Fallback to USDA SDA → 
+Calculate weighted average → 
+Display CSR2 rating
 ```
 
 **Performance:**
-- 25 sample points for large parcels (>160 acres)
-- 1-hour caching per point
-- 3 concurrent API requests (rate limited)
-- Sub-second response for cached parcels
+- **Soil properties** (local DB): 50-200ms ⚡
+- **CSR2 ratings** (external APIs): 2-60s (unchanged)
+- 1-hour caching per query
+- **Hybrid approach**: Fast soil data + external CSR2
 
 ## 🏗️ Architecture
 
 ### Tech Stack
 - **Frontend**: React 18 + TypeScript + Vite
 - **Backend**: Express.js + Node.js
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: PostgreSQL with Drizzle ORM (dual database architecture)
+  - Primary DB: Application data (Neon)
+  - Soil DB: Iowa SSURGO soil properties (Railway) - slope, drainage, texture, soil series
 - **Maps**: MapLibre GL + Mapbox vector tiles
 - **AI**: OpenAI GPT-4o with vector stores
 - **Styling**: Tailwind CSS + shadcn/ui components
@@ -127,14 +162,24 @@ Calculate weighted average → Display CSR2 rating
 │   │   └── lib/         # Utilities
 ├── server/              # Express backend
 │   ├── services/        # Business logic
-│   │   ├── csr2.ts      # CSR2 data retrieval
+│   │   ├── csr2.ts      # CSR2 data retrieval (local DB + external APIs)
 │   │   ├── valuation.ts # Valuation pipeline
 │   │   ├── openai.ts    # AI services
 │   │   └── cornPrice.ts # Futures integration
 │   ├── routes.ts        # API endpoints
-│   └── db.ts            # Database connection
+│   ├── db.ts            # Main database connection
+│   └── soil-db.ts       # Soil database connection (optional)
 ├── shared/              # Shared types/schemas
-└── migrations/          # Database migrations
+│   ├── schema.ts        # Application schema
+│   └── soil-schema.ts   # Soil database schema
+├── scripts/             # Utility scripts
+│   ├── load-iowa-soil-data.ts  # Soil data loader
+│   └── refresh-materialized-view.ts
+├── migrations/          # Application database migrations
+├── migrations-soil/     # Soil database migrations
+└── docs/                # Documentation
+    ├── Soil_Database_Setup_Guide.md
+    └── ...
 ```
 
 ## 🔌 API Endpoints

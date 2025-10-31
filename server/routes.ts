@@ -5,6 +5,8 @@ import { valuationService } from "./services/valuation.js";
 import { csr2Service } from "./services/csr2.js";
 import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
+import { soilPropertiesService } from "./services/soilProperties.js";
+import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { propertyFormSchema, auctions } from "@shared/schema";
 import { db } from "./db.js";
 import { and, gte, lte, eq, asc, sql } from "drizzle-orm";
@@ -269,6 +271,147 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : "Failed to calculate average CSR2"
+      });
+    }
+  });
+
+  // ===============================
+  // Soil Data API Endpoints
+  // ===============================
+
+  // Get soil data by map unit key (mukey)
+  app.get("/api/soil/mukey/:mukey", async (req, res) => {
+    try {
+      const { mukey } = req.params;
+      
+      if (!mukey) {
+        return res.status(400).json({
+          success: false,
+          message: "Map unit key (mukey) is required"
+        });
+      }
+
+      const soilData = await soilPropertiesService.getSoilDataByMukey(mukey);
+      
+      if (!soilData) {
+        return res.status(404).json({
+          success: false,
+          message: "No soil data found for this map unit key"
+        });
+      }
+
+      res.json({
+        success: true,
+        data: soilData
+      });
+    } catch (error) {
+      console.error("Soil data query error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to fetch soil data"
+      });
+    }
+  });
+
+  // Get list of all soil series
+  app.get("/api/soil/series", async (req, res) => {
+    try {
+      const series = await soilPropertiesService.getAllSoilSeries();
+      
+      res.json({
+        success: true,
+        count: series.length,
+        series
+      });
+    } catch (error) {
+      console.error("Soil series query error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to fetch soil series"
+      });
+    }
+  });
+
+  // Search soil components by criteria
+  app.post("/api/soil/search", async (req, res) => {
+    try {
+      const criteria = req.body;
+      
+      const results = await soilPropertiesService.searchSoilComponents(criteria);
+      
+      res.json({
+        success: true,
+        count: results.length,
+        results
+      });
+    } catch (error) {
+      console.error("Soil search error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to search soil data"
+      });
+    }
+  });
+
+  // Get mukey (map unit key) for coordinates
+  app.get("/api/mukey/point", async (req, res) => {
+    try {
+      const lon = parseFloat(req.query.lon as string);
+      const lat = parseFloat(req.query.lat as string);
+      
+      if (isNaN(lon) || isNaN(lat)) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid longitude and latitude are required"
+        });
+      }
+
+      const mukey = await mukeyLookupService.getMukeyForPoint(lon, lat);
+      
+      if (!mukey) {
+        return res.status(404).json({
+          success: false,
+          message: "No soil map unit found for this location"
+        });
+      }
+
+      res.json({
+        success: true,
+        mukey
+      });
+    } catch (error) {
+      console.error("Mukey lookup error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to lookup mukey"
+      });
+    }
+  });
+
+  // Get mukeys for polygon
+  app.post("/api/mukey/polygon", async (req, res) => {
+    try {
+      const { wkt } = req.body;
+      
+      if (!wkt || typeof wkt !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: "Valid WKT geometry is required"
+        });
+      }
+
+      const mukeys = await mukeyLookupService.getMukeysForPolygon(wkt);
+      
+      res.json({
+        success: true,
+        count: mukeys.length,
+        mukeys
+      });
+    } catch (error) {
+      console.error("Mukey polygon lookup error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to lookup mukeys for polygon"
       });
     }
   });

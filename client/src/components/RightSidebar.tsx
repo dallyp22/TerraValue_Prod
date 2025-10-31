@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, DollarSign, TrendingUp, Calendar, MapPin, Ruler, ExternalLink, Calculator, Save, Share2, BarChart3, FileText, Sprout, Eye } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card, CardContent } from './ui/card';
 import { format, differenceInDays } from 'date-fns';
 import type { Auction } from '@shared/schema';
+import { SoilDataPanel } from './SoilDataPanel';
 
 interface RightSidebarProps {
   isOpen: boolean;
@@ -26,6 +27,80 @@ export default function RightSidebar({
   const [activeTab, setActiveTab] = useState('details');
   const [calculating, setCalculating] = useState(false);
   const [csr2Data, setCsr2Data] = useState<any>(null);
+  const [mukey, setMukey] = useState<string | null>(null);
+
+  // Debug: Log whenever component renders
+  console.log('🌾 RightSidebar render - mukey:', mukey, 'selectedItem:', !!selectedItem);
+
+  // Fetch mukey when item is selected and has coordinates
+  useEffect(() => {
+    console.log('🔍 Mukey lookup effect triggered');
+    console.log('Selected item:', selectedItem);
+    console.log('Item type:', itemType);
+    
+    const fetchMukey = async () => {
+      if (!selectedItem) {
+        console.log('No selected item, skipping mukey lookup');
+        setMukey(null);
+        return;
+      }
+
+      // Try different coordinate formats
+      let lon = selectedItem.longitude;
+      let lat = selectedItem.latitude;
+
+      console.log('Initial coordinates:', { lon, lat });
+
+      // For parcels, coordinates might be in different format
+      if (!lon && !lat && selectedItem.coordinates) {
+        console.log('Trying coordinates array:', selectedItem.coordinates);
+        // coordinates might be [lon, lat] array
+        if (Array.isArray(selectedItem.coordinates)) {
+          lon = selectedItem.coordinates[0];
+          lat = selectedItem.coordinates[1];
+          console.log('Extracted from array:', { lon, lat });
+        }
+      }
+
+      // Also check for centroid
+      if (!lon && !lat && selectedItem.centroid) {
+        console.log('Trying centroid:', selectedItem.centroid);
+        if (Array.isArray(selectedItem.centroid)) {
+          lon = selectedItem.centroid[0];
+          lat = selectedItem.centroid[1];
+          console.log('Extracted from centroid:', { lon, lat });
+        }
+      }
+
+      if (!lon || !lat) {
+        console.log('❌ No coordinates available for mukey lookup');
+        console.log('Available properties:', Object.keys(selectedItem));
+        setMukey(null);
+        return;
+      }
+
+      console.log(`✅ Fetching mukey for coordinates: lon=${lon}, lat=${lat}`);
+
+      try {
+        const response = await fetch(
+          `/api/mukey/point?lon=${lon}&lat=${lat}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Mukey response:', data);
+          setMukey(data.mukey || null);
+        } else {
+          console.warn('⚠️ Mukey lookup failed:', response.status);
+          setMukey(null);
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch mukey:', error);
+        setMukey(null);
+      }
+    };
+
+    fetchMukey();
+  }, [selectedItem, itemType]);
 
   if (!selectedItem && !isOpen) return null;
 
@@ -224,9 +299,10 @@ export default function RightSidebar({
                 <FileText className="h-4 w-4 mr-1" />
                 Details
               </TabsTrigger>
-              <TabsTrigger value="soil" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent" disabled={!csr2Mean}>
+              <TabsTrigger value="soil" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent" disabled={!csr2Mean && !mukey}>
                 <Sprout className="h-4 w-4 mr-1" />
                 Soil Data
+                {mukey && !csr2Mean && <Badge variant="secondary" className="ml-2 text-xs">New</Badge>}
               </TabsTrigger>
               <TabsTrigger value="analysis" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent" disabled={!csr2Mean}>
                 <BarChart3 className="h-4 w-4 mr-1" />
@@ -289,11 +365,12 @@ export default function RightSidebar({
               )}
             </TabsContent>
 
-            <TabsContent value="soil" className="tab-content p-6">
+            <TabsContent value="soil" className="tab-content p-6 space-y-4">
+              {/* CSR2 Data (if available) */}
               {csr2Mean && (
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold text-sm mb-2">Soil Quality Metrics</h4>
+                    <h4 className="font-semibold text-sm mb-2">CSR2 Soil Quality Rating</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-slate-600">Mean CSR2:</span>
@@ -313,8 +390,12 @@ export default function RightSidebar({
                       )}
                     </div>
                   </div>
+                  <Separator />
                 </div>
               )}
+              
+              {/* Soil Properties from Local Database */}
+              <SoilDataPanel mukey={mukey} />
             </TabsContent>
 
             <TabsContent value="analysis" className="tab-content p-6">
@@ -441,6 +522,11 @@ export default function RightSidebar({
                 <FileText className="h-4 w-4 mr-1" />
                 Details
               </TabsTrigger>
+              <TabsTrigger value="soil" className="rounded-none border-b-2 border-transparent data-[state=active]:border-green-600 data-[state=active]:bg-transparent" disabled={!mukey}>
+                <Sprout className="h-4 w-4 mr-1" />
+                Soil Data
+                {mukey && <Badge variant="secondary" className="ml-2 text-xs">New</Badge>}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="tab-content p-6 space-y-4">
@@ -472,6 +558,10 @@ export default function RightSidebar({
                   </p>
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="soil" className="tab-content p-6">
+              <SoilDataPanel mukey={mukey} />
             </TabsContent>
           </Tabs>
 
