@@ -382,6 +382,10 @@ export default function EnhancedMap({
             ],
             minzoom: 0,
             maxzoom: 16
+          },
+          'mapbox-streets': {
+            type: 'vector',
+            url: `https://api.mapbox.com/v4/mapbox.mapbox-streets-v8.json?secure&access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
           }
         },
         layers: [
@@ -420,6 +424,64 @@ export default function EnhancedMap({
               'line-color': '#ffffff',
               'line-width': 2.5,
               'line-opacity': 0.8
+            }
+          },
+          // City and town labels
+          {
+            id: 'place-labels-city',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'place_label',
+            filter: ['in', 'type', 'city', 'town'],
+            layout: {
+              'text-field': ['get', 'name_en'],
+              'text-font': ['Noto Sans Bold', 'Arial Unicode MS Bold'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                8, 12,
+                12, 18,
+                16, 24
+              ],
+              'text-anchor': 'center',
+              'text-offset': [0, 0.5],
+              'text-max-width': 8
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 2,
+              'text-halo-blur': 1
+            }
+          },
+          // Village labels (smaller)
+          {
+            id: 'place-labels-village',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'place_label',
+            filter: ['==', 'type', 'village'],
+            minzoom: 10,
+            layout: {
+              'text-field': ['get', 'name_en'],
+              'text-font': ['Noto Sans Regular', 'Arial Unicode MS Regular'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                10, 10,
+                14, 14,
+                16, 16
+              ],
+              'text-anchor': 'center',
+              'text-offset': [0, 0.5]
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1.5,
+              'text-halo-blur': 1
             }
           }
         ]
