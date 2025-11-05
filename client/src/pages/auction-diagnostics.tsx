@@ -28,6 +28,8 @@ export default function AuctionDiagnostics() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sourcePages, setSourcePages] = useState<{[key: string]: number}>({});
   const itemsPerPage = 20;
+  const [validating, setValidating] = useState(false);
+  const [validationResults, setValidationResults] = useState<any>(null);
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -95,6 +97,28 @@ export default function AuctionDiagnostics() {
       alert('Error updating coordinates');
     }
     setUpdating(false);
+  };
+
+  const validateCounties = async () => {
+    setValidating(true);
+    try {
+      const response = await fetch('/api/auctions/validate-counties', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.success) {
+        setValidationResults(data);
+        if (data.fixed > 0) {
+          alert(`✅ County Validation Complete!\n\nValidated: ${data.validated} auctions\nFixed: ${data.fixed} county mismatches\n\nRefresh to see updated data.`);
+          checkAuctions(); // Refresh data
+        } else {
+          alert(`✅ All counties validated!\n\nChecked: ${data.validated} auctions\nNo mismatches found.`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to validate counties:', error);
+      alert('Error validating counties');
+    }
+    setValidating(false);
   };
 
   // Group auctions by source website
@@ -599,8 +623,55 @@ export default function AuctionDiagnostics() {
               <Plus className="h-4 w-4 mr-2" />
               Add Auction Source
             </Button>
+            <Button 
+              onClick={validateCounties}
+              disabled={validating}
+              variant="outline"
+            >
+              {validating ? 'Validating...' : 'Validate Counties'}
+            </Button>
           </CardContent>
         </Card>
+
+        {/* County Validation Results */}
+        {validationResults && (
+          <Card className="border-green-200 bg-green-50">
+            <CardHeader>
+              <CardTitle className="text-green-900">County Validation Results</CardTitle>
+              <CardDescription>Checked coordinates against stored county names</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="p-3 bg-white rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{validationResults.validated}</div>
+                  <div className="text-xs text-gray-600">Auctions Checked</div>
+                </div>
+                <div className="p-3 bg-white rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{validationResults.fixed}</div>
+                  <div className="text-xs text-gray-600">Counties Fixed</div>
+                </div>
+                <div className="p-3 bg-white rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600">{validationResults.mismatches}</div>
+                  <div className="text-xs text-gray-600">Mismatches Found</div>
+                </div>
+              </div>
+              
+              {validationResults.details && validationResults.details.length > 0 && (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="text-sm font-semibold mb-2">Fixed Auctions:</div>
+                  {validationResults.details.map((item: any, i: number) => (
+                    <div key={i} className="p-2 bg-white rounded text-xs">
+                      <div className="font-medium">{item.title.substring(0, 60)}...</div>
+                      <div className="text-gray-600">
+                        ❌ Was: {item.storedCounty} → ✅ Fixed to: {item.geocodedCounty}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Add New Auction Source */}
         {showAddSource && (
