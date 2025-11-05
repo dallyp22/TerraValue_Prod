@@ -10,6 +10,7 @@ import MapControls from './MapControls';
 import PropertyFormOverlay from './PropertyFormOverlay';
 import ValuationPipelineOverlay from './ValuationPipelineOverlay';
 import ValuationReportOverlay from './ValuationReportOverlay';
+import { Header } from './layout/header';
 import { apiRequest } from '@/lib/queryClient';
 import type { PropertyForm as PropertyFormData, Valuation, Auction } from '@shared/schema';
 
@@ -281,7 +282,9 @@ export default function MapCentricHome() {
   }, [filters]);
 
   return (
-    <div className="app-grid-layout">
+    <>
+      <Header />
+      <div className="app-grid-layout">
       {/* Left Sidebar - Search & Filters */}
       <LeftSidebar
         isOpen={leftSidebarOpen}
@@ -517,5 +520,6 @@ export default function MapCentricHome() {
         />
       )}
     </div>
+    </>
   );
 }
