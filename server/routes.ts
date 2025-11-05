@@ -297,6 +297,66 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Validate and fix auction county mismatches
+  app.post("/api/auctions/validate-counties", async (req, res) => {
+    try {
+      // Get all auctions with coordinates
+      const allAuctions = await db.query.auctions.findMany({
+        where: sql`latitude IS NOT NULL AND longitude IS NOT NULL`
+      });
+
+      let validated = 0;
+      let fixed = 0;
+      const mismatches = [];
+
+      for (const auction of allAuctions) {
+        if (!auction.latitude || !auction.longitude) continue;
+        
+        try {
+          // Reverse geocode to get actual county from coordinates
+          const location = await csr2Service.reverseGeocode(auction.latitude, auction.longitude);
+          
+          if (location?.county && auction.county && location.county !== auction.county) {
+            console.log(`Mismatch: "${auction.title.substring(0, 40)}"`);
+            console.log(`  Stored: ${auction.county}, Geocoded: ${location.county}`);
+            
+            mismatches.push({
+              id: auction.id,
+              title: auction.title,
+              storedCounty: auction.county,
+              geocodedCounty: location.county,
+              coordinates: [auction.latitude, auction.longitude]
+            });
+            
+            // Auto-fix: Update to geocoded county (coordinates are more reliable)
+            await db.update(auctions)
+              .set({ county: location.county })
+              .where(eq(auctions.id, auction.id));
+            
+            fixed++;
+          }
+          validated++;
+        } catch (error) {
+          // Skip on error
+        }
+      }
+
+      res.json({
+        success: true,
+        validated,
+        fixed,
+        mismatches: mismatches.length,
+        details: mismatches.slice(0, 20) // First 20
+      });
+    } catch (error) {
+      console.error("Failed to validate counties:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  });
+
   // ===============================
   // Soil Data API Endpoints
   // ===============================

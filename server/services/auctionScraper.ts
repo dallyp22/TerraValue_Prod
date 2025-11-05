@@ -255,8 +255,23 @@ export class AuctionScraperService {
           console.log(`      ✓ Coordinates: ${latitude}, ${longitude}`);
           
           const location = await csr2Service.reverseGeocode(latitude, longitude);
-          county = location?.county || auctionData.county;
-          state = location?.state || auctionData.state;
+          
+          // VALIDATION: Check if geocoded county matches extracted county
+          const geocodedCounty = location?.county;
+          const extractedCounty = auctionData.county;
+          
+          if (geocodedCounty && extractedCounty && geocodedCounty !== extractedCounty) {
+            console.warn(`      ⚠️  COUNTY MISMATCH!`);
+            console.warn(`         Extracted from listing: "${extractedCounty}"`);
+            console.warn(`         Geocoded from address: "${geocodedCounty}"`);
+            console.warn(`         → Using EXTRACTED county (listing is more reliable than address)`);
+            // Trust the extracted county from the auction listing over geocoded
+            county = extractedCounty;
+            state = location?.state || auctionData.state;
+          } else {
+            county = geocodedCounty || extractedCounty;
+            state = location?.state || auctionData.state;
+          }
         } else {
           console.log(`      ✗ No coordinates found for address`);
         }
