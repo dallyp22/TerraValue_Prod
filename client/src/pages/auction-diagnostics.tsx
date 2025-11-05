@@ -4,7 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, MapPin, Ruler, ExternalLink } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -19,6 +21,10 @@ export default function AuctionDiagnostics() {
     minLon: -96.5,
     maxLon: -90.0
   });
+  const [showAddSource, setShowAddSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourcePath, setNewSourcePath] = useState('');
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -427,8 +433,111 @@ export default function AuctionDiagnostics() {
               disabled={scraping}
               variant="secondary"
             >
-              {scraping ? 'Scraping...' : 'Run Full Scraper'}
+              {scraping ? 'Scraping...' : 'Run Full Scraper (All 16 Sources)'}
             </Button>
+            <Button 
+              onClick={() => setShowAddSource(!showAddSource)}
+              variant="outline"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Auction Source
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Add New Auction Source */}
+        {showAddSource && (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-blue-900">Add New Auction Source</CardTitle>
+              <CardDescription>Add a new website to scrape for Iowa farmland auctions</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="source-name">Source Name</Label>
+                  <Input
+                    id="source-name"
+                    placeholder="e.g., Spencer Auction Group"
+                    value={newSourceName}
+                    onChange={(e) => setNewSourceName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="source-url">Website URL</Label>
+                  <Input
+                    id="source-url"
+                    placeholder="e.g., https://spencerauctiongroup.com"
+                    value={newSourceUrl}
+                    onChange={(e) => setNewSourceUrl(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="source-path">Auction Page Path (optional)</Label>
+                  <Input
+                    id="source-path"
+                    placeholder="e.g., /auctions/"
+                    value={newSourcePath}
+                    onChange={(e) => setNewSourcePath(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Alert>
+                <AlertDescription className="text-xs">
+                  <strong>Note:</strong> New sources are added to the backend code. This is currently for reference.
+                  Spencer Auction Group is already configured and will appear once scraped.
+                </AlertDescription>
+              </Alert>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => {
+                    alert(`Source info:\n\nName: ${newSourceName}\nURL: ${newSourceUrl}\nPath: ${newSourcePath || 'None'}\n\nAdd this to server/services/auctionScraper.ts in the sources array.`);
+                  }}
+                  disabled={!newSourceName || !newSourceUrl}
+                >
+                  Generate Config Code
+                </Button>
+                <Button 
+                  onClick={() => setShowAddSource(false)}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Current Auction Sources */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Configured Auction Sources (16)</CardTitle>
+            <CardDescription>Websites currently being scraped for auctions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                'Farmers National', 'Midwest Ag Services', 'Iowa Land Company', 
+                'Peoples Company', 'High Point Land', 'Zomer Company',
+                'Land Search', 'DreamDirt', 'LandWatch',
+                'Steffes', 'McCall Auctions', 'Midwest Land Management',
+                'Randy Pryor Real Estate', 'Jim Schaben Real Estate', 'Denison Livestock',
+                'Spencer Auction Group'
+              ].map((source, idx) => (
+                <div key={idx} className="p-3 border rounded-lg bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-medium">{source}</span>
+                  </div>
+                  {source === 'Spencer Auction Group' && (
+                    <Badge variant="secondary" className="mt-2 text-xs">Recently Added</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-sm text-gray-600">
+              💡 Click "Run Full Scraper" to fetch auctions from all sources including Spencer Auction Group
+            </div>
           </CardContent>
         </Card>
 
