@@ -1451,6 +1451,50 @@ export default function EnhancedMap({
 
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
 
+          // Add click handlers for powerlines to show operator info
+          const powerlineLayers = ['powerlines-345kv', 'powerlines-161kv', 'powerlines-138kv', 'powerlines-115kv', 'powerlines-69kv'];
+          
+          powerlineLayers.forEach(layerId => {
+            map.current!.on('click', layerId, (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+              if (e.features && e.features.length > 0) {
+                const props = e.features[0].properties;
+                const operator = props?.operator || 'Unknown Operator';
+                const voltage = props?.voltage || 'Unknown';
+                const voltageKV = voltage ? (parseInt(voltage) / 1000).toFixed(0) : '?';
+                
+                const html = `
+                  <div style="padding: 10px; min-width: 200px;">
+                    <strong style="display: block; margin-bottom: 8px; font-size: 14px; color: #1f2937;">⚡ Transmission Line</strong>
+                    <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
+                      <strong>Operator:</strong> ${operator}
+                    </div>
+                    <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
+                      <strong>Voltage:</strong> ${voltageKV} kV
+                    </div>
+                    ${props?.circuits ? `<div style="font-size: 11px; color: #6b7280;">Circuits: ${props.circuits}</div>` : ''}
+                    <div style="font-size: 10px; color: #9ca3af; margin-top: 8px; padding-top: 6px; border-top: 1px solid #e5e7eb;">
+                      High voltage transmission infrastructure
+                    </div>
+                  </div>
+                `;
+                
+                new maplibregl.Popup()
+                  .setLngLat(e.lngLat)
+                  .setHTML(html)
+                  .addTo(map.current!);
+              }
+            });
+
+            // Add hover cursor
+            map.current!.on('mouseenter', layerId, () => {
+              if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.current!.on('mouseleave', layerId, () => {
+              if (map.current) map.current.getCanvas().style.cursor = '';
+            });
+          });
+
           // Add hover effects for auction markers
           const handleAuctionMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
             if (map.current) {
