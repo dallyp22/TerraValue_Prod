@@ -133,84 +133,100 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         polygons = [turf.polygon(parcelData.geometry.coordinates)];
       }
       
-      // CSR2 data variable
-      let csr2Data: any = {};
-      let geoJsonPolygon: any = null; // Declare here for use in WKT generation later
+      // Generate sample points within the parcel boundaries
+      // Using FEWER points (9 max) for faster queries
+      let samplePoints: [number, number][] = [];
       
       if (polygons.length > 0) {
+        // Use 3x3 grid (9 points) for ALL parcels - much faster
+        const gridSize = 3; // Always use 3x3 for speed
+        
+        // Create a bounding box for all polygons
+        let minLng = Infinity, maxLng = -Infinity;
+        let minLat = Infinity, maxLat = -Infinity;
+        
+        polygons.forEach(polygon => {
+          const bbox = turf.bbox(polygon);
+          minLng = Math.min(minLng, bbox[0]);
+          minLat = Math.min(minLat, bbox[1]);
+          maxLng = Math.max(maxLng, bbox[2]);
+          maxLat = Math.max(maxLat, bbox[3]);
+        });
+        
+        // Generate grid points within bounding box
+        const lngStep = (maxLng - minLng) / (gridSize + 1);
+        const latStep = (maxLat - minLat) / (gridSize + 1);
+        
+        for (let i = 1; i <= gridSize; i++) {
+          for (let j = 1; j <= gridSize; j++) {
+            const lng = minLng + (lngStep * i);
+            const lat = minLat + (latStep * j);
+            const point = turf.point([lng, lat]);
+            
+            // Only add points inside polygons
+            const isInside = polygons.some(polygon => turf.booleanPointInPolygon(point, polygon));
+            if (isInside) {
+              samplePoints.push([lng, lat]);
+            }
+          }
+        }
+        
+        // Always include center point
+        const centerLng = (minLng + maxLng) / 2;
+        const centerLat = (minLat + maxLat) / 2;
+        const centerPoint = turf.point([centerLng, centerLat]);
+        if (polygons.some(p => turf.booleanPointInPolygon(centerPoint, p))) {
+          samplePoints.push([centerLng, centerLat]);
+        }
+      } else {
+        // Fallback: Use clicked point only (fastest!)
+        samplePoints.push(parcelData.coordinates);
+      }
+      
+      // PARALLELIZED QUERIES: Query all points at once (10-20x faster!)
+      const csr2Values: number[] = [];
+      
+      if (samplePoints.length > 0) {
         toast({
           title: "Analyzing Soil Quality",
-          description: `Querying CSR2 data for ${Math.round(parcelData.acres)} acre parcel using area-weighted polygon analysis...`,
+          description: `Querying ${samplePoints.length} points across parcel (parallelized for speed)...`,
           variant: "default",
         });
         
-        // OPTIMIZED: Use single polygon query instead of point-by-point (10-40x faster!)
-        // Create GeoJSON polygon for the API
-        
-        if (polygons.length > 1) {
-          // MultiPolygon for parcels with multiple sections
-          geoJsonPolygon = {
-            type: 'MultiPolygon',
-            coordinates: polygons.map(p => p.geometry.coordinates)
-          };
-        } else if (polygons.length === 1) {
-          // Single polygon
-          geoJsonPolygon = polygons[0].geometry;
-        }
-
-        // Single API call for entire parcel (3-8 seconds vs 50-200 seconds!)
-        const response = await apiRequest('POST', '/api/average-csr2', { 
-          polygon: geoJsonPolygon 
+        // Query ALL points in parallel (not one-by-one!)
+        const promises = samplePoints.map(async point => {
+          try {
+            const pointWkt = `POINT(${point[0]} ${point[1]})`;
+            const response = await apiRequest('POST', '/api/csr2/polygon', { wkt: pointWkt });
+            const data = await response.json();
+            return data.success && data.mean ? data.mean : null;
+          } catch (error) {
+            return null; // Skip failed points
+          }
         });
-        const data = await response.json();
         
-        if (data.success) {
-          csr2Data = {
-            success: true,
-            mean: data.average || data.mean,
-            min: data.min,
-            max: data.max,
-            count: data.count
-          };
-        } else {
-          throw new Error('CSR2 polygon query failed');
-        }
-      } else {
-        // No polygon geometry - use single point query as fallback
-        const pointWkt = `POINT(${parcelData.coordinates[0]} ${parcelData.coordinates[1]})`;
-        const response = await apiRequest('POST', '/api/csr2/polygon', { wkt: pointWkt });
-        const data = await response.json();
-        
-        if (data.success && data.mean) {
-          csr2Data = {
-            success: true,
-            mean: data.mean,
-            min: data.min || Math.round(data.mean),
-            max: data.max || Math.round(data.mean),
-            count: data.count || 1
-          };
-        } else {
-          throw new Error('Unable to calculate CSR2 values');
-        }
+        // Wait for all queries to complete at once
+        const results = await Promise.all(promises);
+        csr2Values.push(...results.filter((v): v is number => v !== null));
       }
       
-      if (csr2Data.success) {
-        // Create WKT from polygon for storage
-        let wkt = '';
-        if (geoJsonPolygon) {
-          if (geoJsonPolygon.type === 'Polygon') {
-            const coords = geoJsonPolygon.coordinates[0].map((c: number[]) => `${c[0]} ${c[1]}`).join(', ');
-            wkt = `POLYGON((${coords}))`;
-          } else if (geoJsonPolygon.type === 'MultiPolygon') {
-            const polys = geoJsonPolygon.coordinates.map((poly: number[][][]) => {
-              const coords = poly[0].map((c: number[]) => `${c[0]} ${c[1]}`).join(', ');
-              return `((${coords}))`;
-            }).join(', ');
-            wkt = `MULTIPOLYGON(${polys})`;
-          }
-        } else {
-          wkt = `POINT(${parcelData.coordinates[0]} ${parcelData.coordinates[1]})`;
-        }
+      // Calculate average CSR2
+      let csr2Data: any = {};
+      if (csr2Values.length > 0) {
+        const mean = csr2Values.reduce((sum, val) => sum + val, 0) / csr2Values.length;
+        const min = Math.min(...csr2Values);
+        const max = Math.max(...csr2Values);
+        
+        csr2Data = {
+          success: true,
+          mean: Math.round(mean * 10) / 10,
+          min: Math.round(min),
+          max: Math.round(max),
+          count: csr2Values.length
+        };
+        
+        // Create WKT from points
+        const wkt = `MULTIPOINT(${samplePoints.map(p => `${p[0]} ${p[1]}`).join(', ')})`;
 
         const resultData = {
           wkt,
@@ -231,6 +247,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
           description: `Average CSR2: ${csr2Data.mean.toFixed(1)} (Range: ${csr2Data.min}-${csr2Data.max})`,
           variant: "default",
         });
+      } else {
+        throw new Error('Unable to calculate CSR2 values');
       }
     } catch (error) {
       console.error('CSR2 fetch error:', error);
