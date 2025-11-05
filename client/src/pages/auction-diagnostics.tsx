@@ -39,7 +39,7 @@ export default function AuctionDiagnostics() {
         maxLon: mapBounds.maxLon.toString()
       });
       
-      const response = await fetch(`https://web-production-51e54.up.railway.app/api/auctions?${params}`);
+      const response = await fetch(`/api/auctions?${params}`);
       const data = await response.json();
       
       setAuctionData(data);
@@ -53,7 +53,7 @@ export default function AuctionDiagnostics() {
   const startScrape = async () => {
     setScraping(true);
     try {
-      const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
+      const response = await fetch('/api/auctions/refresh', { method: 'POST' });
       const data = await response.json();
       alert(data.message || 'Scraping started');
       
@@ -71,7 +71,7 @@ export default function AuctionDiagnostics() {
   const investigateCoords = async () => {
     setInvestigating(true);
     try {
-      const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/investigate');
+      const response = await fetch('/api/auctions/investigate');
       const data = await response.json();
       setInvestigationResults(data);
     } catch (error) {
@@ -83,7 +83,7 @@ export default function AuctionDiagnostics() {
   const updateCoordinates = async () => {
     setUpdating(true);
     try {
-      const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/update-coordinates', { method: 'POST' });
+      const response = await fetch('/api/auctions/update-coordinates', { method: 'POST' });
       const data = await response.json();
       
       if (data.success) {
