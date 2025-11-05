@@ -154,7 +154,7 @@ export default function AuctionDiagnostics() {
                   </div>
                   <div className="p-4 bg-green-50 rounded">
                     <div className="text-2xl font-bold text-green-600">
-                      {auctionData.totalInDatabase || 0}
+                      {auctionData.total || 0}
                     </div>
                     <div className="text-sm text-gray-600">Total in DB</div>
                   </div>
@@ -166,7 +166,7 @@ export default function AuctionDiagnostics() {
                   </div>
                   <div className="p-4 bg-purple-50 rounded">
                     <div className="text-2xl font-bold text-purple-600">
-                      {(auctionData.totalInDatabase || 0) - (auctionData.withoutCoordinates || 0)}
+                      {auctionData.withCoordinates || 0}
                     </div>
                     <div className="text-sm text-gray-600">With Coords</div>
                   </div>
@@ -181,19 +181,10 @@ export default function AuctionDiagnostics() {
                   </Alert>
                 )}
 
-                {auctionData.auctions?.length === 0 && auctionData.totalInDatabase === 0 && (
+                {auctionData.total === 0 && (
                   <Alert>
                     <AlertDescription>
-                      ❌ No auctions in database. Click "Run Scraper" below to populate the database.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {auctionData.auctions?.length === 0 && auctionData.totalInDatabase > 0 && (
-                  <Alert>
-                    <AlertDescription>
-                      ℹ️ Auctions exist in database but none are in the current map bounds (Iowa area).
-                      Try adjusting the map bounds or check if auctions have valid Iowa coordinates.
+                      ❌ No auctions in database. Click "Run Full Scraper" below to populate the database.
                     </AlertDescription>
                   </Alert>
                 )}
