@@ -9,7 +9,7 @@ import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { propertyFormSchema, auctions } from "@shared/schema";
 import { db } from "./db.js";
-import { and, gte, lte, eq, asc, sql } from "drizzle-orm";
+import { and, gte, lte, eq, asc, desc, sql } from "drizzle-orm";
 import { getCountyCentroid } from "./services/iowaCountyCentroids.js";
 
 // Simple rate limiting middleware
