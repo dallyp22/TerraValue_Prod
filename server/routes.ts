@@ -640,7 +640,8 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         minAcreage, maxAcreage,
         minCSR2, maxCSR2,
         auctionDateRange,
-        minValue, maxValue
+        minValue, maxValue,
+        includeWithoutCoords
       } = req.query;
       
       const landTypes = req.query['landTypes[]'];
@@ -712,7 +713,8 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       // Filter by map bounds (only include auctions with valid coordinates)
       filteredAuctions = filteredAuctions.filter(auction => {
         if (!auction.latitude || !auction.longitude) {
-          return false; // Skip auctions without coordinates
+          // Include or exclude based on parameter
+          return includeWithoutCoords === 'true';
         }
         return auction.latitude >= parseFloat(minLat as string) &&
                auction.latitude <= parseFloat(maxLat as string) &&

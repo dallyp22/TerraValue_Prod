@@ -36,7 +36,8 @@ export default function AuctionDiagnostics() {
         minLat: mapBounds.minLat.toString(),
         maxLat: mapBounds.maxLat.toString(),
         minLon: mapBounds.minLon.toString(),
-        maxLon: mapBounds.maxLon.toString()
+        maxLon: mapBounds.maxLon.toString(),
+        includeWithoutCoords: 'true' // Include all auctions for diagnostics
       });
       
       const response = await fetch(`/api/auctions?${params}`);
