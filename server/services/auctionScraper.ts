@@ -39,7 +39,7 @@ export class AuctionScraperService {
     'https://www.landwatch.com/iowa-land-for-sale/western-region/auctions/page-3'
   ];
 
-  // Source configurations for 15 auction sites
+  // Source configurations for 16 auction sites
   private sources = [
     { name: 'Farmers National', url: 'https://www.farmersnational.com', searchPath: '/real-estate/auctions?fncRealEstate_properties%5BsortBy%5D=fncRealEstate_properties%3AauctionDate%3Aasc&fncRealEstate_properties%5Brange%5D%5BtotalAcres%5D=0%3A' },
     { name: 'Midwest Ag Services', url: 'https://midwestagservices.com', searchPath: '/farm-auctions/' },
@@ -55,7 +55,8 @@ export class AuctionScraperService {
     { name: 'Midwest Land Management', url: 'https://www.midwestlandmanagement.com/' },
     { name: 'Randy Pryor Real Estate', url: 'https://randypryorrealestate.com', searchPath: '/farm-land-auctions/' },
     { name: 'Jim Schaben Real Estate', url: 'https://jimschabenrealestate.com', searchPath: '/land-listings' },
-    { name: 'Denison Livestock', url: 'https://www.denisonlivestock.com/' }
+    { name: 'Denison Livestock', url: 'https://www.denisonlivestock.com/' },
+    { name: 'Spencer Auction Group', url: 'https://spencerauctiongroup.com', searchPath: '/auctions/' }
   ];
 
   // Scrape all auction sources
