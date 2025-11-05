@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus } from 'lucide-react';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,9 @@ export default function AuctionDiagnostics() {
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourcePath, setNewSourcePath] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sourcePages, setSourcePages] = useState<{[key: string]: number}>({});
+  const itemsPerPage = 20;
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -221,7 +224,7 @@ export default function AuctionDiagnostics() {
                 {/* All Auctions Tab */}
                 <TabsContent value="all" className="space-y-3">
                   <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {auctionData.auctions.slice(0, 20).map((auction: any, i: number) => (
+                    {auctionData.auctions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((auction: any, i: number) => (
                       <div key={i} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
                         <div className="flex justify-between items-start mb-2">
                           <div className="font-semibold text-base">{auction.title}</div>
@@ -271,16 +274,71 @@ export default function AuctionDiagnostics() {
                         </div>
                       </div>
                     ))}
-                    {auctionData.auctions.length > 20 && (
-                      <div className="text-center text-sm text-gray-500 py-2">
-                        Showing 20 of {auctionData.auctions.length} auctions
-                      </div>
-                    )}
                   </div>
+                  
+                  {/* Pagination for All Tab */}
+                  {auctionData.auctions.length > itemsPerPage && (
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="text-sm text-gray-600">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, auctionData.auctions.length)} of {auctionData.auctions.length} auctions
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.ceil(auctionData.auctions.length / itemsPerPage) }, (_, i) => i + 1)
+                            .filter(page => {
+                              // Show first, last, current, and adjacent pages
+                              return page === 1 || 
+                                     page === Math.ceil(auctionData.auctions.length / itemsPerPage) ||
+                                     Math.abs(page - currentPage) <= 1;
+                            })
+                            .map((page, idx, arr) => (
+                              <div key={page} className="flex items-center">
+                                {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                  <span className="px-2 text-gray-400">...</span>
+                                )}
+                                <Button
+                                  variant={currentPage === page ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(page)}
+                                  className="min-w-[40px]"
+                                >
+                                  {page}
+                                </Button>
+                              </div>
+                            ))}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(auctionData.auctions.length / itemsPerPage), p + 1))}
+                          disabled={currentPage >= Math.ceil(auctionData.auctions.length / itemsPerPage)}
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
 
                 {/* Individual Source Tabs */}
-                {Object.entries(auctionsBySource).map(([source, sourceAuctions]) => (
+                {Object.entries(auctionsBySource).map(([source, sourceAuctions]) => {
+                  const sourcePage = sourcePages[source] || 1;
+                  const startIdx = (sourcePage - 1) * itemsPerPage;
+                  const endIdx = sourcePage * itemsPerPage;
+                  const paginatedAuctions = (sourceAuctions as any[]).slice(startIdx, endIdx);
+                  const totalPages = Math.ceil((sourceAuctions as any[]).length / itemsPerPage);
+                  
+                  return (
                   <TabsContent key={source} value={source} className="space-y-3">
                     <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                       <div className="text-sm font-semibold text-blue-900">
@@ -292,7 +350,7 @@ export default function AuctionDiagnostics() {
                     </div>
                     
                     <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                      {(sourceAuctions as any[]).map((auction: any, i: number) => (
+                      {paginatedAuctions.map((auction: any, i: number) => (
                         <div key={i} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
                           <div className="font-semibold text-base mb-2">{auction.title}</div>
                           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -345,8 +403,41 @@ export default function AuctionDiagnostics() {
                         </div>
                       ))}
                     </div>
+                    
+                    {/* Pagination for Source Tab */}
+                    {(sourceAuctions as any[]).length > itemsPerPage && (
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="text-sm text-gray-600">
+                          Showing {startIdx + 1}-{Math.min(endIdx, (sourceAuctions as any[]).length)} of {(sourceAuctions as any[]).length}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSourcePages({...sourcePages, [source]: Math.max(1, sourcePage - 1)})}
+                            disabled={sourcePage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Previous
+                          </Button>
+                          <span className="flex items-center px-3 text-sm">
+                            Page {sourcePage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSourcePages({...sourcePages, [source]: Math.min(totalPages, sourcePage + 1)})}
+                            disabled={sourcePage >= totalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </TabsContent>
-                ))}
+                );
+                })}
               </Tabs>
             </CardContent>
           </Card>
