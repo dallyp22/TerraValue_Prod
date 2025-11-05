@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, MapPin, Ruler, ExternalLink } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -89,6 +92,25 @@ export default function AuctionDiagnostics() {
     setUpdating(false);
   };
 
+  // Group auctions by source website
+  const auctionsBySource = useMemo(() => {
+    if (!auctionData?.auctions) return {};
+    
+    const grouped: { [key: string]: any[] } = {};
+    auctionData.auctions.forEach((auction: any) => {
+      const source = auction.sourceWebsite || 'Unknown Source';
+      if (!grouped[source]) {
+        grouped[source] = [];
+      }
+      grouped[source].push(auction);
+    });
+    
+    // Sort sources by auction count
+    return Object.fromEntries(
+      Object.entries(grouped).sort((a, b) => b[1].length - a[1].length)
+    );
+  }, [auctionData]);
+
   useEffect(() => {
     checkAuctions();
   }, []);
@@ -168,35 +190,158 @@ export default function AuctionDiagnostics() {
           </CardContent>
         </Card>
 
-        {/* Sample Auctions */}
+        {/* Auctions by Source */}
         {auctionData?.auctions && auctionData.auctions.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Sample Auctions ({auctionData.auctions.length} found)</CardTitle>
-              <CardDescription>First 10 auctions in current bounds</CardDescription>
+              <CardTitle>Auctions by Source</CardTitle>
+              <CardDescription>
+                {auctionData.auctions.length} total auctions from {Object.keys(auctionsBySource).length} sources
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {auctionData.auctions.slice(0, 10).map((auction: any, i: number) => (
-                  <div key={i} className="p-3 border rounded">
-                    <div className="font-semibold">{auction.title}</div>
-                    <div className="text-sm text-gray-600">
-                      {auction.county}, {auction.state} • {auction.acreage} acres
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {auction.latitude && auction.longitude ? (
-                        <span className="text-green-600">
-                          ✅ Coords: [{auction.latitude.toFixed(4)}, {auction.longitude.toFixed(4)}]
-                        </span>
-                      ) : (
-                        <span className="text-red-600">❌ No coordinates</span>
-                      )}
-                      {' • '}
-                      Source: {auction.sourceWebsite}
-                    </div>
+              <Tabs defaultValue="all" className="w-full">
+                <TabsList className="flex flex-wrap h-auto">
+                  <TabsTrigger value="all">
+                    All ({auctionData.auctions.length})
+                  </TabsTrigger>
+                  {Object.entries(auctionsBySource).map(([source, auctions]) => (
+                    <TabsTrigger key={source} value={source} className="text-xs">
+                      {source} ({(auctions as any[]).length})
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {/* All Auctions Tab */}
+                <TabsContent value="all" className="space-y-3">
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {auctionData.auctions.slice(0, 20).map((auction: any, i: number) => (
+                      <div key={i} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-semibold text-base">{auction.title}</div>
+                          <Badge variant="outline">{auction.sourceWebsite}</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          {auction.county && (
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <MapPin className="h-3 w-3" />
+                              {auction.county}, {auction.state}
+                            </div>
+                          )}
+                          {auction.acreage && (
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <Ruler className="h-3 w-3" />
+                              {auction.acreage} acres
+                            </div>
+                          )}
+                          {auction.auctionDate && (
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(auction.auctionDate).toLocaleDateString()}
+                            </div>
+                          )}
+                          {auction.url && (
+                            <div className="flex items-center gap-1">
+                              <a 
+                                href={auction.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                View Listing
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs mt-2">
+                          {auction.latitude && auction.longitude ? (
+                            <span className="text-green-600">
+                              ✅ Coords: [{auction.latitude.toFixed(4)}, {auction.longitude.toFixed(4)}]
+                            </span>
+                          ) : (
+                            <span className="text-red-600">❌ No coordinates</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {auctionData.auctions.length > 20 && (
+                      <div className="text-center text-sm text-gray-500 py-2">
+                        Showing 20 of {auctionData.auctions.length} auctions
+                      </div>
+                    )}
                   </div>
+                </TabsContent>
+
+                {/* Individual Source Tabs */}
+                {Object.entries(auctionsBySource).map(([source, sourceAuctions]) => (
+                  <TabsContent key={source} value={source} className="space-y-3">
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                      <div className="text-sm font-semibold text-blue-900">
+                        {source}
+                      </div>
+                      <div className="text-xs text-blue-700">
+                        {(sourceAuctions as any[]).length} auction{(sourceAuctions as any[]).length !== 1 ? 's' : ''} found
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {(sourceAuctions as any[]).map((auction: any, i: number) => (
+                        <div key={i} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+                          <div className="font-semibold text-base mb-2">{auction.title}</div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            {auction.county && (
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <MapPin className="h-3 w-3" />
+                                {auction.county}, {auction.state}
+                              </div>
+                            )}
+                            {auction.acreage && (
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <Ruler className="h-3 w-3" />
+                                {auction.acreage} acres
+                              </div>
+                            )}
+                            {auction.auctionDate && (
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(auction.auctionDate).toLocaleDateString()}
+                              </div>
+                            )}
+                            {auction.url && (
+                              <div className="flex items-center gap-1">
+                                <a 
+                                  href={auction.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  View Listing
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                          {auction.description && (
+                            <div className="text-xs text-gray-600 mt-2 line-clamp-2">
+                              {auction.description}
+                            </div>
+                          )}
+                          <div className="text-xs mt-2">
+                            {auction.latitude && auction.longitude ? (
+                              <span className="text-green-600">
+                                ✅ Coords: [{auction.latitude.toFixed(4)}, {auction.longitude.toFixed(4)}]
+                              </span>
+                            ) : (
+                              <span className="text-red-600">❌ No coordinates</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
                 ))}
-              </div>
+              </Tabs>
             </CardContent>
           </Card>
         )}
