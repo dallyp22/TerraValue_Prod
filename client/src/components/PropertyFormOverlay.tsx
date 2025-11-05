@@ -135,6 +135,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       
       // CSR2 data variable
       let csr2Data: any = {};
+      let geoJsonPolygon: any = null; // Declare here for use in WKT generation later
       
       if (polygons.length > 0) {
         toast({
@@ -145,7 +146,6 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         
         // OPTIMIZED: Use single polygon query instead of point-by-point (10-40x faster!)
         // Create GeoJSON polygon for the API
-        let geoJsonPolygon: any = null;
         
         if (polygons.length > 1) {
           // MultiPolygon for parcels with multiple sections
@@ -225,11 +225,18 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         }
         
         setParcelCSR2Data(resultData);
+        
+        toast({
+          title: "CSR2 Analysis Complete",
+          description: `Average CSR2: ${csr2Data.mean.toFixed(1)} (Range: ${csr2Data.min}-${csr2Data.max})`,
+          variant: "default",
+        });
       }
     } catch (error) {
+      console.error('CSR2 fetch error:', error);
       toast({
         title: "Warning",
-        description: "Could not fetch soil data for this parcel. Manual entry may be required.",
+        description: "Could not fetch CSR2 data for this parcel. You can still proceed with manual entry.",
         variant: "destructive",
       });
     } finally {
