@@ -120,6 +120,15 @@ export default function AuctionDiagnostics() {
     );
   }, [auctionData]);
 
+  // Separate auctions with and without coordinates
+  const auctionsWithCoords = useMemo(() => {
+    return auctionData?.auctions?.filter((a: any) => a.latitude && a.longitude) || [];
+  }, [auctionData]);
+
+  const auctionsWithoutCoords = useMemo(() => {
+    return auctionData?.auctions?.filter((a: any) => !a.latitude || !a.longitude) || [];
+  }, [auctionData]);
+
   useEffect(() => {
     checkAuctions();
   }, []);
@@ -439,6 +448,76 @@ export default function AuctionDiagnostics() {
                 );
                 })}
               </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Auctions Without Coordinates */}
+        {auctionsWithoutCoords.length > 0 && (
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardHeader>
+              <CardTitle className="text-yellow-900">Auctions Without Coordinates ({auctionsWithoutCoords.length})</CardTitle>
+              <CardDescription>
+                These auctions couldn't be geocoded and won't appear on the map
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {auctionsWithoutCoords.map((auction: any, i: number) => (
+                  <div key={i} className="p-4 border border-yellow-300 rounded-lg bg-white">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-semibold text-base">{auction.title}</div>
+                      <Badge variant="outline">{auction.sourceWebsite}</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {auction.address && (
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <MapPin className="h-3 w-3" />
+                          {auction.address}
+                        </div>
+                      )}
+                      {auction.county && (
+                        <div className="text-gray-600">
+                          {auction.county}, {auction.state}
+                        </div>
+                      )}
+                      {auction.acreage && (
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Ruler className="h-3 w-3" />
+                          {auction.acreage} acres
+                        </div>
+                      )}
+                      {auction.auctionDate && (
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(auction.auctionDate).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    {auction.url && (
+                      <div className="mt-2">
+                        <a 
+                          href={auction.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View Original Listing
+                        </a>
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-yellow-700">
+                      ⚠️ Geocoding failed - Add coordinates manually or update address
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Alert className="mt-4">
+                <AlertDescription className="text-xs">
+                  💡 Click "Investigate Coordinates" above to see which can be fixed with county-level coordinates
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
         )}
