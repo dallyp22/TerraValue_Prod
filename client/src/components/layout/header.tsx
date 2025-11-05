@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ChartLine, Bell, User } from "lucide-react";
+import { ChartLine, Bell, User, Gavel } from "lucide-react";
 
 export function Header() {
   return (
@@ -20,6 +20,10 @@ export function Header() {
           <nav className="hidden lg:flex space-x-8">
             <Link href="/" className="text-slate-900 font-light hover:text-slate-600 transition-colors duration-200">
               Valuation Tool
+            </Link>
+            <Link href="/auction-diagnostics" className="text-slate-500 font-light hover:text-slate-900 transition-colors duration-200 flex items-center gap-1">
+              <Gavel className="h-4 w-4" />
+              Auctions
             </Link>
             <Link href="#" className="text-slate-500 font-light hover:text-slate-900 transition-colors duration-200">
               Market Reports
