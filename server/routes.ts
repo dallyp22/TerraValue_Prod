@@ -632,6 +632,42 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
 
   // ===== AUCTION ENDPOINTS =====
 
+  // Get all auctions (for diagnostics)
+  app.get("/api/auctions/all", async (req, res) => {
+    try {
+      const allAuctions = await db.query.auctions.findMany({
+        orderBy: [desc(auctions.scrapedAt)],
+        limit: 500 // Reasonable limit
+      });
+
+      // Group by source
+      const bySource: {[key: string]: any[]} = {};
+      allAuctions.forEach(auction => {
+        const source = auction.sourceWebsite || 'Unknown';
+        if (!bySource[source]) bySource[source] = [];
+        bySource[source].push(auction);
+      });
+
+      res.json({
+        success: true,
+        total: allAuctions.length,
+        withCoordinates: allAuctions.filter(a => a.latitude && a.longitude).length,
+        withoutCoordinates: allAuctions.filter(a => !a.latitude || !a.longitude).length,
+        sources: Object.keys(bySource).length,
+        auctions: allAuctions,
+        bySource: Object.fromEntries(
+          Object.entries(bySource).map(([k, v]) => [k, v.length])
+        )
+      });
+    } catch (error) {
+      console.error("Failed to list all auctions:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  });
+
   // Get auctions within map bounds
   app.get("/api/auctions", async (req, res) => {
     try {

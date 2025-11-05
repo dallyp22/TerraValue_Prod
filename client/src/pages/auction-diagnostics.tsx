@@ -32,18 +32,13 @@ export default function AuctionDiagnostics() {
   const checkAuctions = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        minLat: mapBounds.minLat.toString(),
-        maxLat: mapBounds.maxLat.toString(),
-        minLon: mapBounds.minLon.toString(),
-        maxLon: mapBounds.maxLon.toString(),
-        includeWithoutCoords: 'true' // Include all auctions for diagnostics
-      });
-      
-      const response = await fetch(`/api/auctions?${params}`);
+      // Use /all endpoint to get everything for diagnostics
+      const response = await fetch(`/api/auctions/all`);
       const data = await response.json();
       
       setAuctionData(data);
+      console.log('📊 Auction data loaded:', data.total, 'total auctions');
+      console.log('📊 By source:', data.bySource);
     } catch (error) {
       console.error('Failed to fetch auctions:', error);
       setAuctionData({ error: 'Failed to fetch auctions' });
