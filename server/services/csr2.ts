@@ -402,9 +402,11 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         }
       }
 
-      // Sample CSR2 values at multiple points
+      // Sample CSR2 values at multiple points (PARALLELIZED for speed)
+      console.log(`⚡ Querying ${samplePoints.length} points in parallel...`);
       const samplePromises = samplePoints.map(([x, y]) => csr2PointValue(x, y));
       const sampleValues = await Promise.all(samplePromises);
+      console.log(`✅ Parallel queries complete`);
       
       // Filter out null values
       const validValues = sampleValues.filter((v): v is number => v !== null);
@@ -669,20 +671,20 @@ export function calculateBlendedLandValue(
  * Calculate average CSR2 for a custom polygon using USDA Soil Data Access API
  */
 export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
+  console.log('🔍 calculateAverageCSR2 called with polygon type:', polygon.type);
+  
   // Convert GeoJSON polygon to WKT manually
   const coordinates = polygon.coordinates[0]; // First ring of polygon
   const coordPairs = coordinates.map((coord: [number, number]) => `${coord[0]} ${coord[1]}`).join(', ');
   const wkt = `POLYGON((${coordPairs}))`;
+  
+  console.log('📍 WKT generated, length:', wkt.length);
 
-  // Try local database first
-  if (isSoilDbAvailable()) {
-    const localStats = await csr2PolygonStatsFromLocalDb(wkt);
-    if (localStats !== null) {
-      return localStats;
-    }
-  }
+  // Skip local database for now since we don't have PostGIS spatial data
+  // This avoids unnecessary failed queries
+  console.log('⏭️ Skipping local DB (no PostGIS), going straight to USDA SDA');
 
-  // Fallback to USDA SDA query
+  // Use USDA SDA query directly
   const sql = `
     SELECT 
       m.mukey,
@@ -779,14 +781,21 @@ export async function calculateAverageCSR2(polygon: any): Promise<CSR2Stats> {
       count: count
     };
   } catch (error) {
-    console.error('USDA CSR2 query failed, falling back to polygon sampling:', error);
+    console.error('❌ USDA CSR2 query failed:', error);
+    console.log('🔄 Attempting fallback to point sampling method...');
     
     // Fallback to using getCsr2PolygonStats for full statistics
-    const stats = await getCsr2PolygonStats(wkt);
-    if (stats.mean === null) {
+    try {
+      const stats = await getCsr2PolygonStats(wkt);
+      if (stats.mean === null) {
+        throw new Error('Failed to calculate CSR2 statistics using fallback method');
+      }
+      console.log('✅ Fallback succeeded with mean:', stats.mean);
+      return stats;
+    } catch (fallbackError) {
+      console.error('❌ Fallback also failed:', fallbackError);
       throw new Error('Failed to calculate CSR2 statistics using fallback method');
     }
-    return stats;
   }
 }
 

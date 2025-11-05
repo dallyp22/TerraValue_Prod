@@ -260,7 +260,29 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         });
       }
 
-      const stats = await csr2Service.calculateAverageCSR2(polygon);
+      // Convert GeoJSON polygon to WKT
+      let wkt = '';
+      if (polygon.type === 'Polygon') {
+        const coords = polygon.coordinates[0].map((c: number[]) => `${c[0]} ${c[1]}`).join(', ');
+        wkt = `POLYGON((${coords}))`;
+      } else if (polygon.type === 'MultiPolygon') {
+        const polys = polygon.coordinates.map((poly: number[][][]) => {
+          const coords = poly[0].map((c: number[]) => `${c[0]} ${c[1]}`).join(', ');
+          return `((${coords}))`;
+        }).join(', ');
+        wkt = `MULTIPOLYGON(${polys})`;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Polygon must be of type Polygon or MultiPolygon"
+        });
+      }
+
+      console.log(`📐 Processing polygon CSR2 query, WKT length: ${wkt.length}`);
+
+      // Use getCsr2PolygonStats which handles polygon queries properly
+      const stats = await csr2Service.getCsr2PolygonStats(wkt);
+      
       res.json({
         success: true,
         average: stats.mean || 0,
