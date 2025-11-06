@@ -210,11 +210,17 @@ export class ParcelAggregationService {
     // Aggregate each owner's parcels
     const aggregated: ParcelFeature[] = [];
     Object.entries(byOwner).forEach(([owner, ownerParcels]) => {
-      if (ownerParcels.length > 1) {
-        console.log(`  Combining ${ownerParcels.length} parcels for "${ownerParcels[0].properties.DEEDHOLDER.substring(0, 30)}..."`);
+      try {
+        if (ownerParcels.length > 1) {
+          console.log(`  Combining ${ownerParcels.length} parcels for "${ownerParcels[0].properties.DEEDHOLDER.substring(0, 30)}..."`);
+        }
+        const combined = this.combineOwnerParcels(ownerParcels);
+        aggregated.push(...combined);
+      } catch (error) {
+        // If combination fails for this owner, just add original parcels
+        console.warn(`  ⚠️ Failed to combine parcels for owner, using originals`);
+        aggregated.push(...ownerParcels);
       }
-      const combined = this.combineOwnerParcels(ownerParcels);
-      aggregated.push(...combined);
     });
     
     const elapsedTime = Date.now() - startTime;
