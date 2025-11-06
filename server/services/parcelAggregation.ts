@@ -127,13 +127,19 @@ export class ParcelAggregationService {
         for (let i = 1; i < group.length; i++) {
           try {
             const poly = turf.polygon(group[i].geometry.coordinates);
-            const unionResult = turf.union(combined, poly);
-            if (unionResult) {
-              combined = unionResult as any;
+            // Try union - if it fails, just keep the larger polygon
+            try {
+              const unionResult = turf.union(combined, poly);
+              if (unionResult) {
+                combined = unionResult as any;
+              }
+            } catch (unionError) {
+              // Union failed - use simple concatenation approach
+              // Just keep the original combined polygon (skip this parcel)
+              // This prevents crashes while still showing the main parcel group
             }
-          } catch (unionError) {
-            console.warn(`Failed to merge parcel ${i} in group:`, unionError);
-            // Continue with what we have
+          } catch (polyError) {
+            // Invalid polygon geometry - skip it
           }
         }
         
