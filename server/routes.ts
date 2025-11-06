@@ -7,6 +7,7 @@ import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
+import { parcelAggregationService } from "./services/parcelAggregation.js";
 import { propertyFormSchema, auctions } from "@shared/schema";
 import { db } from "./db.js";
 import { and, gte, lte, eq, asc, desc, sql } from "drizzle-orm";
@@ -353,6 +354,46 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({
         success: false,
         message: "Internal server error"
+      });
+    }
+  });
+
+  // ===============================
+  // Parcel Aggregation API
+  // ===============================
+
+  // Get aggregated parcels (combines adjacent parcels with same owner)
+  app.get("/api/parcels/aggregated", async (req, res) => {
+    try {
+      const { minLon, minLat, maxLon, maxLat } = req.query;
+      
+      if (!minLon || !minLat || !maxLon || !maxLat) {
+        return res.status(400).json({
+          success: false,
+          message: "Bounding box required: minLon, minLat, maxLon, maxLat"
+        });
+      }
+      
+      const bbox: [number, number, number, number] = [
+        parseFloat(minLon as string),
+        parseFloat(minLat as string),
+        parseFloat(maxLon as string),
+        parseFloat(maxLat as string)
+      ];
+      
+      const aggregated = await parcelAggregationService.aggregateParcels(bbox);
+      
+      res.json({
+        success: true,
+        count: aggregated.length,
+        type: 'FeatureCollection',
+        features: aggregated
+      });
+    } catch (error) {
+      console.error("Parcel aggregation error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to aggregate parcels"
       });
     }
   });
