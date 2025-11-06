@@ -142,7 +142,9 @@ export default function EnhancedMap({
           aggregatedFeatures.push(parcels[0]);
         } else {
           // Multiple parcels - try to combine adjacent ones
+          console.log(`  Owner "${parcels[0].properties?.DEEDHOLDER}" has ${parcels.length} parcels - attempting to combine...`);
           const combined = combineAdjacentParcels(parcels);
+          console.log(`  → Combined into ${combined.length} group(s)`);
           aggregatedFeatures.push(...combined);
         }
       });
