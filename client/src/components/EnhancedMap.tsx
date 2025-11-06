@@ -430,8 +430,10 @@ export default function EnhancedMap({
       }
     }
 
-    // Use server-side aggregation endpoint for better performance and reliability
-    const url = `/api/parcels/aggregated?minLon=${bounds.getWest()}&minLat=${bounds.getSouth()}&maxLon=${bounds.getEast()}&maxLat=${bounds.getNorth()}`;
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
+    
+    // Use the working Iowa Parcels 2017 service with all available fields for non-Harrison counties
+    const url = `https://services3.arcgis.com/kd9gaiUExYqUbnoq/arcgis/rest/services/Iowa_Parcels_2017/FeatureServer/0/query?where=1%3D1&outFields=COUNTYNAME,STATEPARID,PARCELNUMB,PARCELCLAS,DEEDHOLDER&geometry=${bbox}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=geojson&resultRecordCount=2000`;
 
     try {
       const response = await fetch(url);
@@ -440,17 +442,13 @@ export default function EnhancedMap({
       }
       
       const data = await response.json();
+      console.log('Parcel data received:', data.features?.length || 0, 'features');
       
-      if (data.success && data.features && data.features.length > 0) {
-        const combinedCount = data.features.filter((f:any) => f.properties.COMBINED).length;
-        console.log(`✅ Server returned ${data.count} parcels (${combinedCount} are combined groups)`);
-        
+      if (data.features && data.features.length > 0) {
         const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
         if (source) {
-          source.setData({
-            type: 'FeatureCollection',
-            features: data.features
-          });
+          source.setData(data);
+          console.log(`Loaded ${data.features.length} parcels`);
         }
       } else if (data.properties?.exceededTransferLimit) {
         // Too many features - zoom in more
