@@ -192,10 +192,13 @@ export default function EnhancedMap({
               
               if (intersects) {
                 // Merge this parcel
-                mergedPolygon = turf.union(mergedPolygon, turfParcels[j].polygon);
-                mergedIndices.push(j);
-                used.add(j);
-                foundAdjacent = true;
+                const unionResult = turf.union(mergedPolygon, turfParcels[j].polygon);
+                if (unionResult) {
+                  mergedPolygon = unionResult as any; // Union can return Polygon or MultiPolygon
+                  mergedIndices.push(j);
+                  used.add(j);
+                  foundAdjacent = true;
+                }
               }
             } catch (e) {
               // Skip on error (complex geometries)
