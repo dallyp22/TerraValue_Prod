@@ -39,7 +39,7 @@ export class AuctionScraperService {
     'https://www.landwatch.com/iowa-land-for-sale/western-region/auctions/page-3'
   ];
 
-  // Source configurations for 16 auction sites
+  // Source configurations for 24 auction sites
   private sources = [
     { name: 'Farmers National', url: 'https://www.farmersnational.com', searchPath: '/real-estate/auctions?fncRealEstate_properties%5BsortBy%5D=fncRealEstate_properties%3AauctionDate%3Aasc&fncRealEstate_properties%5Brange%5D%5BtotalAcres%5D=0%3A' },
     { name: 'Midwest Ag Services', url: 'https://midwestagservices.com', searchPath: '/farm-auctions/' },
@@ -51,12 +51,20 @@ export class AuctionScraperService {
     { name: 'DreamDirt', url: 'https://bid.dreamdirt.com' },
     { name: 'LandWatch', url: 'https://landwatch.com' },
     { name: 'Steffes', url: 'https://steffes-website-production.azurewebsites.net' },
+    { name: 'Steffes Group', url: 'https://steffesgroup.com', searchPath: '/auctions/land' },
     { name: 'McCall Auctions', url: 'https://www.mccallauctions.com', searchPath: '/mccall-listings?cat=17' },
     { name: 'Midwest Land Management', url: 'https://www.midwestlandmanagement.com/' },
     { name: 'Randy Pryor Real Estate', url: 'https://randypryorrealestate.com', searchPath: '/farm-land-auctions/' },
     { name: 'Jim Schaben Real Estate', url: 'https://jimschabenrealestate.com', searchPath: '/land-listings' },
     { name: 'Denison Livestock', url: 'https://www.denisonlivestock.com/' },
-    { name: 'Spencer Auction Group', url: 'https://spencerauctiongroup.com', searchPath: '/auctions/' }
+    { name: 'Spencer Auction Group', url: 'https://spencerauctiongroup.com', searchPath: '/auctions/' },
+    { name: 'Sieren Auction Sales', url: 'https://www.sierenauctionsales.com', searchPath: '/current-auctions' },
+    { name: 'Green Real Estate & Auction', url: 'https://www.greenrealestate-auction.com', searchPath: '/#auctions-start' },
+    { name: 'Iowa Land Sales', url: 'https://iowalandsales.com', searchPath: '/iowa-farm-real-estate/' },
+    { name: 'Sullivan Auctioneers', url: 'https://www.sullivanauctioneers.com' },
+    { name: 'BigIron', url: 'https://www.bigiron.com', searchPath: '/sale/farmland-property-for-sale' },
+    { name: 'Central States Real Estate', url: 'https://centralstatesrealestate.com', searchPath: '/properties/land-auctions/' },
+    { name: 'The Acre Co', url: 'https://theacreco.com' }
   ];
 
   // Scrape all auction sources

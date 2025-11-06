@@ -614,7 +614,7 @@ export default function AuctionDiagnostics() {
               disabled={scraping}
               variant="secondary"
             >
-              {scraping ? 'Scraping...' : 'Run Full Scraper (All 16 Sources)'}
+              {scraping ? 'Scraping...' : 'Run Full Scraper (All 24 Sources)'}
             </Button>
             <Button 
               onClick={() => setShowAddSource(!showAddSource)}
@@ -739,7 +739,7 @@ export default function AuctionDiagnostics() {
         {/* Current Auction Sources */}
         <Card>
           <CardHeader>
-            <CardTitle>Configured Auction Sources (16)</CardTitle>
+            <CardTitle>Configured Auction Sources (24)</CardTitle>
             <CardDescription>Websites currently being scraped for auctions</CardDescription>
           </CardHeader>
           <CardContent>
@@ -748,23 +748,27 @@ export default function AuctionDiagnostics() {
                 'Farmers National', 'Midwest Ag Services', 'Iowa Land Company', 
                 'Peoples Company', 'High Point Land', 'Zomer Company',
                 'Land Search', 'DreamDirt', 'LandWatch',
-                'Steffes', 'McCall Auctions', 'Midwest Land Management',
+                'Steffes', 'Steffes Group', 'McCall Auctions', 'Midwest Land Management',
                 'Randy Pryor Real Estate', 'Jim Schaben Real Estate', 'Denison Livestock',
-                'Spencer Auction Group'
+                'Spencer Auction Group', 'Sieren Auction Sales', 'Green Real Estate & Auction',
+                'Iowa Land Sales', 'Sullivan Auctioneers', 'BigIron',
+                'Central States Real Estate', 'The Acre Co'
               ].map((source, idx) => (
                 <div key={idx} className="p-3 border rounded-lg bg-slate-50">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span className="text-sm font-medium">{source}</span>
                   </div>
-                  {source === 'Spencer Auction Group' && (
+                  {['Spencer Auction Group', 'Steffes Group', 'Sieren Auction Sales', 
+                    'Green Real Estate & Auction', 'Iowa Land Sales', 'Sullivan Auctioneers',
+                    'BigIron', 'Central States Real Estate', 'The Acre Co'].includes(source) && (
                     <Badge variant="secondary" className="mt-2 text-xs">Recently Added</Badge>
                   )}
                 </div>
               ))}
             </div>
             <div className="mt-4 text-sm text-gray-600">
-              💡 Click "Run Full Scraper" to fetch auctions from all sources including Spencer Auction Group
+              💡 Click "Run Full Scraper" to fetch auctions from all 24 sources (9 recently added)
             </div>
           </CardContent>
         </Card>
