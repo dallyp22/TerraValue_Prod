@@ -27,6 +27,13 @@ export default function MapControls({ showLegend = true }: MapControlsProps) {
             <span className="legend-marker w-3 h-3 rounded border-2 border-green-500 flex-shrink-0"></span>
             <span>Parcel Boundaries</span>
           </div>
+          <div className="legend-item flex items-center gap-2 text-xs text-slate-700 pt-2 border-t border-slate-200 mt-2">
+            <span className="legend-marker w-4 h-0.5 bg-orange-500 flex-shrink-0"></span>
+            <span>Power & Transmission Lines</span>
+          </div>
+          <div className="legend-item flex items-center gap-2 text-xs text-slate-500 ml-6">
+            <span className="text-[10px]">Darker = Higher Voltage</span>
+          </div>
         </div>
       </div>
       )}

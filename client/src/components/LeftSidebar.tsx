@@ -50,6 +50,22 @@ export interface MapOverlays {
     kv115: boolean;
     kv69: boolean;
   };
+  showTransmissionLines: boolean;
+  transmissionLineStates: {
+    kansas: boolean;
+    minnesota: boolean;
+    missouri: boolean;
+    nebraska: boolean;
+    southDakota: boolean;
+  };
+  transmissionLineVoltages: {
+    kv345: boolean;
+    kv230: boolean;
+    kv161: boolean;
+    kv138: boolean;
+    kv115: boolean;
+    kv69: boolean;
+  };
   showCityLabels: boolean;
   showHighways: boolean;
 }
@@ -480,6 +496,22 @@ export default function LeftSidebar({
                         kv115: allEnabled,
                         kv69: allEnabled
                       },
+                      showTransmissionLines: allEnabled,
+                      transmissionLineStates: {
+                        kansas: allEnabled,
+                        minnesota: allEnabled,
+                        missouri: allEnabled,
+                        nebraska: allEnabled,
+                        southDakota: allEnabled
+                      },
+                      transmissionLineVoltages: {
+                        kv345: allEnabled,
+                        kv230: allEnabled,
+                        kv161: allEnabled,
+                        kv138: allEnabled,
+                        kv115: allEnabled,
+                        kv69: allEnabled
+                      },
                       showCityLabels: allEnabled,
                       showHighways: allEnabled
                     });
@@ -655,6 +687,165 @@ export default function LeftSidebar({
                       <span className="text-xs text-slate-600">69 kV</span>
                   </label>
                   </div>
+                )}
+              </div>
+
+              {/* High Voltage Transmission Lines (Multi-State) */}
+              <div className="space-y-3 pb-4 border-b border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer py-1.5">
+                  <Checkbox
+                    checked={mapOverlays.showTransmissionLines}
+                    onCheckedChange={(checked) =>
+                      onMapOverlaysChange({ ...mapOverlays, showTransmissionLines: checked as boolean })
+                    }
+                  />
+                  <span className="text-sm font-medium text-slate-700">⚡ HV Transmission Lines</span>
+                </label>
+
+                {/* State Filters - only show when transmission lines are enabled */}
+                {mapOverlays.showTransmissionLines && (
+                  <>
+                    <div className="ml-6 space-y-1 pb-3 border-l-2 border-orange-300 pl-3">
+                      <p className="text-xs font-semibold text-slate-600 mb-2">States</p>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineStates.kansas}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineStates: { ...mapOverlays.transmissionLineStates, kansas: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">Kansas</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineStates.minnesota}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineStates: { ...mapOverlays.transmissionLineStates, minnesota: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">Minnesota</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineStates.missouri}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineStates: { ...mapOverlays.transmissionLineStates, missouri: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">Missouri</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineStates.nebraska}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineStates: { ...mapOverlays.transmissionLineStates, nebraska: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">Nebraska</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineStates.southDakota}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineStates: { ...mapOverlays.transmissionLineStates, southDakota: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">South Dakota</span>
+                      </label>
+                    </div>
+
+                    {/* Voltage Level Filters */}
+                    <div className="ml-6 space-y-1 pb-2 border-l-2 border-orange-300 pl-3">
+                      <p className="text-xs font-semibold text-slate-600 mb-2">Voltage Levels</p>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv345}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv345: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">345 kV</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv230}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv230: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">230 kV</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv161}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv161: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">161 kV</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv138}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv138: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">138 kV</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv115}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv115: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">115 kV</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.transmissionLineVoltages.kv69}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({ 
+                              ...mapOverlays, 
+                              transmissionLineVoltages: { ...mapOverlays.transmissionLineVoltages, kv69: checked as boolean }
+                            })
+                          }
+                        />
+                        <span className="text-xs text-slate-600">69 kV</span>
+                      </label>
+                    </div>
+                  </>
                 )}
               </div>
             </CollapsibleContent>

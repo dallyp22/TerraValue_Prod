@@ -61,6 +61,22 @@ export default function MapCentricHome() {
       kv115: true,
       kv69: true
     },
+    showTransmissionLines: true,
+    transmissionLineStates: {
+      kansas: true,
+      minnesota: true,
+      missouri: true,
+      nebraska: true,
+      southDakota: true
+    },
+    transmissionLineVoltages: {
+      kv345: true,
+      kv230: true,
+      kv161: true,
+      kv138: true,
+      kv115: true,
+      kv69: true
+    },
     showCityLabels: true,
     showHighways: true
   });
@@ -323,8 +339,12 @@ export default function MapCentricHome() {
           lakeTypes={mapOverlays.lakeTypes}
           showPowerLines={mapOverlays.showPowerLines}
           powerLineVoltages={mapOverlays.powerLineVoltages}
+          showTransmissionLines={mapOverlays.showTransmissionLines}
+          transmissionLineStates={mapOverlays.transmissionLineStates}
+          transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
+          useSelfHostedParcels={false} // Using original ArcGIS method for now - switch to true to use self-hosted
         />
 
         {/* Map Controls */}

@@ -10,6 +10,7 @@ import { SubstationInfoPanel } from './SubstationInfoPanel';
 import { DataCenterInfoPanel } from './DataCenterInfoPanel';
 import { LakeInfoPanel } from './LakeInfoPanel';
 import type { Auction } from '@shared/schema';
+import { API_BASE_URL } from '@/config';
 
 interface EnhancedMapProps {
   drawModeEnabled: boolean;
@@ -40,14 +41,32 @@ interface EnhancedMapProps {
     kv115: boolean;
     kv69: boolean;
   };
+  showTransmissionLines?: boolean;
+  transmissionLineStates?: {
+    kansas: boolean;
+    minnesota: boolean;
+    missouri: boolean;
+    nebraska: boolean;
+    southDakota: boolean;
+  };
+  transmissionLineVoltages?: {
+    kv345: boolean;
+    kv230: boolean;
+    kv161: boolean;
+    kv138: boolean;
+    kv115: boolean;
+    kv69: boolean;
+  };
   showCityLabels?: boolean;
   showHighways?: boolean;
+  useSelfHostedParcels?: boolean; // Enable self-hosted vector tiles instead of ArcGIS
 }
 
 export default function EnhancedMap({ 
   drawModeEnabled, 
   onParcelClick, 
   onPolygonDrawn,
+  useSelfHostedParcels = false,
   onAuctionClick,
   onStartAuctionValuation,
   drawnPolygonData,
@@ -64,6 +83,9 @@ export default function EnhancedMap({
   lakeTypes = { lakes: true, reservoirs: true },
   showPowerLines = true,
   powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true },
+  showTransmissionLines = true,
+  transmissionLineStates = { kansas: true, minnesota: true, missouri: true, nebraska: true, southDakota: true },
+  transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
   showHighways = true
 }: EnhancedMapProps) {
@@ -371,6 +393,11 @@ export default function EnhancedMap({
 
   // Function to load parcels based on current map bounds
   const loadParcels = async () => {
+    // Skip loading if using self-hosted vector tiles (they load automatically)
+    if (useSelfHostedParcels) {
+      return;
+    }
+    
     if (!map.current || map.current.getZoom() <= 12) {
       // Clear data if zoomed out
       const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
@@ -749,18 +776,30 @@ export default function EnhancedMap({
       
       // Add parcel data source if it doesn't exist
       if (!map.current!.getSource('parcels')) {
-        map.current!.addSource('parcels', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: []
-          }
-        });
+        if (useSelfHostedParcels) {
+          // Use self-hosted vector tiles
+          const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+          map.current!.addSource('parcels', {
+            type: 'vector',
+            tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
+            minzoom: 10,
+            maxzoom: 18
+          });
+        } else {
+          // Use GeoJSON from ArcGIS (legacy)
+          map.current!.addSource('parcels', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: []
+            }
+          });
+        }
       }
 
       // Add parcel outline layer if it doesn't exist
       if (!map.current!.getLayer('parcels-outline')) {
-        map.current!.addLayer({
+        const outlineLayer: any = {
           id: 'parcels-outline',
           type: 'line',
           source: 'parcels',
@@ -769,12 +808,20 @@ export default function EnhancedMap({
             'line-width': 2,
             'line-opacity': 0.8
           }
-        });
+        };
+        
+        // Add source-layer for vector tiles
+        if (useSelfHostedParcels) {
+          outlineLayer['source-layer'] = 'parcels';
+          outlineLayer.minzoom = 14; // Only show individual parcels at high zoom
+        }
+        
+        map.current!.addLayer(outlineLayer);
       }
 
       // Add parcel fill layer if it doesn't exist
       if (!map.current!.getLayer('parcels-fill')) {
-        map.current!.addLayer({
+        const fillLayer: any = {
           id: 'parcels-fill',
           type: 'fill',
           source: 'parcels',
@@ -782,15 +829,84 @@ export default function EnhancedMap({
             'fill-color': '#10b981',
             'fill-opacity': 0.15
           }
+        };
+        
+        // Add source-layer for vector tiles
+        if (useSelfHostedParcels) {
+          fillLayer['source-layer'] = 'parcels';
+          fillLayer.minzoom = 14; // Only show individual parcels at high zoom
+        }
+        
+        map.current!.addLayer(fillLayer);
+      }
+
+      // Add ownership group layers for self-hosted tiles (zoom < 14)
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-fill')) {
+        map.current!.addLayer({
+          id: 'ownership-fill',
+          type: 'fill',
+          source: 'parcels',
+          'source-layer': 'ownership',
+          paint: {
+            'fill-color': '#3b82f6',
+            'fill-opacity': 0.2
+          },
+          maxzoom: 14 // Hide at high zoom when individual parcels show
+        });
+      }
+
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-outline')) {
+        map.current!.addLayer({
+          id: 'ownership-outline',
+          type: 'line',
+          source: 'parcels',
+          'source-layer': 'ownership',
+          paint: {
+            'line-color': '#2563eb',
+            'line-width': 2,
+            'line-opacity': 0.6
+          },
+          maxzoom: 14
+        });
+      }
+
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-labels')) {
+        map.current!.addLayer({
+          id: 'ownership-labels',
+          type: 'symbol',
+          source: 'parcels',
+          'source-layer': 'ownership',
+          layout: {
+            'text-field': [
+              'concat',
+              ['get', 'owner'],
+              '\n(',
+              ['to-string', ['get', 'parcel_count']],
+              ' parcels, ',
+              ['to-string', ['get', 'acres']],
+              ' ac)'
+            ],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 12,
+            'text-anchor': 'center',
+            'text-allow-overlap': false,
+            'visibility': showOwnerLabels ? 'visible' : 'none'
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5
+          },
+          maxzoom: 14
         });
       }
 
       // Add owner labels layer (only visible when zoomed in and toggle is on)
       if (!map.current!.getLayer('parcels-labels')) {
-        map.current!.addLayer({
+        const labelLayer: any = {
           id: 'parcels-labels',
-        type: 'symbol',
-        source: 'parcels',
+          type: 'symbol',
+          source: 'parcels',
         layout: {
           'text-field': [
             'case',
@@ -846,7 +962,16 @@ export default function EnhancedMap({
           ]
         },
         minzoom: 13
-      });
+        };
+        
+        // Add source-layer for vector tiles
+        if (useSelfHostedParcels) {
+          labelLayer['source-layer'] = 'parcels';
+          // Update text field for vector tile properties
+          labelLayer.layout['text-field'] = ['get', 'owner']; // Vector tiles use simplified property names
+        }
+        
+        map.current!.addLayer(labelLayer);
       }
 
       // Add Harrison County vector tile layers (initially hidden)
@@ -1153,22 +1278,33 @@ export default function EnhancedMap({
           const props = e.features[0].properties;
           const geometry = e.features[0].geometry;
           
-          // Calculate acres from geometry using Turf.js
+          // Handle both GeoJSON (ArcGIS) and Vector Tile property names
+          const owner = props.owner || props.DEEDHOLDER || 'Unknown';
+          const parcelNumber = props.parcel_number || props.PARCELNUMB || 'N/A';
+          const parcelClass = props.class || props.PARCELCLAS || 'N/A';
+          const county = props.county || props.COUNTYNAME || 'N/A';
+          const stateParcelId = props.STATEPARID || 'N/A';
+          
+          // Get acres from vector tile properties or calculate from geometry
           let acres = 0;
-          if (geometry.type === 'Polygon' && geometry.coordinates && geometry.coordinates[0]) {
+          if (props.acres) {
+            // Vector tiles include pre-calculated acres
+            acres = parseFloat(props.acres);
+          } else if (geometry.type === 'Polygon' && geometry.coordinates && geometry.coordinates[0]) {
+            // Calculate from GeoJSON geometry
             const polygon = turf.polygon(geometry.coordinates);
             const area = turf.area(polygon);
-            acres = Math.round((area / 4046.86) * 100) / 100; // Convert square meters to acres with 2 decimal precision
+            acres = Math.round((area / 4046.86) * 100) / 100;
           }
           
           const parcel = {
-            owner_name: props.DEEDHOLDER || 'Unknown',
-            address: props.STATEPARID || 'N/A',
+            owner_name: owner,
+            address: stateParcelId,
             acres: acres,
             coordinates: [e.lngLat.lng, e.lngLat.lat],
-            parcel_number: props.PARCELNUMB || 'N/A',
-            parcel_class: props.PARCELCLAS || 'N/A',
-            county: props.COUNTYNAME || 'N/A',
+            parcel_number: parcelNumber,
+            parcel_class: parcelClass,
+            county: county,
             geometry: geometry // Include actual polygon geometry
           };
           
@@ -1177,10 +1313,11 @@ export default function EnhancedMap({
           // Only show popup if not in drawing mode
           if (!drawModeEnabledRef.current) {
             const html = `
-              <strong>Owner:</strong> ${props.DEEDHOLDER || 'Unknown'}<br>
-              <strong>Parcel Number:</strong> ${props.PARCELNUMB || 'N/A'}<br>
-              <strong>Class:</strong> ${props.PARCELCLAS || 'N/A'}<br>
-              <strong>County:</strong> ${props.COUNTYNAME || 'N/A'}<br>
+              <strong>Owner:</strong> ${owner}<br>
+              <strong>Parcel Number:</strong> ${parcelNumber}<br>
+              <strong>Class:</strong> ${parcelClass}<br>
+              <strong>County:</strong> ${county}<br>
+              <strong>Acres:</strong> ${acres.toFixed(2)}<br>
               <small><em>Iowa Parcels 2017 Data</em></small>
             `;
             new maplibregl.Popup()
@@ -1211,6 +1348,47 @@ export default function EnhancedMap({
       map.current!.on('mouseleave', 'parcels-fill', () => {
         map.current!.getCanvas().style.cursor = '';
       });
+
+      // Add ownership group click handlers (for self-hosted tiles)
+      if (useSelfHostedParcels) {
+        const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+          if (e.features && e.features.length > 0) {
+            const props = e.features[0].properties;
+            
+            const html = `
+              <strong>Owner:</strong> ${props.owner || 'Unknown'}<br>
+              <strong>Total Parcels:</strong> ${props.parcel_count || 'N/A'}<br>
+              <strong>Total Acres:</strong> ${props.acres || 'N/A'}<br>
+              <small><em>Aggregated Ownership Group</em></small>
+            `;
+            
+            new maplibregl.Popup()
+              .setLngLat(e.lngLat)
+              .setHTML(html)
+              .addTo(map.current!);
+          }
+        };
+
+        map.current!.on('click', 'ownership-fill', handleOwnershipClick);
+        map.current!.on('click', 'ownership-outline', handleOwnershipClick);
+
+        // Add hover effects for ownership layers
+        map.current!.on('mouseenter', 'ownership-fill', () => {
+          map.current!.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map.current!.on('mouseleave', 'ownership-fill', () => {
+          map.current!.getCanvas().style.cursor = '';
+        });
+
+        map.current!.on('mouseenter', 'ownership-outline', () => {
+          map.current!.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map.current!.on('mouseleave', 'ownership-outline', () => {
+          map.current!.getCanvas().style.cursor = '';
+        });
+      }
 
       // Add auction data source
       map.current!.addSource('auctions', {
@@ -1243,6 +1421,32 @@ export default function EnhancedMap({
       map.current!.addSource('powerlines', {
         type: 'geojson',
         data: '/powerlines.geojson'
+      });
+
+      // Add transmission line data sources for each state
+      map.current!.addSource('transmission-kansas', {
+        type: 'geojson',
+        data: '/KS_HighVtransmission.geojson'
+      });
+
+      map.current!.addSource('transmission-minnesota', {
+        type: 'geojson',
+        data: '/MN_HighVtransmission.geojson'
+      });
+
+      map.current!.addSource('transmission-missouri', {
+        type: 'geojson',
+        data: '/MO_HighVtransmission.geojson'
+      });
+
+      map.current!.addSource('transmission-nebraska', {
+        type: 'geojson',
+        data: '/NE_HighVtransmission.geojson'
+      });
+
+      map.current!.addSource('transmission-southdakota', {
+        type: 'geojson',
+        data: '/SD_HighVtransmission.geojson'
       });
 
       // Add auction marker layers with color-coding
@@ -1724,6 +1928,94 @@ export default function EnhancedMap({
             });
           });
 
+          // Helper function to add transmission line layers for each state and voltage
+          const addTransmissionLineLayers = () => {
+            const states = [
+              { id: 'kansas', name: 'Kansas', source: 'transmission-kansas' },
+              { id: 'minnesota', name: 'Minnesota', source: 'transmission-minnesota' },
+              { id: 'missouri', name: 'Missouri', source: 'transmission-missouri' },
+              { id: 'nebraska', name: 'Nebraska', source: 'transmission-nebraska' },
+              { id: 'southdakota', name: 'South Dakota', source: 'transmission-southdakota' }
+            ];
+
+            const voltages = [
+              { kv: 345, color: '#c2410c', width: 3.5, opacity: 0.9 }, // Darkest orange (highest voltage)
+              { kv: 230, color: '#d97706', width: 3, opacity: 0.85 }, // Dark orange
+              { kv: 161, color: '#ea580c', width: 2.5, opacity: 0.8 }, // Medium-dark orange
+              { kv: 138, color: '#f97316', width: 2, opacity: 0.75 }, // Medium orange
+              { kv: 115, color: '#fb923c', width: 1.5, opacity: 0.7 }, // Light orange
+              { kv: 69, color: '#fdba74', width: 1, opacity: 0.65 } // Lightest orange
+            ];
+
+            states.forEach(state => {
+              voltages.forEach(voltage => {
+                const layerId = `transmission-${state.id}-${voltage.kv}kv`;
+                
+                map.current!.addLayer({
+                  id: layerId,
+                  type: 'line',
+                  source: state.source,
+                  paint: {
+                    'line-color': voltage.color,
+                    'line-width': voltage.width,
+                    'line-opacity': voltage.opacity
+                  },
+                  layout: {
+                    'visibility': showTransmissionLines ? 'visible' : 'none'
+                  },
+                  filter: ['any',
+                    ['==', ['get', 'voltage'], `${voltage.kv}000`],
+                    ['in', `${voltage.kv}000`, ['get', 'voltage']]
+                  ]
+                });
+
+                // Add click handler
+                map.current!.on('click', layerId, (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+                  if (e.features && e.features.length > 0) {
+                    const props = e.features[0].properties;
+                    const operator = props?.operator || 'Unknown Operator';
+                    const voltageStr = props?.voltage || 'Unknown';
+                    const voltageKV = voltageStr ? (parseInt(voltageStr.split(';')[0]) / 1000).toFixed(0) : '?';
+                    
+                    const html = `
+                      <div style="padding: 10px; min-width: 200px;">
+                        <strong style="display: block; margin-bottom: 8px; font-size: 14px; color: #ea580c;">⚡ ${state.name} Transmission</strong>
+                        <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
+                          <strong>Operator:</strong> ${operator}
+                        </div>
+                        <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
+                          <strong>Voltage:</strong> ${voltageKV} kV
+                        </div>
+                        ${props?.circuits ? `<div style="font-size: 11px; color: #6b7280;">Circuits: ${props.circuits}</div>` : ''}
+                        ${props?.frequency ? `<div style="font-size: 11px; color: #6b7280;">Frequency: ${props.frequency} Hz</div>` : ''}
+                        <div style="font-size: 10px; color: #9ca3af; margin-top: 8px; padding-top: 6px; border-top: 1px solid #e5e7eb;">
+                          High voltage transmission line
+                        </div>
+                      </div>
+                    `;
+                    
+                    new maplibregl.Popup()
+                      .setLngLat(e.lngLat)
+                      .setHTML(html)
+                      .addTo(map.current!);
+                  }
+                });
+
+                // Add hover cursor
+                map.current!.on('mouseenter', layerId, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+                });
+
+                map.current!.on('mouseleave', layerId, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = '';
+                });
+              });
+            });
+          };
+
+          // Add all transmission line layers
+          addTransmissionLineLayers();
+
           // Add hover effects for auction markers
           const handleAuctionMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
             if (map.current) {
@@ -2186,6 +2478,42 @@ export default function EnhancedMap({
       }
     });
   }, [showPowerLines, powerLineVoltages]);
+
+  // Toggle transmission lines layer visibility based on state and voltage selections
+  useEffect(() => {
+    if (!map.current) return;
+
+    const states = [
+      { id: 'kansas', enabled: transmissionLineStates.kansas },
+      { id: 'minnesota', enabled: transmissionLineStates.minnesota },
+      { id: 'missouri', enabled: transmissionLineStates.missouri },
+      { id: 'nebraska', enabled: transmissionLineStates.nebraska },
+      { id: 'southdakota', enabled: transmissionLineStates.southDakota }
+    ];
+
+    const voltages = [
+      { kv: 345, enabled: transmissionLineVoltages.kv345 },
+      { kv: 230, enabled: transmissionLineVoltages.kv230 },
+      { kv: 161, enabled: transmissionLineVoltages.kv161 },
+      { kv: 138, enabled: transmissionLineVoltages.kv138 },
+      { kv: 115, enabled: transmissionLineVoltages.kv115 },
+      { kv: 69, enabled: transmissionLineVoltages.kv69 }
+    ];
+
+    states.forEach(state => {
+      voltages.forEach(voltage => {
+        const layerId = `transmission-${state.id}-${voltage.kv}kv`;
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(
+            layerId,
+            'visibility',
+            showTransmissionLines && state.enabled && voltage.enabled ? 'visible' : 'none'
+          );
+        }
+      });
+    });
+  }, [showTransmissionLines, transmissionLineStates, transmissionLineVoltages]);
 
   return (
     <>
