@@ -114,6 +114,123 @@ export default function EnhancedMap({
     }
   };
 
+  // Aggregate parcels by owner - combine adjacent parcels with same owner
+  const aggregateParcelsByOwner = (features: any[]): any[] => {
+    if (!features || features.length === 0) return [];
+    
+    try {
+      // Group parcels by owner (DEEDHOLDER)
+      const parcelsByOwner: { [owner: string]: any[] } = {};
+      
+      features.forEach(feature => {
+        const owner = feature.properties?.DEEDHOLDER || 'Unknown Owner';
+        // Normalize owner name for better matching
+        const normalizedOwner = owner.trim().toUpperCase();
+        
+        if (!parcelsByOwner[normalizedOwner]) {
+          parcelsByOwner[normalizedOwner] = [];
+        }
+        parcelsByOwner[normalizedOwner].push(feature);
+      });
+      
+      const aggregatedFeatures: any[] = [];
+      
+      // For each owner, try to combine adjacent parcels
+      Object.entries(parcelsByOwner).forEach(([owner, parcels]) => {
+        if (parcels.length === 1) {
+          // Single parcel - just add it
+          aggregatedFeatures.push(parcels[0]);
+        } else {
+          // Multiple parcels - try to combine adjacent ones
+          const combined = combineAdjacentParcels(parcels);
+          aggregatedFeatures.push(...combined);
+        }
+      });
+      
+      return aggregatedFeatures;
+    } catch (error) {
+      console.error('Error aggregating parcels:', error);
+      return features; // Return original if aggregation fails
+    }
+  };
+
+  // Combine adjacent parcels using Turf.js
+  const combineAdjacentParcels = (parcels: any[]): any[] => {
+    if (parcels.length === 0) return [];
+    if (parcels.length === 1) return parcels;
+    
+    try {
+      // Convert all to turf polygons
+      const turfParcels = parcels.map(p => ({
+        feature: p,
+        polygon: turf.polygon(p.geometry.coordinates)
+      }));
+      
+      const combined: any[] = [];
+      const used = new Set<number>();
+      
+      // For each parcel, find and merge with adjacent parcels
+      for (let i = 0; i < turfParcels.length; i++) {
+        if (used.has(i)) continue;
+        
+        let mergedPolygon = turfParcels[i].polygon;
+        const mergedIndices = [i];
+        used.add(i);
+        
+        // Find adjacent parcels
+        let foundAdjacent = true;
+        while (foundAdjacent) {
+          foundAdjacent = false;
+          
+          for (let j = 0; j < turfParcels.length; j++) {
+            if (used.has(j)) continue;
+            
+            // Check if adjacent (touching or very close)
+            try {
+              const buffered = turf.buffer(mergedPolygon, 0.001, { units: 'kilometers' }); // 1 meter buffer
+              const intersects = turf.booleanIntersects(buffered, turfParcels[j].polygon);
+              
+              if (intersects) {
+                // Merge this parcel
+                mergedPolygon = turf.union(mergedPolygon, turfParcels[j].polygon);
+                mergedIndices.push(j);
+                used.add(j);
+                foundAdjacent = true;
+              }
+            } catch (e) {
+              // Skip on error (complex geometries)
+            }
+          }
+        }
+        
+        // Create combined feature with total acreage
+        const totalAcres = mergedIndices.reduce((sum, idx) => {
+          const geom = turfParcels[idx].polygon;
+          const area = turf.area(geom) / 4046.86; // Convert to acres
+          return sum + area;
+        }, 0);
+        
+        const combinedFeature = {
+          type: 'Feature',
+          properties: {
+            ...turfParcels[i].feature.properties,
+            PARCEL_COUNT: mergedIndices.length,
+            TOTAL_ACRES: Math.round(totalAcres * 100) / 100,
+            COMBINED: mergedIndices.length > 1
+          },
+          geometry: mergedPolygon.geometry
+        };
+        
+        combined.push(combinedFeature);
+      }
+      
+      return combined;
+    } catch (error) {
+      console.error('Error combining parcels:', error);
+      return parcels; // Return original if combination fails
+    }
+  };
+
   // Function to determine if current view is in Harrison County, Iowa
   const isInHarrisonCounty = () => {
     if (!map.current) return false;
@@ -305,10 +422,18 @@ export default function EnhancedMap({
       console.log('Parcel data received:', data.features?.length || 0, 'features');
       
       if (data.features && data.features.length > 0) {
+        // AGGREGATE PARCELS BY OWNER (like Harrison County)
+        console.log('🔄 Aggregating parcels by owner...');
+        const aggregatedFeatures = aggregateParcelsByOwner(data.features);
+        console.log(`✅ Aggregated ${data.features.length} parcels into ${aggregatedFeatures.length} combined holdings`);
+        
         const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
         if (source) {
-          source.setData(data);
-          console.log(`Loaded ${data.features.length} parcels`);
+          source.setData({
+            type: 'FeatureCollection',
+            features: aggregatedFeatures
+          });
+          console.log(`Loaded ${aggregatedFeatures.length} aggregated parcels`);
         }
       } else if (data.properties?.exceededTransferLimit) {
         // Too many features - zoom in more
@@ -654,9 +779,27 @@ export default function EnhancedMap({
         layout: {
           'text-field': [
             'case',
-            ['>', ['length', ['get', 'DEEDHOLDER']], 20],
-            ['concat', ['slice', ['get', 'DEEDHOLDER'], 0, 20], '...'],
-            ['get', 'DEEDHOLDER']
+            // If combined parcels, show owner + parcel count + acres
+            ['get', 'COMBINED'],
+            ['concat',
+              ['case',
+                ['>', ['length', ['get', 'DEEDHOLDER']], 15],
+                ['concat', ['slice', ['get', 'DEEDHOLDER'], 0, 15], '...'],
+                ['get', 'DEEDHOLDER']
+              ],
+              '\n(',
+              ['to-string', ['get', 'PARCEL_COUNT']],
+              ' parcels, ',
+              ['to-string', ['get', 'TOTAL_ACRES']],
+              ' ac)'
+            ],
+            // Single parcel - just show owner
+            [
+              'case',
+              ['>', ['length', ['get', 'DEEDHOLDER']], 20],
+              ['concat', ['slice', ['get', 'DEEDHOLDER'], 0, 20], '...'],
+              ['get', 'DEEDHOLDER']
+            ]
           ],
           'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
           'text-size': [
@@ -886,6 +1029,77 @@ export default function EnhancedMap({
       // Add click handlers for Harrison County layers
       map.current!.on('click', 'harrison-parcels-outline', handleHarrisonParcelClick);
       map.current!.on('click', 'harrison-parcels-fill', handleHarrisonParcelClick);
+
+      // Add click handlers for regular parcels (all other counties)
+      const handleRegularParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (e.features && e.features.length > 0) {
+          const props = e.features[0].properties;
+          const geometry = e.features[0].geometry;
+          
+          // Calculate acres from geometry
+          let acres = 0;
+          if (geometry.type === 'Polygon' && geometry.coordinates) {
+            const polygon = turf.polygon(geometry.coordinates);
+            const area = turf.area(polygon);
+            acres = area / 4046.86; // Convert to acres
+          }
+          
+          // Use aggregated acres if available
+          const totalAcres = props.TOTAL_ACRES || acres;
+          
+          const parcel = {
+            owner_name: props.DEEDHOLDER || 'Unknown',
+            address: props.STATEPARID || 'N/A',
+            acres: Math.round(totalAcres * 100) / 100,
+            coordinates: [e.lngLat.lng, e.lngLat.lat],
+            parcel_number: props.PARCELNUMB || 'N/A',
+            parcel_class: props.PARCELCLAS || 'N/A',
+            county: props.COUNTYNAME || 'Unknown County',
+            geometry: geometry,
+            parcelCount: props.PARCEL_COUNT || 1, // Number of combined parcels
+            isCombined: props.COMBINED || false
+          };
+          
+          onParcelClick(parcel);
+          
+          // Show popup
+          if (!drawModeEnabledRef.current) {
+            const html = `
+              <strong>Owner:</strong> ${props.DEEDHOLDER || 'Unknown'}<br>
+              ${props.COMBINED ? `<strong style="color: #10b981;">Combined: ${props.PARCEL_COUNT} parcels</strong><br>` : ''}
+              <strong>Total Acres:</strong> ${totalAcres.toFixed(2)}<br>
+              <strong>Parcel Number:</strong> ${props.PARCELNUMB || 'N/A'}<br>
+              <strong>Class:</strong> ${props.PARCELCLAS || 'N/A'}<br>
+              <strong>County:</strong> ${props.COUNTYNAME || 'N/A'}<br>
+              <small><em>Iowa Parcels 2017 Data${props.COMBINED ? ' (Aggregated)' : ''}</em></small>
+            `;
+            new maplibregl.Popup()
+              .setLngLat(e.lngLat)
+              .setHTML(html)
+              .addTo(map.current!);
+          }
+        }
+      };
+
+      map.current!.on('click', 'parcels-outline', handleRegularParcelClick);
+      map.current!.on('click', 'parcels-fill', handleRegularParcelClick);
+
+      // Add hover effects for regular parcels
+      map.current!.on('mouseenter', 'parcels-outline', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current!.on('mouseleave', 'parcels-outline', () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
+
+      map.current!.on('mouseenter', 'parcels-fill', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current!.on('mouseleave', 'parcels-fill', () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
 
       // Add hover effects for Harrison County layers
       map.current!.on('mouseenter', 'harrison-parcels-outline', () => {
