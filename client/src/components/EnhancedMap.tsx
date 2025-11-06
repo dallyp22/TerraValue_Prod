@@ -160,11 +160,29 @@ export default function EnhancedMap({
     if (parcels.length === 1) return parcels;
     
     try {
-      // Convert all to turf polygons
-      const turfParcels = parcels.map(p => ({
-        feature: p,
-        polygon: turf.polygon(p.geometry.coordinates)
-      }));
+      // Convert all to turf polygons - with validation
+      const turfParcels = parcels.map(p => {
+        // Validate geometry before converting
+        if (!p.geometry || !p.geometry.coordinates || !Array.isArray(p.geometry.coordinates)) {
+          return null;
+        }
+        
+        // Check if coordinates are valid (at least 4 points for a closed polygon)
+        const coords = p.geometry.coordinates;
+        if (!coords[0] || !Array.isArray(coords[0]) || coords[0].length < 4) {
+          return null;
+        }
+        
+        try {
+          return {
+            feature: p,
+            polygon: turf.polygon(coords)
+          };
+        } catch (e) {
+          console.warn('Invalid polygon geometry, skipping:', e);
+          return null;
+        }
+      }).filter(p => p !== null) as any[];
       
       const combined: any[] = [];
       const used = new Set<number>();
