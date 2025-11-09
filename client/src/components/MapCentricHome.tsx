@@ -48,6 +48,13 @@ export default function MapCentricHome() {
     showAuctions: true,
     showSubstations: true,
     showDatacenters: true,
+    datacenterStates: {
+      iowa: true,
+      illinois: true,
+      missouri: true,
+      nebraska: true,
+      wisconsin: true
+    },
     showLakes: true,
     lakeTypes: {
       lakes: true,
@@ -335,6 +342,7 @@ export default function MapCentricHome() {
           auctionFilters={filters}
           showSubstations={mapOverlays.showSubstations}
           showDatacenters={mapOverlays.showDatacenters}
+          datacenterStates={mapOverlays.datacenterStates}
           showLakes={mapOverlays.showLakes}
           lakeTypes={mapOverlays.lakeTypes}
           showPowerLines={mapOverlays.showPowerLines}

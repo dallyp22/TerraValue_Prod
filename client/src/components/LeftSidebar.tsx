@@ -37,6 +37,13 @@ export interface MapOverlays {
   showAuctions: boolean;
   showSubstations: boolean;
   showDatacenters: boolean;
+  datacenterStates: {
+    iowa: boolean;
+    illinois: boolean;
+    missouri: boolean;
+    nebraska: boolean;
+    wisconsin: boolean;
+  };
   showLakes: boolean;
   lakeTypes: {
     lakes: boolean;
@@ -557,15 +564,84 @@ export default function LeftSidebar({
                 />
                 <span className="text-sm text-slate-700">Power Substations</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
-                <Checkbox
-                  checked={mapOverlays.showDatacenters}
-                  onCheckedChange={(checked) =>
-                    onMapOverlaysChange({ ...mapOverlays, showDatacenters: checked as boolean })
-                  }
-                />
-                <span className="text-sm text-slate-700">Data Centers</span>
-              </label>
+              {/* Data Centers Toggle with State Filters */}
+              <div className="pl-4 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer py-2">
+                  <Checkbox
+                    checked={mapOverlays.showDatacenters}
+                    onCheckedChange={(checked) =>
+                      onMapOverlaysChange({ ...mapOverlays, showDatacenters: checked as boolean })
+                    }
+                  />
+                  <span className="text-sm text-slate-700">Data Centers</span>
+                </label>
+                
+                {/* State Filters - only show when datacenters are enabled */}
+                {mapOverlays.showDatacenters && (
+                  <div className="ml-6 space-y-1 pb-2 border-l-2 border-blue-200 pl-3">
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.datacenterStates.iowa}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            datacenterStates: { ...mapOverlays.datacenterStates, iowa: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Iowa</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.datacenterStates.illinois}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            datacenterStates: { ...mapOverlays.datacenterStates, illinois: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Illinois</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.datacenterStates.missouri}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            datacenterStates: { ...mapOverlays.datacenterStates, missouri: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Missouri</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.datacenterStates.nebraska}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            datacenterStates: { ...mapOverlays.datacenterStates, nebraska: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Nebraska</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <Checkbox
+                        checked={mapOverlays.datacenterStates.wisconsin}
+                        onCheckedChange={(checked) =>
+                          onMapOverlaysChange({ 
+                            ...mapOverlays, 
+                            datacenterStates: { ...mapOverlays.datacenterStates, wisconsin: checked as boolean }
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Wisconsin</span>
+                    </label>
+                  </div>
+                )}
+              </div>
               
               {/* Lakes Toggle */}
               <div className="pl-4 space-y-2">

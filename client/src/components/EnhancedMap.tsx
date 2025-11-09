@@ -28,6 +28,13 @@ interface EnhancedMapProps {
   auctionFilters?: any;
   showSubstations?: boolean;
   showDatacenters?: boolean;
+  datacenterStates?: {
+    iowa: boolean;
+    illinois: boolean;
+    missouri: boolean;
+    nebraska: boolean;
+    wisconsin: boolean;
+  };
   showLakes?: boolean;
   lakeTypes?: {
     lakes: boolean;
@@ -79,6 +86,7 @@ export default function EnhancedMap({
   auctionFilters,
   showSubstations = true,
   showDatacenters = true,
+  datacenterStates = { iowa: true, illinois: true, missouri: true, nebraska: true, wisconsin: true },
   showLakes = true,
   lakeTypes = { lakes: true, reservoirs: true },
   showPowerLines = true,
@@ -1406,10 +1414,30 @@ export default function EnhancedMap({
         data: '/substations.geojson'
       });
 
-      // Add datacenters data source
+      // Add datacenters data sources (Iowa + neighboring states)
       map.current!.addSource('datacenters', {
         type: 'geojson',
         data: '/datacentersIowa.geojson'
+      });
+      
+      map.current!.addSource('datacenters-il', {
+        type: 'geojson',
+        data: '/IL_DataCenters.geojson'
+      });
+      
+      map.current!.addSource('datacenters-mo', {
+        type: 'geojson',
+        data: '/MO_DataCenters.geojson'
+      });
+      
+      map.current!.addSource('datacenters-ne', {
+        type: 'geojson',
+        data: '/NE_DataCenters.geojson'
+      });
+      
+      map.current!.addSource('datacenters-wi', {
+        type: 'geojson',
+        data: '/WI_DataCenters.geojson'
       });
 
       // Add lakes data source
@@ -1718,6 +1746,76 @@ export default function EnhancedMap({
               });
               map.current.on('mouseleave', 'datacenters-fill', () => {
                 if (map.current) map.current.getCanvas().style.cursor = '';
+              });
+              
+              // Add neighboring state datacenter layers
+              const neighboringStates = [
+                { id: 'il', source: 'datacenters-il', visible: datacenterStates.illinois },
+                { id: 'mo', source: 'datacenters-mo', visible: datacenterStates.missouri },
+                { id: 'ne', source: 'datacenters-ne', visible: datacenterStates.nebraska },
+                { id: 'wi', source: 'datacenters-wi', visible: datacenterStates.wisconsin }
+              ];
+              
+              neighboringStates.forEach(state => {
+                // Fill layer
+                map.current!.addLayer({
+                  id: `datacenters-${state.id}-fill`,
+                  type: 'fill',
+                  source: state.source,
+                  paint: {
+                    'fill-color': '#2563eb',
+                    'fill-opacity': 0.2
+                  },
+                  layout: {
+                    'visibility': showDatacenters && state.visible ? 'visible' : 'none'
+                  }
+                });
+                
+                // Outline layer
+                map.current!.addLayer({
+                  id: `datacenters-${state.id}-outline`,
+                  type: 'line',
+                  source: state.source,
+                  paint: {
+                    'line-color': '#1e40af',
+                    'line-width': 2,
+                    'line-opacity': 0.6
+                  },
+                  layout: {
+                    'visibility': showDatacenters && state.visible ? 'visible' : 'none'
+                  }
+                });
+                
+                // Marker layer
+                map.current!.addLayer({
+                  id: `datacenters-${state.id}-markers`,
+                  type: 'symbol',
+                  source: state.source,
+                  layout: {
+                    'icon-image': 'server-icon',
+                    'icon-size': 0.8,
+                    'icon-allow-overlap': true,
+                    'visibility': showDatacenters && state.visible ? 'visible' : 'none'
+                  }
+                });
+                
+                // Add click handlers
+                map.current!.on('click', `datacenters-${state.id}-markers`, handleDatacenterClick);
+                map.current!.on('click', `datacenters-${state.id}-fill`, handleDatacenterClick);
+                
+                // Add hover effects
+                map.current!.on('mouseenter', `datacenters-${state.id}-markers`, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+                });
+                map.current!.on('mouseleave', `datacenters-${state.id}-markers`, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = '';
+                });
+                map.current!.on('mouseenter', `datacenters-${state.id}-fill`, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+                });
+                map.current!.on('mouseleave', `datacenters-${state.id}-fill`, () => {
+                  if (map.current) map.current.getCanvas().style.cursor = '';
+                });
               });
             }
           };
@@ -2358,19 +2456,46 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
 
-    const layers = ['datacenters-fill', 'datacenters-outline', 'datacenters-markers'];
-
-    layers.forEach(layerId => {
+    // Iowa datacenters
+    const iowaLayers = ['datacenters-fill', 'datacenters-outline', 'datacenters-markers'];
+    iowaLayers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
         map.current?.setLayoutProperty(
           layerId,
           'visibility',
-          showDatacenters ? 'visible' : 'none'
+          showDatacenters && datacenterStates.iowa ? 'visible' : 'none'
         );
       }
     });
-  }, [showDatacenters]);
+    
+    // Neighboring state datacenters
+    const stateConfigs = [
+      { id: 'il', visible: datacenterStates.illinois },
+      { id: 'mo', visible: datacenterStates.missouri },
+      { id: 'ne', visible: datacenterStates.nebraska },
+      { id: 'wi', visible: datacenterStates.wisconsin }
+    ];
+    
+    stateConfigs.forEach(({ id, visible }) => {
+      const layers = [
+        `datacenters-${id}-fill`,
+        `datacenters-${id}-outline`,
+        `datacenters-${id}-markers`
+      ];
+      
+      layers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(
+            layerId,
+            'visibility',
+            showDatacenters && visible ? 'visible' : 'none'
+          );
+        }
+      });
+    });
+  }, [showDatacenters, datacenterStates]);
 
   // Toggle lakes layer visibility
   useEffect(() => {
