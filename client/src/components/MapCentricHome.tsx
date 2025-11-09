@@ -50,7 +50,7 @@ export default function MapCentricHome() {
     showDatacenters: true,
     datacenterStates: {
       iowa: true,
-      illinois: true,
+      illinois: false,
       missouri: true,
       nebraska: true,
       wisconsin: true

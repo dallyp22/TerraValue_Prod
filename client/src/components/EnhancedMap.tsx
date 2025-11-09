@@ -86,7 +86,7 @@ export default function EnhancedMap({
   auctionFilters,
   showSubstations = true,
   showDatacenters = true,
-  datacenterStates = { iowa: true, illinois: true, missouri: true, nebraska: true, wisconsin: true },
+  datacenterStates = { iowa: true, illinois: false, missouri: true, nebraska: true, wisconsin: true },
   showLakes = true,
   lakeTypes = { lakes: true, reservoirs: true },
   showPowerLines = true,
