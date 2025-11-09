@@ -146,7 +146,13 @@ export default function AuctionDiagnostics() {
   }, [auctionData]);
 
   const auctionsWithoutCoords = useMemo(() => {
-    return auctionData?.auctions?.filter((a: any) => !a.latitude || !a.longitude) || [];
+    return auctionData?.auctions?.filter((a: any) => 
+      (!a.latitude || !a.longitude) && a.status !== 'excluded'
+    ) || [];
+  }, [auctionData]);
+
+  const excludedAuctions = useMemo(() => {
+    return auctionData?.auctions?.filter((a: any) => a.status === 'excluded') || [];
   }, [auctionData]);
 
   useEffect(() => {
@@ -463,13 +469,45 @@ export default function AuctionDiagnostics() {
           </Card>
         )}
 
+        {/* Excluded Auctions (Non-Land) */}
+        {excludedAuctions.length > 0 && (
+          <Card className="border-gray-200 bg-gray-50">
+            <CardHeader>
+              <CardTitle className="text-gray-900">Excluded Listings ({excludedAuctions.length})</CardTitle>
+              <CardDescription>
+                AI identified these as non-land auctions (blog posts, equipment, etc.) - not shown on map
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {excludedAuctions.slice(0, 10).map((auction: any, i: number) => (
+                  <div key={i} className="p-3 border border-gray-300 rounded-lg bg-white">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-medium text-sm">{auction.title}</div>
+                      <Badge variant="secondary" className="text-xs">Excluded</Badge>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {auction.sourceWebsite}
+                    </div>
+                  </div>
+                ))}
+                {excludedAuctions.length > 10 && (
+                  <div className="text-xs text-gray-500 text-center pt-2">
+                    ... and {excludedAuctions.length - 10} more
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Auctions Without Coordinates */}
         {auctionsWithoutCoords.length > 0 && (
           <Card className="border-yellow-200 bg-yellow-50">
             <CardHeader>
               <CardTitle className="text-yellow-900">Auctions Without Coordinates ({auctionsWithoutCoords.length})</CardTitle>
               <CardDescription>
-                These auctions couldn't be geocoded and won't appear on the map
+                Actual land auctions that couldn't be geocoded (out-of-state or missing data)
               </CardDescription>
             </CardHeader>
             <CardContent>

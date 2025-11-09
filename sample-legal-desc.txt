@@ -1,0 +1,6 @@
+Sample legal descriptions to parse:
+1. "Section 10, Township 85N, Range 27W, Polk County, Iowa"
+2. "NE1/4 of Section 23, T82N, R24W"
+3. "E1/2 of SW1/4 of Section 15, Township 83 North, Range 25 West"
+4. "Sections 14, 15, 22, 23, T84N, R26W"
+5. "Part of SE1/4 of Section 36, T81N, R23W, containing 80 acres"

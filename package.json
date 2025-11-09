@@ -12,7 +12,15 @@
     "db:push": "drizzle-kit push",
     "db:soil:push": "drizzle-kit push --config=drizzle-soil.config.ts",
     "db:soil:load": "tsx scripts/load-iowa-soil-data.ts",
-    "db:soil:refresh": "tsx scripts/refresh-materialized-view.ts"
+    "db:soil:refresh": "tsx scripts/refresh-materialized-view.ts",
+    "db:parcels:load": "tsx scripts/load-iowa-parcels.ts",
+    "db:parcels:aggregate": "tsx scripts/aggregate-ownership.ts",
+    "db:parcels:aggregate-adjacent": "tsx scripts/aggregate-adjacent-parcels.ts",
+    "db:parcels:export": "tsx scripts/export-parcels-geojson.ts",
+    "db:parcels:export-all": "tsx scripts/export-all-parcels-single.ts",
+    "test:parcels": "tsx scripts/test-parcel-system.ts",
+    "auctions:geocode": "tsx scripts/geocode-missing-auctions.ts",
+    "auctions:geocode:test": "tsx scripts/test-geocoding-sample.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

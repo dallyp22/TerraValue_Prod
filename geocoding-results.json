@@ -1,0 +1,318 @@
+[
+  {
+    "auction_id": 777,
+    "title": "NO-RESERVE DEALER & FARMER AUCTION",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is titled as a 'NO-RESERVE DEALER & FARMER AUCTION' and mentions a 'Timed Online Auction Format' with 'bidding extensions', which suggests it is likely an auction for equipment or other items rather than land. There is no legal description provided in the Section/Township/Range format, which is typically present in land auctions. The address provided is a physical location in Hamilton, Illinois, but it is not indicative of a land auction. The county is listed as 'N/A', reinforcing the idea that this is not a land auction. Therefore, the confidence level for the street address is high, but the auction is not for land."
+  },
+  {
+    "auction_id": 773,
+    "title": "2-DAY NO-RESERVE COLLECTOR CAR AUCTION",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing is for a collector car auction, not a land auction. There is no mention of any land being sold, nor is there any legal description in the Section/Township/Range format. The address provided is 'Various Locations,' which does not specify a physical location or city, and the county is listed as 'N/A.' The state is mentioned as Iowa, but this does not pertain to a specific land parcel."
+  },
+  {
+    "auction_id": 420,
+    "title": "Dave & Krista McBain & Laurel Dmytrow Farm Retirement Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing title and description suggest a farm retirement auction, which could include land, but there is no explicit mention of land being auctioned. The address provided is for White Fox, SK, which is consistent with the location of the auction but does not specify a particular parcel of land. No legal description in Section/Township/Range format is present in the listing, indicating that specific land parcels are not detailed. Therefore, it is likely that this auction may include equipment or other farm assets rather than land itself."
+  },
+  {
+    "auction_id": 407,
+    "title": "1,478 Acre Row Crop Farm in Madison Parish LA-Investment Opportunity",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 346,
+    "title": "Auctions 101: How Long Does an Auction Last?",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is a guide or article about auctions, not an actual land auction. There is no legal description or physical location provided in the listing. The content focuses on explaining auction durations rather than detailing a specific land auction event."
+  },
+  {
+    "auction_id": 337,
+    "title": "Brian Berube Estate Farm Equipment Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is titled 'Brian Berube Estate Farm Equipment Auction' and described as a 'Timed Online Auction,' which indicates it is focused on equipment rather than land. There is no mention of a legal description in the Section/Township/Range format, nor is there any indication of a specific parcel of land being auctioned. The address provided includes two cities in North Dakota, but no specific street address or county information is given. Therefore, the auction is not for land, and the location information is limited to the state and cities mentioned."
+  },
+  {
+    "auction_id": 333,
+    "title": "Hal Griffith Farm Retirement Auction",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 331,
+    "title": "Online Steffes Auction 7/30",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is for an online auction event focused on equipment sales rather than a specific land auction. There is no mention of any legal land description in the Section/Township/Range format, nor is there a specific street address or physical location provided. The listing lacks details typically associated with land auctions, such as parcel numbers or specific geographic identifiers. The county is marked as N/A, and the state is mentioned as Iowa, but this does not provide sufficient information to determine a specific location for a land auction."
+  },
+  {
+    "auction_id": 264,
+    "title": "Dos and Don’ts When Selling Your Farmland for Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is an article or blog post about the process of selling farmland at auction, rather than an actual land auction listing. There is no specific land being auctioned, and therefore no legal description, street address, city, county, or state information is provided. The content is more focused on general advice and strategies for selling farmland through auction rather than detailing a specific auction event."
+  },
+  {
+    "auction_id": 263,
+    "title": "What To Expect During a Real Estate Auction Process",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is a blog post or article about what to expect during a real estate auction process. It does not contain any specific details about a particular land auction, such as a legal description, street address, or county information. The content is educational in nature, aimed at preparing individuals for future auctions rather than advertising a specific land auction event."
+  },
+  {
+    "auction_id": 262,
+    "title": "Benefits and Risks of Buying Land at Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is a guide or article about the benefits and risks of buying land at auction, rather than an actual land auction listing. There is no specific land parcel being auctioned, and no legal description, street address, city, county, or state information is provided. The content focuses on the auction process rather than a specific property."
+  },
+  {
+    "auction_id": 261,
+    "title": "Auctions 101: Guide Price vs. Reserve Price",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is not an actual land auction. It is an informational article about auction terms, specifically guide price and reserve price, without any specific land or property being auctioned. There is no legal description, street address, city, county, or state information provided that pertains to a specific land auction. The mention of Iowa is in the context of the state, but it does not relate to a specific auction location."
+  },
+  {
+    "auction_id": 253,
+    "title": "Colton & Keri Chabot Farm Equipment Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing is for farm equipment, not land, as indicated by the title and description. There is no legal description in Section/Township/Range format provided, which is typical for land auctions. The address provided is for the location of the auction, not a parcel of land being sold. The city and state are clearly mentioned, but no county is specified, which is consistent with the address format for this type of listing."
+  },
+  {
+    "auction_id": 85,
+    "title": "147.46 +/- Acres Farmland Near Underwood Pott. Co. Iowa",
+    "success": true,
+    "coordinates": {
+      "latitude": 41.3136,
+      "longitude": -95.6378
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Pottawattamie",
+    "is_actual_auction": true,
+    "reasoning": "The listing is clearly for a land auction as it specifies '147.46 +/- Acres Farmland' and mentions a 'Farm Sale'. The location is described in relation to Underwood, Iowa, providing a directional address rather than a specific street address. The county and state are explicitly mentioned as Pottawattamie County, Iowa. No legal description in Section/Township/Range format is provided in the listing."
+  },
+  {
+    "auction_id": 64,
+    "title": "91 Acres m/l in Buena Vista County, Iowa",
+    "success": true,
+    "coordinates": {
+      "latitude": 42.7319,
+      "longitude": -95.1517
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Buena Vista",
+    "is_actual_auction": true,
+    "reasoning": "The listing is for a land auction as it mentions the sale of a tract of farmland in Buena Vista County, Iowa. The address provided is '520th Street, Albert City, IA 50510', which gives a specific location in Albert City, Iowa. The county is inferred from the title and description, which both mention Buena Vista County. However, there is no legal description in the Section/Township/Range format provided in the listing."
+  },
+  {
+    "auction_id": 62,
+    "title": "314 Acres m/l in Cherokee County, Iowa",
+    "success": true,
+    "coordinates": {
+      "latitude": 42.7447,
+      "longitude": -95.6378
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Cherokee",
+    "is_actual_auction": true,
+    "reasoning": "The listing is for a land auction as it mentions '314 Acres m/l in Cherokee County, Iowa' and describes the sale of farmland parcels. The address provided is '620th Street, Washta, IA 51061', which is a physical location in Cherokee County, Iowa. However, there is no specific legal description in the Section/Township/Range format provided in the listing."
+  },
+  {
+    "auction_id": 61,
+    "title": "80 Acres m/l in O'Brien County, IA",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 60,
+    "title": "34 Acres m/l in Palo Alto County, Iowa",
+    "success": true,
+    "coordinates": {
+      "latitude": 43.0758,
+      "longitude": -94.6753
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Palo Alto",
+    "is_actual_auction": true,
+    "reasoning": "The listing is for a 34-acre tract of land in Palo Alto County, Iowa, indicating it is a land auction. The address provided is '310th Street, Ruthven, IA 51358', which gives a specific location in Ruthven, Iowa. The county is mentioned as Palo Alto in the description, confirming the location. No legal description in Section/Township/Range format is provided in the listing."
+  },
+  {
+    "auction_id": 55,
+    "title": "D-Double-U Land Auction",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 54,
+    "title": "54.4 Acres m/l in O'Brien County, Iowa",
+    "success": true,
+    "coordinates": {
+      "latitude": 43.0883,
+      "longitude": -95.6289
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "O'Brien",
+    "is_actual_auction": true,
+    "reasoning": "The listing is for a 54.4-acre tract of farmland in O'Brien County, Iowa, indicating it is a land auction. The address provided is 'Oriole Avenue, Sheldon, IA 51201', which gives a clear location in Sheldon, Iowa. The county is inferred from the title and description mentioning O'Brien County. No legal description in Section/Township/Range format is provided in the listing."
+  },
+  {
+    "auction_id": 51,
+    "title": "311.1 Acres in Macedonia, IA",
+    "success": true,
+    "coordinates": {
+      "latitude": 41.3136,
+      "longitude": -95.6378
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Pottawattamie",
+    "is_actual_auction": true,
+    "reasoning": "The listing is for 311.1 acres of land in Pottawattamie County, Iowa, indicating it is a land auction. The address provided is 614 Dr Van Zee Rd, Oakland, IA 51560, which is in Pottawattamie County, Iowa. The listing does not provide a specific legal description in Section/Township/Range format, so that information is not available. The confidence level for the street address and location details is high because the address is explicitly stated in the listing, and the county and state are confirmed by the description of the property being in Pottawattamie County, Iowa."
+  },
+  {
+    "auction_id": 49,
+    "title": "290.35 Acres in Osceola County, IA",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 43,
+    "title": "Denison Livestock Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing titled 'Denison Livestock Auction' does not provide any indication that it is a land auction. The description mentions 'Special Sales 2025-2026,' which suggests it is related to livestock sales rather than land. There is no legal description in the Section/Township/Range format, nor is there any street address or specific location information provided. The lack of county and state information further supports the conclusion that this is not a land auction listing."
+  },
+  {
+    "auction_id": 41,
+    "title": "What Are the Different Types of Land Auctions",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is an informational article about the different types of land auctions rather than an actual auction listing for a specific piece of land. There is no legal description, street address, city, county, or specific state information provided in the text. The content is focused on educating readers about land auctions in general, not advertising a specific auction event."
+  },
+  {
+    "auction_id": 40,
+    "title": "Auctioneer vs. Real Estate Broker Roles in Farm Sales",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is an article discussing the roles of auctioneers and real estate brokers in farm sales. It does not contain any specific information about a land auction, such as a legal description, street address, or specific location details. Therefore, it is not an actual land auction listing."
+  },
+  {
+    "auction_id": 39,
+    "title": "The Price Is Right—for Who? Farmland Value in Auctions",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is a blog post or article discussing the dynamics of farmland auctions and does not contain specific details about a particular land auction. There is no legal description in Section/Township/Range format, nor is there any street address, city, county, or state information provided. The content focuses on general advice and insights into farmland value in auctions rather than advertising a specific land auction event."
+  },
+  {
+    "auction_id": 38,
+    "title": "The Basics of Land Auctions: A Comprehensive Guide",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is a guide about land auctions, not an actual auction listing. It does not provide any specific location information such as a legal description, street address, city, county, or state. The content is educational in nature, aimed at informing readers about the process of land auctions rather than advertising a specific parcel of land for sale."
+  },
+  {
+    "auction_id": 36,
+    "title": "C & E Schmidt & Sons Farm Ltd. Retirement Auction",
+    "success": false,
+    "error": "All geocoding methods failed"
+  },
+  {
+    "auction_id": 35,
+    "title": "Barrie Dickie & John Wayne Dickie Estate Farm Retirement Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing primarily describes the sale of farm equipment rather than land. There is no mention of a legal description in the Section/Township/Range format, which would indicate a land auction. The address provided is for Strasbourg, SK, which is consistent with the location of the auction but does not specify a street address or legal land description. Therefore, this is not an actual land auction, and the location information is limited to the city and province."
+  },
+  {
+    "auction_id": 33,
+    "title": "Hire Yield Ag Solutions Retirement Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing is for farm equipment, not land. The address provided (SE 14-8-4 W2 Arcola, SK S0C 0G0) is a location in Saskatchewan, Canada, and not a legal land description in the PLSS format used in Iowa. The listing does not mention any land being auctioned, only equipment. Therefore, it is not a land auction, and there is no legal description in the Section/Township/Range format. The address is confidently extracted as it is clearly stated in the listing."
+  },
+  {
+    "auction_id": 32,
+    "title": "Why You Should Sell Your Farmland at Public Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing is a blog post or article discussing the benefits of selling farmland at public auction. It does not provide specific details about a particular land auction, such as a legal description, street address, or location information. The content is focused on general advice and marketing strategies for selling farmland through auctions, rather than advertising a specific piece of land for sale."
+  },
+  {
+    "auction_id": 31,
+    "title": "Farmers Stay Silent During Auctions So Young Man Can Win Bid On Long-Lost Family Farm",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is a blog post or article responding to a viral story about a land auction, rather than an actual land auction listing. There is no specific legal description, street address, city, county, or state information provided in the text. The content focuses on the narrative of the story rather than providing details necessary for a land auction."
+  },
+  {
+    "auction_id": 29,
+    "title": "Why Selling at Auction Often Gets You More Than a Private Sale",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is an article discussing the benefits of selling land at auction rather than a specific land auction listing. There is no legal description, street address, city, county, or state information provided in the text. The content focuses on the advantages of auctions in general, without referencing any particular property or auction event."
+  },
+  {
+    "auction_id": 13,
+    "title": "Closing April 3, 2025 @ 5:00 P.M. - Online Only Coin Auction",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing is for an online coin auction, not a land auction. There is no legal description provided in the Section/Township/Range format, indicating that no land is being auctioned. The address provided is for the location of the auction company or event, not for a parcel of land being sold. The city and state are clearly mentioned, but the county is not specified, hence left blank."
+  },
+  {
+    "auction_id": 11,
+    "title": "Live & Online Auction Of Fantastic Line Up Of Collector Cars!",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The auction listing is for collector cars and memorabilia, not for land. There is no legal description provided in the Section/Township/Range format, indicating that the auction does not involve land parcels. The street address is clearly stated as '1230 10th ST., Rock Valley, IA', and the city and state are explicitly mentioned, providing high confidence in the location information. The county is not specified in the listing."
+  },
+  {
+    "auction_id": 9,
+    "title": "120+/- Floyd County, IA - SEALED BID AUCTION",
+    "success": true,
+    "coordinates": {
+      "latitude": 43.0664,
+      "longitude": -92.7928
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Floyd County",
+    "is_actual_auction": true,
+    "reasoning": "The listing is clearly for a land auction as it describes two tracts of farmland available for purchase. The address provided is 'TBD Nuthatch Ave', which indicates a specific location, although the exact city is not mentioned. The county is specified as Floyd County, and the state is Iowa. There is no legal description in the Section/Township/Range format provided in the listing."
+  },
+  {
+    "auction_id": 8,
+    "title": "Revolutionizing Farmland Auction Sales",
+    "success": false,
+    "is_actual_auction": false,
+    "reasoning": "The listing provided is an article discussing the impact of technology on farmland auctions, rather than an actual land auction listing. There is no specific land being auctioned, and no legal description, street address, city, county, or state information is provided. The content focuses on general trends and strategies in farmland auctions, not on a specific property sale."
+  },
+  {
+    "auction_id": 2,
+    "title": "Black Hawk County, Iowa 125.22 +/- Acre Sealed Bid Sale 2 Tracts",
+    "success": true,
+    "coordinates": {
+      "latitude": 42.4697,
+      "longitude": -92.3096
+    },
+    "method": "county_centroid",
+    "confidence": "low",
+    "county": "Black Hawk",
+    "is_actual_auction": true,
+    "reasoning": "The listing title specifies a land auction in Black Hawk County, Iowa, for 125.22 acres divided into 2 tracts. However, there is no detailed legal description provided in the Section/Township/Range format, nor is there a specific street address or city mentioned. The county and state are inferred from the title, providing high confidence for the location at the county level."
+  }
+]

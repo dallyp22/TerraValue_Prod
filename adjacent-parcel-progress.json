@@ -1,0 +1,19 @@
+{
+  "completedCounties": [
+    "ADAIR",
+    "ADAMS",
+    "ALLAMAKEE",
+    "APPANOOSE",
+    "AUDUBON",
+    "BENTON",
+    "BLACK HAWK",
+    "BOONE",
+    "BREMER",
+    "BUCHANAN",
+    "BUENA VISTA",
+    "BUTLER",
+    "CALHOUN"
+  ],
+  "totalClusters": 76626,
+  "totalParcelsProcessed": 176393
+}

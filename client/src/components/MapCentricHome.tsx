@@ -344,7 +344,7 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
-          useSelfHostedParcels={false} // Using original ArcGIS method for now - switch to true to use self-hosted
+          useSelfHostedParcels={true} // Testing aggregated parcels in ADAIR County
         />
 
         {/* Map Controls */}

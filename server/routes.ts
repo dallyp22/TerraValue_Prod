@@ -8,10 +8,21 @@ import { auctionScraperService } from "./services/auctionScraper.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { parcelAggregationService } from "./services/parcelAggregation.js";
-import { propertyFormSchema, auctions } from "@shared/schema";
+import { propertyFormSchema, auctions, parcels } from "@shared/schema";
 import { db } from "./db.js";
 import { and, gte, lte, eq, asc, desc, sql } from "drizzle-orm";
 import { getCountyCentroid } from "./services/iowaCountyCentroids.js";
+import { generateParcelTile, generateHybridTile, getTileCacheStats, clearTileCache } from "./services/parcelTiles.js";
+import { 
+  findParcelsAtPoint, 
+  getParcelsInBounds, 
+  getParcelsByOwner,
+  getOwnershipStats,
+  searchOwners,
+  getTopLandowners,
+  findSimilarOwners
+} from "./services/parcelOwnership.js";
+import { pool } from "./db.js";
 
 // Simple rate limiting middleware
 const createRateLimiter = (maxRequests: number, windowMs: number) => {
@@ -76,8 +87,15 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
-  // Apply general rate limiting to all API routes
-  app.use('/api', generalRateLimiter);
+  // Apply general rate limiting to all API routes EXCEPT tiles
+  // Tiles need to be excluded because maps load dozens of tiles simultaneously
+  app.use('/api', (req: any, res: any, next: any) => {
+    // Skip rate limiting for tile endpoints
+    if (req.path.includes('/tiles/')) {
+      return next();
+    }
+    return generalRateLimiter(req, res, next);
+  });
   
   // Start valuation process
   const valuationHandler = async (req: any, res: any) => {
@@ -1200,6 +1218,364 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({ 
         success: false, 
         message: 'Failed to update auction coordinates' 
+      });
+    }
+  });
+
+  // ===============================================
+  // PARCEL DATA ENDPOINTS
+  // ===============================================
+
+  // Vector tile endpoint - Generate MVT tiles for parcels
+  app.get("/api/parcels/tiles/:z/:x/:y.mvt", async (req, res) => {
+    try {
+      const z = parseInt(req.params.z);
+      const x = parseInt(req.params.x);
+      const y = parseInt(req.params.y);
+      
+      // Validate tile coordinates
+      if (isNaN(z) || isNaN(x) || isNaN(y)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid tile coordinates' 
+        });
+      }
+      
+      if (z < 0 || z > 22) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Zoom level must be between 0 and 22' 
+        });
+      }
+      
+      // Generate tile
+      const tile = await generateParcelTile(z, x, y, pool);
+      
+      // Always set CORS header
+      res.set('Access-Control-Allow-Origin', '*');
+      
+      if (!tile || tile.length === 0) {
+        // Return empty tile with CORS header
+        res.status(204).send();
+        return;
+      }
+      
+      // Set appropriate headers for MVT
+      res.set({
+        'Content-Type': 'application/x-protobuf',
+        'Cache-Control': 'public, max-age=3600'
+      });
+      
+      res.send(tile);
+    } catch (error) {
+      console.error("Tile generation error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to generate tile' 
+      });
+    }
+  });
+
+  // Hybrid tile endpoint (both parcels and ownership layers)
+  app.get("/api/parcels/tiles/hybrid/:z/:x/:y.mvt", async (req, res) => {
+    try {
+      const z = parseInt(req.params.z);
+      const x = parseInt(req.params.x);
+      const y = parseInt(req.params.y);
+      
+      if (isNaN(z) || isNaN(x) || isNaN(y)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid tile coordinates' 
+        });
+      }
+      
+      const tile = await generateHybridTile(z, x, y, pool);
+      
+      // Always set CORS header
+      res.set('Access-Control-Allow-Origin', '*');
+      
+      if (!tile || tile.length === 0) {
+        res.status(204).send();
+        return;
+      }
+      
+      res.set({
+        'Content-Type': 'application/x-protobuf',
+        'Cache-Control': 'public, max-age=3600'
+      });
+      
+      res.send(tile);
+    } catch (error) {
+      console.error("Hybrid tile generation error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to generate hybrid tile' 
+      });
+    }
+  });
+
+  // Get tile cache statistics
+  app.get("/api/parcels/tiles/stats", async (req, res) => {
+    try {
+      const stats = getTileCacheStats();
+      res.json({ success: true, stats });
+    } catch (error) {
+      console.error("Tile stats error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to get tile statistics' 
+      });
+    }
+  });
+
+  // Clear tile cache
+  app.post("/api/parcels/tiles/clear-cache", async (req, res) => {
+    try {
+      clearTileCache();
+      res.json({ success: true, message: 'Tile cache cleared' });
+    } catch (error) {
+      console.error("Cache clear error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to clear cache' 
+      });
+    }
+  });
+
+  // Search for parcels at a point (lat/lng)
+  app.get("/api/parcels/search", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      
+      if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Valid latitude and longitude are required' 
+        });
+      }
+      
+      const results = await findParcelsAtPoint(lng, lat, pool);
+      
+      res.json({ 
+        success: true, 
+        parcels: results,
+        count: results.length
+      });
+    } catch (error) {
+      console.error("Parcel search error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to search parcels' 
+      });
+    }
+  });
+
+  // Get parcel by ID
+  app.get("/api/parcels/:id", async (req, res) => {
+    try {
+      const parcelId = parseInt(req.params.id);
+      
+      if (isNaN(parcelId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid parcel ID' 
+        });
+      }
+      
+      const parcel = await db.query.parcels.findFirst({
+        where: eq(parcels.id, parcelId)
+      });
+      
+      if (!parcel) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Parcel not found' 
+        });
+      }
+      
+      // Get geometry as GeoJSON
+      const geomResult = await pool.query(
+        'SELECT ST_AsGeoJSON(geom) as geometry FROM parcels WHERE id = $1',
+        [parcelId]
+      );
+      
+      const geometry = geomResult.rows[0]?.geometry 
+        ? JSON.parse(geomResult.rows[0].geometry) 
+        : null;
+      
+      res.json({ 
+        success: true, 
+        parcel: {
+          ...parcel,
+          geometry,
+          acres: parcel.areaSqm ? (parcel.areaSqm / 4046.86).toFixed(2) : null
+        }
+      });
+    } catch (error) {
+      console.error("Parcel fetch error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch parcel' 
+      });
+    }
+  });
+
+  // Get parcels by owner (normalized name)
+  app.get("/api/parcels/owner/:name", async (req, res) => {
+    try {
+      const normalizedOwner = decodeURIComponent(req.params.name);
+      const stats = await getOwnershipStats(normalizedOwner);
+      
+      if (!stats) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'No parcels found for this owner' 
+        });
+      }
+      
+      res.json({ success: true, ...stats });
+    } catch (error) {
+      console.error("Owner parcels error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch owner parcels' 
+      });
+    }
+  });
+
+  // Get parcels by county
+  app.get("/api/parcels/county/:county", async (req, res) => {
+    try {
+      const county = decodeURIComponent(req.params.county);
+      const limit = parseInt(req.query.limit as string) || 1000;
+      
+      const result = await db.select()
+        .from(parcels)
+        .where(eq(parcels.countyName, county))
+        .limit(Math.min(limit, 5000));
+      
+      res.json({ 
+        success: true, 
+        parcels: result,
+        count: result.length
+      });
+    } catch (error) {
+      console.error("County parcels error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch county parcels' 
+      });
+    }
+  });
+
+  // Search for owners (fuzzy matching)
+  app.get("/api/parcels/ownership/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      if (!query || query.trim().length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Search query is required' 
+        });
+      }
+      
+      const results = await searchOwners(query, limit);
+      
+      res.json({ 
+        success: true, 
+        owners: results,
+        count: results.length
+      });
+    } catch (error) {
+      console.error("Owner search error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to search owners' 
+      });
+    }
+  });
+
+  // Find similar owner names
+  app.get("/api/parcels/ownership/similar", async (req, res) => {
+    try {
+      const name = req.query.name as string;
+      const threshold = parseInt(req.query.threshold as string) || 3;
+      
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Owner name is required' 
+        });
+      }
+      
+      const similar = await findSimilarOwners(name, threshold);
+      
+      res.json({ 
+        success: true, 
+        similarOwners: similar,
+        count: similar.length
+      });
+    } catch (error) {
+      console.error("Similar owners error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to find similar owners' 
+      });
+    }
+  });
+
+  // Get top landowners
+  app.get("/api/parcels/ownership/top", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const topOwners = await getTopLandowners(Math.min(limit, 1000));
+      
+      res.json({ 
+        success: true, 
+        owners: topOwners,
+        count: topOwners.length
+      });
+    } catch (error) {
+      console.error("Top landowners error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch top landowners' 
+      });
+    }
+  });
+
+  // Get parcels within bounding box
+  app.get("/api/parcels/bounds", async (req, res) => {
+    try {
+      const minLng = parseFloat(req.query.minLng as string);
+      const minLat = parseFloat(req.query.minLat as string);
+      const maxLng = parseFloat(req.query.maxLng as string);
+      const maxLat = parseFloat(req.query.maxLat as string);
+      const limit = parseInt(req.query.limit as string) || 1000;
+      
+      if (isNaN(minLng) || isNaN(minLat) || isNaN(maxLng) || isNaN(maxLat)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Valid bounding box coordinates are required' 
+        });
+      }
+      
+      const results = await getParcelsInBounds(minLng, minLat, maxLng, maxLat, pool, limit);
+      
+      res.json({ 
+        success: true, 
+        parcels: results,
+        count: results.length
+      });
+    } catch (error) {
+      console.error("Bounds search error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to search parcels in bounds' 
       });
     }
   });

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, json, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -94,6 +94,61 @@ export const auctions = pgTable("auctions", {
   status: text("status").default("active") // "active", "sold", "cancelled"
 });
 
+// Iowa Parcels - Property ownership data with PostGIS geometries
+export const parcels = pgTable("parcels", {
+  id: serial("id").primaryKey(),
+  countyName: text("county_name"),
+  stateParcelId: text("state_parcel_id"),
+  parcelNumber: text("parcel_number"),
+  parcelClass: text("parcel_class"),
+  deedHolder: text("deed_holder"),
+  deedHolderNormalized: text("deed_holder_normalized"), // For fuzzy matching
+  areaSqm: real("area_sqm"), // From Shape__Area
+  lengthM: real("length_m"), // From Shape__Length
+  // Note: geom column added via raw SQL as PostGIS MULTIPOLYGON
+  // Will be added during migration: AddGeometryColumn('parcels', 'geom', 4326, 'MULTIPOLYGON', 2)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  parcelNumberIdx: index("parcels_parcel_number_idx").on(table.parcelNumber),
+  deedHolderIdx: index("parcels_deed_holder_idx").on(table.deedHolder),
+  deedHolderNormalizedIdx: index("parcels_deed_holder_normalized_idx").on(table.deedHolderNormalized),
+  countyNameIdx: index("parcels_county_name_idx").on(table.countyName),
+  // Spatial index on geom will be added via raw SQL: CREATE INDEX parcels_geom_idx ON parcels USING GIST(geom)
+}));
+
+// Parcel Ownership Groups - Aggregated parcels by owner (ALL parcels, even non-adjacent)
+export const parcelOwnershipGroups = pgTable("parcel_ownership_groups", {
+  id: serial("id").primaryKey(),
+  normalizedOwner: text("normalized_owner").notNull().unique(),
+  parcelCount: integer("parcel_count").notNull().default(0),
+  totalAcres: real("total_acres").notNull().default(0),
+  parcelIds: json("parcel_ids").$type<number[]>(), // Array of parcel IDs
+  // Note: combined_geom column added via raw SQL as PostGIS MULTIPOLYGON
+  // Will be added during migration: AddGeometryColumn('parcel_ownership_groups', 'combined_geom', 4326, 'MULTIPOLYGON', 2)
+  lastUpdated: timestamp("last_updated").defaultNow(),
+}, (table) => ({
+  normalizedOwnerIdx: index("ownership_groups_normalized_owner_idx").on(table.normalizedOwner),
+  // Spatial index on combined_geom will be added via raw SQL
+}));
+
+// Parcel Aggregated - ONLY adjacent/touching parcels combined by owner (like Harrison County)
+export const parcelAggregated = pgTable("parcel_aggregated", {
+  id: serial("id").primaryKey(),
+  normalizedOwner: text("normalized_owner").notNull(),
+  county: text("county").notNull(),
+  parcelIds: json("parcel_ids").$type<number[]>(), // Array of adjacent parcel IDs in this cluster
+  parcelCount: integer("parcel_count").notNull(),
+  totalAcres: real("total_acres").notNull(),
+  // Note: geom column added via raw SQL as PostGIS MULTIPOLYGON
+  // Will be added during migration: AddGeometryColumn('parcel_aggregated', 'geom', 4326, 'MULTIPOLYGON', 2)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  ownerCountyIdx: index("aggregated_owner_county_idx").on(table.normalizedOwner, table.county),
+  countyIdx: index("aggregated_county_idx").on(table.county),
+  ownerIdx: index("aggregated_owner_idx").on(table.normalizedOwner),
+  // Spatial index: CREATE INDEX parcel_aggregated_geom_idx ON parcel_aggregated USING GIST(geom)
+}));
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -180,6 +235,12 @@ export type PropertyForm = z.infer<typeof propertyFormSchema>;
 export type PropertyImprovement = z.infer<typeof propertyImprovementSchema>;
 export type Auction = typeof auctions.$inferSelect;
 export type InsertAuction = typeof auctions.$inferInsert;
+export type Parcel = typeof parcels.$inferSelect;
+export type InsertParcel = typeof parcels.$inferInsert;
+export type ParcelOwnershipGroup = typeof parcelOwnershipGroups.$inferSelect;
+export type InsertParcelOwnershipGroup = typeof parcelOwnershipGroups.$inferInsert;
+export type ParcelAggregated = typeof parcelAggregated.$inferSelect;
+export type InsertParcelAggregated = typeof parcelAggregated.$inferInsert;
 
 export interface ValuationBreakdown {
   baseValue: number;
