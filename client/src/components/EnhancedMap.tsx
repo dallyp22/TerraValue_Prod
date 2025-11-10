@@ -1020,7 +1020,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-fill',
         type: 'fill',
         source: 'harrison-parcels',
-        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
+        'source-layer': 'harrison_county_all_parcels_o-7g2t48',
         paint: {
           'fill-color': '#10b981',
           'fill-opacity': 0.15
@@ -1034,7 +1034,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-outline',
         type: 'line',
         source: 'harrison-parcels',
-        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
+        'source-layer': 'harrison_county_all_parcels_o-7g2t48',
         paint: {
           'line-color': '#10b981',
           'line-width': 2,
@@ -1049,7 +1049,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-labels',
         type: 'symbol',
         source: 'harrison-parcels',
-        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
+        'source-layer': 'harrison_county_all_parcels_o-7g2t48',
         layout: {
           'text-field': [
             'case',
@@ -1094,7 +1094,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-selected',
         type: 'line',
         source: 'harrison-parcels',
-        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
+        'source-layer': 'harrison_county_all_parcels_o-7g2t48',
         paint: {
           'line-color': '#ef4444',
           'line-width': 6,
@@ -1136,7 +1136,7 @@ export default function EnhancedMap({
             
             // Query ALL features with the same parcel number to get all sections
             const allFeatures = map.current.querySourceFeatures('harrison-parcels', {
-              sourceLayer: 'dpolivka2298m684w2',  // Updated for new tileset
+              sourceLayer: 'harrison_county_all_parcels_o-7g2t48',
               filter: ['==', ['get', 'parcelnumb'], parcelNumber]
             });
             
