@@ -510,10 +510,16 @@ export default function EnhancedMap({
       console.log('Parcel data received:', data.features?.length || 0, 'features');
       
       if (data.features && data.features.length > 0) {
+        // IMPORTANT: Aggregate parcels by owner for Harrison County (and other non-self-hosted counties)
+        const aggregatedData = {
+          ...data,
+          features: aggregateParcelsByOwner(data.features)
+        };
+        
         const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
         if (source) {
-          source.setData(data);
-          console.log(`Loaded ${data.features.length} parcels`);
+          source.setData(aggregatedData);
+          console.log(`Loaded ${data.features.length} parcels → ${aggregatedData.features.length} after aggregation`);
         }
       } else if (data.properties?.exceededTransferLimit) {
         // Too many features - zoom in more
@@ -576,10 +582,7 @@ export default function EnhancedMap({
           },
           'harrison-parcels': {
             type: 'vector',
-            tiles: [
-              `https://a.tiles.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
-              `https://b.tiles.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
-            ],
+            url: `mapbox://dpolivka22.98m684w2?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
             minzoom: 0,
             maxzoom: 16
           },
@@ -1017,7 +1020,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-fill',
         type: 'fill',
         source: 'harrison-parcels',
-        'source-layer': 'TMV-79tjod',
+        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
         paint: {
           'fill-color': '#10b981',
           'fill-opacity': 0.15
@@ -1031,7 +1034,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-outline',
         type: 'line',
         source: 'harrison-parcels',
-        'source-layer': 'TMV-79tjod',
+        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
         paint: {
           'line-color': '#10b981',
           'line-width': 2,
@@ -1046,7 +1049,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-labels',
         type: 'symbol',
         source: 'harrison-parcels',
-        'source-layer': 'TMV-79tjod',
+        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
         layout: {
           'text-field': [
             'case',
@@ -1091,7 +1094,7 @@ export default function EnhancedMap({
         id: 'harrison-parcels-selected',
         type: 'line',
         source: 'harrison-parcels',
-        'source-layer': 'TMV-79tjod',
+        'source-layer': 'dpolivka2298m684w2',  // Updated for new tileset
         paint: {
           'line-color': '#ef4444',
           'line-width': 6,
@@ -1133,7 +1136,7 @@ export default function EnhancedMap({
             
             // Query ALL features with the same parcel number to get all sections
             const allFeatures = map.current.querySourceFeatures('harrison-parcels', {
-              sourceLayer: 'TMV-79tjod',
+              sourceLayer: 'dpolivka2298m684w2',  // Updated for new tileset
               filter: ['==', ['get', 'parcelnumb'], parcelNumber]
             });
             
@@ -2306,7 +2309,7 @@ export default function EnhancedMap({
 
     // Get all features from Harrison County tileset
     const features = map.current.querySourceFeatures('harrison-parcels', {
-      sourceLayer: 'TMV-79tjod'
+      sourceLayer: 'dpolivka2298m684w2'  // Updated for new tileset
     });
 
     if (features.length === 0) return;
