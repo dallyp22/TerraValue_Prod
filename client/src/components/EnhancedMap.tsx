@@ -436,14 +436,26 @@ export default function EnhancedMap({
         map.current.setLayoutProperty('harrison-parcels-fill', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
-        // Hide regular parcel labels when in Harrison County
-        const regularLayer = map.current.getLayer('parcels-labels');
-        if (regularLayer) {
-          map.current.setLayoutProperty('parcels-labels', 'visibility', 'none');
-        }
         map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'visible');
         
-        // Clear the default parcel source to avoid overlap
+        // Hide ALL other parcel layers (regular and self-hosted)
+        const regularLayer = map.current.getLayer('parcels-labels');
+        if (regularLayer) map.current.setLayoutProperty('parcels-labels', 'visibility', 'none');
+        
+        const parcelFill = map.current.getLayer('parcels-fill');
+        const parcelOutline = map.current.getLayer('parcels-outline');
+        if (parcelFill) map.current.setLayoutProperty('parcels-fill', 'visibility', 'none');
+        if (parcelOutline) map.current.setLayoutProperty('parcels-outline', 'visibility', 'none');
+        
+        // Hide ownership layers (self-hosted aggregated parcels)
+        const ownershipFill = map.current.getLayer('ownership-fill');
+        const ownershipOutline = map.current.getLayer('ownership-outline');
+        const ownershipLabels = map.current.getLayer('ownership-labels');
+        if (ownershipFill) map.current.setLayoutProperty('ownership-fill', 'visibility', 'none');
+        if (ownershipOutline) map.current.setLayoutProperty('ownership-outline', 'visibility', 'none');
+        if (ownershipLabels) map.current.setLayoutProperty('ownership-labels', 'visibility', 'none');
+        
+        // Clear the default parcel GeoJSON source to avoid overlap
         const defaultSource = map.current.getSource('parcels') as maplibregl.GeoJSONSource;
         if (defaultSource) {
           defaultSource.setData({ type: 'FeatureCollection', features: [] });
@@ -458,10 +470,27 @@ export default function EnhancedMap({
         map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'none');
         map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', 'none');
         map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'none');
-        // Re-enable regular parcel labels when outside Harrison County
+        
+        // Re-enable regular/self-hosted parcel layers when outside Harrison County
         const regularLayer = map.current.getLayer('parcels-labels');
         if (regularLayer) {
           map.current.setLayoutProperty('parcels-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
+        }
+        
+        // Re-enable parcel layers (for both GeoJSON and vector tiles)
+        const parcelFill = map.current.getLayer('parcels-fill');
+        const parcelOutline = map.current.getLayer('parcels-outline');
+        if (parcelFill) map.current.setLayoutProperty('parcels-fill', 'visibility', 'visible');
+        if (parcelOutline) map.current.setLayoutProperty('parcels-outline', 'visibility', 'visible');
+        
+        // Re-enable ownership layers if using self-hosted tiles
+        if (useSelfHostedParcels && map.current.getZoom() < 14) {
+          const ownershipFill = map.current.getLayer('ownership-fill');
+          const ownershipOutline = map.current.getLayer('ownership-outline');
+          const ownershipLabels = map.current.getLayer('ownership-labels');
+          if (ownershipFill) map.current.setLayoutProperty('ownership-fill', 'visibility', 'visible');
+          if (ownershipOutline) map.current.setLayoutProperty('ownership-outline', 'visibility', 'visible');
+          if (ownershipLabels) map.current.setLayoutProperty('ownership-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
         }
       }
     }
