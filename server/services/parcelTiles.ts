@@ -33,6 +33,7 @@ export async function generateParcelTile(
     if (z < 14) {
       // Show aggregated ADJACENT parcels for lower zoom levels (like Harrison County)
       // Uses parcel_aggregated table which only combines touching parcels
+      // EXCLUDE Harrison County - it has its own Mapbox tileset
       sql = `
         WITH mvtgeom AS (
           SELECT 
@@ -49,6 +50,7 @@ export async function generateParcelTile(
           FROM parcel_aggregated
           WHERE geom && ST_TileEnvelope($1, $2, $3)
             AND parcel_count > 1
+            AND county != 'HARRISON'  -- Exclude Harrison County
         )
         SELECT ST_AsMVT(mvtgeom.*, 'ownership', 4096, 'geom')
         FROM mvtgeom
@@ -56,6 +58,7 @@ export async function generateParcelTile(
       `;
     } else {
       // Show individual parcels for high zoom levels
+      // EXCLUDE Harrison County - it has its own Mapbox tileset
       sql = `
         WITH mvtgeom AS (
           SELECT 
@@ -75,6 +78,7 @@ export async function generateParcelTile(
             ROUND((area_sqm / 4046.86)::numeric, 2) as acres
           FROM parcels
           WHERE geom && ST_TileEnvelope($1, $2, $3)
+            AND county_name != 'HARRISON'  -- Exclude Harrison County
         )
         SELECT ST_AsMVT(mvtgeom.*, 'parcels', 4096, 'geom')
         FROM mvtgeom
