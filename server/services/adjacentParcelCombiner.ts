@@ -124,7 +124,7 @@ export async function processCountyAggregation(
             cluster_id,
             array_agg(id) as parcel_ids,
             COUNT(*) as parcel_count,
-            SUM(area_sqm) / 4046.86 as total_acres,
+            COALESCE(SUM(area_sqm), 0) / 4046.86 as total_acres,
             ST_Union(geom) as combined_geom
           FROM clustered
           GROUP BY cluster_id

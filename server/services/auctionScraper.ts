@@ -62,7 +62,7 @@ export class AuctionScraperService {
     { name: 'Green Real Estate & Auction', url: 'https://www.greenrealestate-auction.com', searchPath: '/#auctions-start' },
     { name: 'Iowa Land Sales', url: 'https://iowalandsales.com', searchPath: '/iowa-farm-real-estate/' },
     { name: 'Sullivan Auctioneers', url: 'https://www.sullivanauctioneers.com' },
-    { name: 'BigIron', url: 'https://www.bigiron.com', searchPath: '/sale/farmland-property-for-sale' },
+    { name: 'BigIron', url: 'https://www.bigiron.com', searchPath: '/Lots?distance=500&filter=Open&industry=RealEstate&provider=BigIron%7CSullivan&categories=Real+Estate+%3A+Farmland+Property%7CReal+Estate+%3A+Acreage+Property' },
     { name: 'Central States Real Estate', url: 'https://centralstatesrealestate.com', searchPath: '/properties/land-auctions/' },
     { name: 'The Acre Co', url: 'https://theacreco.com' }
   ];
