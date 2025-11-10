@@ -297,12 +297,19 @@ export default function EnhancedMap({
       north: 41.866
     };
     
-    // Removed debugging logs as system is now operational
-    
-    return center.lng >= harrisonBounds.west && 
+    const inHarrison = center.lng >= harrisonBounds.west && 
            center.lng <= harrisonBounds.east && 
            center.lat >= harrisonBounds.south && 
            center.lat <= harrisonBounds.north;
+    
+    // Debug logging for Harrison County issue
+    console.log('🔍 Harrison Check:', {
+      center: { lat: center.lat.toFixed(4), lng: center.lng.toFixed(4) },
+      inHarrison,
+      zoom: map.current.getZoom()
+    });
+    
+    return inHarrison;
   };
 
   // Function to load auctions within current map bounds
@@ -430,8 +437,10 @@ export default function EnhancedMap({
     
     // Check if we're in Harrison County and should use the custom tileset
     if (isInHarrisonCounty()) {
+      console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset');
       // Show Harrison County layers if they exist
       const harrisonSource = map.current.getSource('harrison-parcels');
+      console.log('Harrison source exists?', !!harrisonSource);
       if (harrisonSource) {
         map.current.setLayoutProperty('harrison-parcels-fill', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'visible');
@@ -439,13 +448,23 @@ export default function EnhancedMap({
         map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'visible');
         
         // Hide ALL other parcel layers (regular and self-hosted)
+        console.log('🚫 Hiding other parcel layers for Harrison County');
         const regularLayer = map.current.getLayer('parcels-labels');
-        if (regularLayer) map.current.setLayoutProperty('parcels-labels', 'visibility', 'none');
+        if (regularLayer) {
+          map.current.setLayoutProperty('parcels-labels', 'visibility', 'none');
+          console.log('  - Hidden parcels-labels');
+        }
         
         const parcelFill = map.current.getLayer('parcels-fill');
         const parcelOutline = map.current.getLayer('parcels-outline');
-        if (parcelFill) map.current.setLayoutProperty('parcels-fill', 'visibility', 'none');
-        if (parcelOutline) map.current.setLayoutProperty('parcels-outline', 'visibility', 'none');
+        if (parcelFill) {
+          map.current.setLayoutProperty('parcels-fill', 'visibility', 'none');
+          console.log('  - Hidden parcels-fill');
+        }
+        if (parcelOutline) {
+          map.current.setLayoutProperty('parcels-outline', 'visibility', 'none');
+          console.log('  - Hidden parcels-outline');
+        }
         
         // Hide ownership layers (self-hosted aggregated parcels)
         const ownershipFill = map.current.getLayer('ownership-fill');
@@ -585,7 +604,7 @@ export default function EnhancedMap({
             tiles: [
               `https://api.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
             ],
-            minzoom: 0,
+            minzoom: 12,  // Tileset only has data from zoom 12+
             maxzoom: 16
           },
           'state-borders': {
