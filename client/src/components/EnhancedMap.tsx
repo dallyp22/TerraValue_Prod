@@ -582,7 +582,9 @@ export default function EnhancedMap({
           },
           'harrison-parcels': {
             type: 'vector',
-            url: `mapbox://dpolivka22.98m684w2?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
+            tiles: [
+              `https://api.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
+            ],
             minzoom: 0,
             maxzoom: 16
           },
