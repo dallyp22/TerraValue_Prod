@@ -577,8 +577,8 @@ export default function EnhancedMap({
           'harrison-parcels': {
             type: 'vector',
             tiles: [
-              `https://a.tiles.mapbox.com/v4/dpolivka22.3l1693dn/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
-              `https://b.tiles.mapbox.com/v4/dpolivka22.3l1693dn/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
+              `https://a.tiles.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
+              `https://b.tiles.mapbox.com/v4/dpolivka22.98m684w2/{z}/{x}/{y}.vector.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`
             ],
             minzoom: 0,
             maxzoom: 16
