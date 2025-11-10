@@ -352,7 +352,7 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
-          useSelfHostedParcels={true} // Testing aggregated parcels in ADAIR County
+          useSelfHostedParcels={false} // Using ArcGIS method - Harrison County works perfectly this way
         />
 
         {/* Map Controls */}
