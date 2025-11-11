@@ -35,7 +35,7 @@ export async function generateParcelTile(
       // Uses parcel_aggregated table which only combines touching parcels
       // EXCLUDE Harrison County - it has its own Mapbox tileset
       sql = `
-        WITH mvtgeom AS (
+        WITH aggregated AS (
           SELECT 
             ST_AsMVTGeom(
               geom,
@@ -49,11 +49,39 @@ export async function generateParcelTile(
             ROUND(total_acres::numeric, 1) as acres
           FROM parcel_aggregated
           WHERE geom && ST_TileEnvelope($1, $2, $3)
-            AND parcel_count > 1
             AND county != 'HARRISON'  -- Exclude Harrison County
+        ),
+        single_parcels AS (
+          -- Include single parcels that aren't in any aggregated cluster
+          SELECT 
+            ST_AsMVTGeom(
+              geom,
+              ST_TileEnvelope($1, $2, $3),
+              4096,
+              256,
+              true
+            ) AS geom,
+            deed_holder as owner,
+            1 as parcel_count,
+            ROUND((area_sqm / 4046.86)::numeric, 1) as acres
+          FROM parcels
+          WHERE geom && ST_TileEnvelope($1, $2, $3)
+            AND county_name != 'HARRISON'
+            AND deed_holder_normalized IS NOT NULL
+            -- Only include if NOT in parcel_aggregated
+            AND NOT EXISTS (
+              SELECT 1 FROM parcel_aggregated pa
+              WHERE parcels.id = ANY((pa.parcel_ids::text)::int[])
+                AND pa.county = parcels.county_name
+            )
+        ),
+        combined AS (
+          SELECT * FROM aggregated
+          UNION ALL
+          SELECT * FROM single_parcels
         )
-        SELECT ST_AsMVT(mvtgeom.*, 'ownership', 4096, 'geom')
-        FROM mvtgeom
+        SELECT ST_AsMVT(combined.*, 'ownership', 4096, 'geom')
+        FROM combined
         WHERE geom IS NOT NULL
       `;
     } else {
