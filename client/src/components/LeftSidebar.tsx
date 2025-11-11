@@ -329,28 +329,20 @@ export default function LeftSidebar({
               </div>
               <div className="quick-acres flex gap-2 mt-3">
                 <Button
-                  variant={filters.minAcreage === 0 && filters.maxAcreage === 40 ? 'default' : 'outline'}
+                  variant={filters.minAcreage === 0 && filters.maxAcreage === 80 ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => updateFilters({ minAcreage: 0, maxAcreage: 40 })}
+                  onClick={() => updateFilters({ minAcreage: 0, maxAcreage: 80 })}
                   className="flex-1 text-xs"
                 >
-                  0-40
+                  0-80
                 </Button>
                 <Button
-                  variant={filters.minAcreage === 40 && filters.maxAcreage === 160 ? 'default' : 'outline'}
+                  variant={filters.minAcreage === 80 && filters.maxAcreage === 1000 ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => updateFilters({ minAcreage: 40, maxAcreage: 160 })}
+                  onClick={() => updateFilters({ minAcreage: 80, maxAcreage: 1000 })}
                   className="flex-1 text-xs"
                 >
-                  40-160
-                </Button>
-                <Button
-                  variant={filters.minAcreage === 160 && filters.maxAcreage === 1000 ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => updateFilters({ minAcreage: 160, maxAcreage: 1000 })}
-                  className="flex-1 text-xs"
-                >
-                  160+
+                  80+
                 </Button>
               </div>
             </CollapsibleContent>
