@@ -2641,16 +2641,28 @@ export default function EnhancedMap({
     if (!map.current) return;
     
     const zoom = map.current.getZoom();
-    const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
     
+    // Show/hide ownership layers (blue aggregated parcels)
+    const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
     ownershipLayers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
-        // Show when: toggle ON AND zoom < 14 AND not in Harrison County
         const shouldShow = useSelfHostedParcels && zoom < 14 && !isInHarrisonCounty();
         const visibility = shouldShow ? 'visible' : 'none';
         map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        console.log(`🔵 Ownership layer ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels}, harrison: ${isInHarrisonCounty()})`);
+        console.log(`🔵 Ownership layer ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels})`);
+      }
+    });
+    
+    // Hide/show ArcGIS parcel layers based on toggle
+    const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+    arcgisLayers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        // Hide ArcGIS layers when toggle is ON
+        const visibility = useSelfHostedParcels ? 'none' : 'visible';
+        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
+        console.log(`🟢 ArcGIS layer ${layerId}: ${visibility} (toggle: ${useSelfHostedParcels})`);
       }
     });
   }, [useSelfHostedParcels]);
