@@ -22,6 +22,7 @@ vite.config.ts.*
 # Logs
 *.log
 npm-debug.log*
+logs/
 
 # OS
 Thumbs.db/api/index.js

@@ -4,6 +4,23 @@ import { db } from '../db.js';
 import { auctions } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getCountyCentroid } from './iowaCountyCentroids.js';
+import { scraperDiagnosticsService } from './scraperDiagnostics.js';
+
+// Scraper statistics interface for diagnostics
+export interface ScraperStats {
+  scrapeId: string;
+  sourceName: string;
+  discoveredUrls: number;
+  processedUrls: number;
+  successfulSaves: number;
+  failedScrapes: number;
+  failedSaves: number;
+  iowaDiscovered: number;
+  iowaSaved: number;
+  duration: number;
+  timestamp: Date;
+  missingUrls: string[];
+}
 
 // Extraction schema for auction data
 const auctionSchema = {
@@ -32,6 +49,19 @@ const auctionSchema = {
 };
 
 export class AuctionScraperService {
+  // Stats from last scrape run
+  private lastScrapeStats: ScraperStats[] = [];
+  private currentScrapeId: string = '';
+  
+  // Real-time progress tracking
+  private scrapeProgress = {
+    isActive: false,
+    currentSource: '',
+    completedSources: 0,
+    totalSources: 24,
+    currentSourceProgress: 0
+  };
+
   // LandWatch specific listing pages
   private landWatchPages = [
     'https://www.landwatch.com/iowa-land-for-sale/western-region/auctions',
@@ -67,27 +97,159 @@ export class AuctionScraperService {
     { name: 'The Acre Co', url: 'https://theacreco.com' }
   ];
 
+  // Get stats from last scrape
+  getLastScrapeStats(): ScraperStats[] {
+    return this.lastScrapeStats;
+  }
+  
+  // Get current scrape progress
+  getScrapeProgress() {
+    return this.scrapeProgress;
+  }
+
   // Scrape all auction sources
   async scrapeAllSources() {
+    // Generate unique scrape ID
+    this.currentScrapeId = `scrape_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    this.lastScrapeStats = [];
+    
+    // Initialize progress tracking
+    this.scrapeProgress = {
+      isActive: true,
+      currentSource: 'Starting...',
+      completedSources: 0,
+      totalSources: this.sources.length,
+      currentSourceProgress: 0
+    };
+    
     const results = [];
     
-    for (const source of this.sources) {
+    for (let i = 0; i < this.sources.length; i++) {
+      const source = this.sources[i];
       try {
+        // Update progress
+        this.scrapeProgress.currentSource = source.name;
+        this.scrapeProgress.completedSources = i;
+        
         console.log(`Scraping ${source.name}...`);
         const auctions = await this.scrapeSingleSource(source);
         results.push(...auctions);
         console.log(`✅ ${source.name}: Found ${auctions.length} auctions`);
+        
+        // Mark as completed
+        this.scrapeProgress.completedSources = i + 1;
       } catch (error) {
         console.error(`❌ Failed to scrape ${source.name}:`, error instanceof Error ? error.message : error);
+        this.scrapeProgress.completedSources = i + 1;
       }
     }
     
     console.log(`\n🎉 Total auctions scraped: ${results.length}`);
+    
+    // Log diagnostics
+    if (this.lastScrapeStats.length > 0) {
+      scraperDiagnosticsService.logStats(this.lastScrapeStats);
+      scraperDiagnosticsService.logMissingAuctions(this.lastScrapeStats);
+      
+      // Calculate and log coverage metrics
+      const metrics = scraperDiagnosticsService.calculateCoverageMetrics(this.lastScrapeStats);
+      console.log('\n📊 Coverage Summary:');
+      metrics.forEach(m => {
+        console.log(`  ${m.source}: ${m.coverage_percentage}% (${m.saved}/${m.discovered}), Iowa: ${m.iowa_coverage_percentage}%`);
+      });
+      
+      // Detect anomalies
+      const historical = scraperDiagnosticsService.getHistoricalStats(7);
+      const anomalies = scraperDiagnosticsService.detectAnomalies(this.lastScrapeStats, historical);
+      if (anomalies.length > 0) {
+        console.log('\n⚠️  Anomalies detected:');
+        anomalies.forEach(a => console.log(`  - ${a}`));
+      }
+    }
+    
+    // Mark scraping as complete
+    this.scrapeProgress.isActive = false;
+    this.scrapeProgress.currentSource = 'Complete!';
+    this.scrapeProgress.completedSources = this.sources.length;
+    
     return results;
+  }
+
+  // Manually scrape a specific auction URL (useful for adding missed auctions)
+  async scrapeSpecificUrl(url: string, sourceName?: string) {
+    console.log(`\n🔍 Manually scraping auction: ${url}\n`);
+    
+    // Try to determine source from URL if not provided
+    if (!sourceName) {
+      for (const source of this.sources) {
+        if (url.toLowerCase().includes(source.url.toLowerCase().replace('https://', '').replace('www.', ''))) {
+          sourceName = source.name;
+          break;
+        }
+      }
+      sourceName = sourceName || 'Unknown Source';
+    }
+    
+    console.log(`  Source: ${sourceName}`);
+    
+    try {
+      const scrapeResult = await firecrawlService.scrapeWithJson(url);
+      
+      if (scrapeResult && scrapeResult.title) {
+        const auctionData = {
+          title: scrapeResult.title || 'Untitled Auction',
+          description: scrapeResult.description || '',
+          url: url,
+          auction_date: scrapeResult.auction_date || scrapeResult.date,
+          address: scrapeResult.address || scrapeResult.location,
+          acreage: scrapeResult.acreage || scrapeResult.acres,
+          land_type: scrapeResult.land_type || scrapeResult.property_type,
+          county: scrapeResult.county,
+          state: scrapeResult.state || 'Iowa',
+          sourceWebsite: sourceName
+        };
+        
+        console.log('  ✅ Data extracted:');
+        console.log(`     Title: ${auctionData.title}`);
+        console.log(`     County: ${auctionData.county || 'N/A'}`);
+        console.log(`     State: ${auctionData.state}`);
+        console.log(`     Acreage: ${auctionData.acreage || 'N/A'}`);
+        console.log(`     Date: ${auctionData.auction_date || 'N/A'}\n`);
+        
+        await this.saveAuction(auctionData);
+        console.log(`  ✅ Auction saved to database!\n`);
+        
+        return auctionData;
+      } else {
+        console.log(`  ❌ No data could be extracted from this URL\n`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`  ❌ Error scraping URL:`, error instanceof Error ? error.message : error);
+      throw error;
+    }
   }
 
   // Scrape single auction source
   private async scrapeSingleSource(source: any) {
+    const startTime = Date.now();
+    
+    // Initialize stats tracking
+    const stats: ScraperStats = {
+      scrapeId: this.currentScrapeId,
+      sourceName: source.name,
+      discoveredUrls: 0,
+      processedUrls: 0,
+      successfulSaves: 0,
+      failedScrapes: 0,
+      failedSaves: 0,
+      iowaDiscovered: 0,
+      iowaSaved: 0,
+      duration: 0,
+      timestamp: new Date(),
+      missingUrls: []
+    };
+    
     // Step 1: Try multiple strategies to find auction URLs
     const searchUrl = source.searchPath ? `${source.url}${source.searchPath}` : source.url;
     let auctionUrls: string[] = [];
@@ -138,16 +300,58 @@ export class AuctionScraperService {
     
     if (auctionUrls.length === 0) {
       console.log(`  ❌ No auction URLs found for ${source.name}`);
+      stats.duration = Date.now() - startTime;
+      this.lastScrapeStats.push(stats);
       return [];
     }
     
-    auctionUrls = auctionUrls.slice(0, 10); // Limit to 10 per source
+    // Update stats: discovered URLs
+    stats.discoveredUrls = auctionUrls.length;
+    
+    // Filter for Iowa auctions first (prioritize Iowa)
+    const iowaUrls = auctionUrls.filter(url => 
+      url.toLowerCase().includes('-ia') || 
+      url.toLowerCase().includes('iowa') ||
+      url.toLowerCase().includes('_ia_')
+    );
+    const otherUrls = auctionUrls.filter(url => 
+      !url.toLowerCase().includes('-ia') && 
+      !url.toLowerCase().includes('iowa') &&
+      !url.toLowerCase().includes('_ia_')
+    );
+    
+    // Update stats: Iowa discovered
+    stats.iowaDiscovered = iowaUrls.length;
+    
+    // Prioritize Iowa, but include others if we have room
+    const prioritizedUrls = [...iowaUrls, ...otherUrls];
+    
+    // Increase limit to 20 URLs per source (from 10)
+    const limitedUrls = prioritizedUrls.slice(0, 20);
+    
+    // Track URLs that won't be processed (missing)
+    if (auctionUrls.length > limitedUrls.length) {
+      stats.missingUrls = prioritizedUrls.slice(20);
+    }
+    
     console.log(`  ✅ Total URLs discovered: ${auctionUrls.length}`);
+    console.log(`  📍 Iowa URLs: ${iowaUrls.length}`);
+    console.log(`  🌍 Other URLs: ${otherUrls.length}`);
+    console.log(`  ✂️  Processing first ${limitedUrls.length} URLs (Iowa prioritized)`);
     
     // Step 2: Scrape each URL individually with JSON extraction
     const savedAuctions = [];
-    for (const urlString of auctionUrls) {
+    let successCount = 0;
+    let failCount = 0;
+    
+    stats.processedUrls = limitedUrls.length;
+    
+    for (let i = 0; i < limitedUrls.length; i++) {
+      const urlString = limitedUrls[i];
+      const isIowa = iowaUrls.includes(urlString);
+      
       try {
+        console.log(`    [${i + 1}/${limitedUrls.length}] Processing...`);
         const scrapeResult = await firecrawlService.scrapeWithJson(urlString);
         
         if (scrapeResult && scrapeResult.title) {
@@ -164,15 +368,43 @@ export class AuctionScraperService {
             sourceWebsite: source.name
           };
           
-          await this.saveAuction(auctionData);
-          savedAuctions.push(auctionData);
-          console.log(`    ✓ Saved: ${auctionData.title.substring(0, 50)}...`);
+          try {
+            await this.saveAuction(auctionData);
+            savedAuctions.push(auctionData);
+            successCount++;
+            stats.successfulSaves++;
+            
+            // Check if this is an Iowa auction
+            if (isIowa || auctionData.state?.toLowerCase() === 'iowa' || auctionData.state?.toLowerCase() === 'ia') {
+              stats.iowaSaved++;
+            }
+            
+            console.log(`    ✓ [${i + 1}/${limitedUrls.length}] Saved: ${auctionData.title.substring(0, 50)}...`);
+          } catch (saveError) {
+            stats.failedSaves++;
+            failCount++;
+            console.log(`    ✗ [${i + 1}/${limitedUrls.length}] Save failed for ${auctionData.title.substring(0, 50)}...`);
+          }
+        } else {
+          stats.failedScrapes++;
+          failCount++;
+          const shortUrl = urlString.length > 50 ? urlString.substring(0, 50) + '...' : urlString;
+          console.log(`    ⚠ [${i + 1}/${limitedUrls.length}] No data extracted from ${shortUrl}`);
         }
       } catch (error) {
+        stats.failedScrapes++;
+        failCount++;
         const shortUrl = urlString.length > 50 ? urlString.substring(0, 50) + '...' : urlString;
-        console.log(`    ✗ Failed to scrape ${shortUrl}`);
+        const errorMsg = error instanceof Error ? error.message : 'unknown error';
+        console.log(`    ✗ [${i + 1}/${limitedUrls.length}] Failed: ${shortUrl} (${errorMsg})`);
       }
     }
+    
+    console.log(`\n  📊 Results: ${successCount} saved, ${failCount} failed`);
+    
+    // Finalize stats
+    stats.duration = Date.now() - startTime;
+    this.lastScrapeStats.push(stats);
     
     console.log(`  Saved ${savedAuctions.length} auctions from ${source.name}`);
     return savedAuctions;

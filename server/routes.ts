@@ -1012,6 +1012,34 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Get real-time scrape progress
+  app.get("/api/auctions/scrape-progress", async (req, res) => {
+    try {
+      const progress = auctionScraperService.getScrapeProgress();
+      
+      // Always return success, even if not scraping
+      res.json({
+        success: true,
+        isActive: progress.isActive || false,
+        currentSource: progress.currentSource || '',
+        completedSources: progress.completedSources || 0,
+        totalSources: progress.totalSources || 24,
+        currentSourceProgress: progress.currentSourceProgress || 0
+      });
+    } catch (error) {
+      console.error("Scrape progress error:", error);
+      res.status(500).json({
+        success: false,
+        isActive: false,
+        currentSource: '',
+        completedSources: 0,
+        totalSources: 24,
+        currentSourceProgress: 0,
+        message: 'Failed to get scrape progress'
+      });
+    }
+  });
+
   // Get auction details
   app.get("/api/auctions/:id", async (req, res) => {
     try {
@@ -1090,6 +1118,220 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({ 
         success: false, 
         message: 'Failed to start LandWatch scraping' 
+      });
+    }
+  });
+
+  // Manually add a specific auction by URL
+  app.post("/api/auctions/add-by-url", valuationRateLimiter, async (req, res) => {
+    try {
+      const { url, sourceName } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({
+          success: false,
+          message: 'URL is required'
+        });
+      }
+      
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid URL format'
+        });
+      }
+      
+      console.log(`🔍 Manual auction addition requested: ${url}`);
+      
+      // Scrape the auction synchronously for immediate feedback
+      const result = await auctionScraperService.scrapeSpecificUrl(url, sourceName);
+      
+      if (result) {
+        res.json({
+          success: true,
+          message: 'Auction added successfully!',
+          auction: result
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: 'Could not extract auction data from this URL. Please ensure it\'s a valid auction listing.'
+        });
+      }
+    } catch (error) {
+      console.error("Manual auction addition error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to add auction'
+      });
+    }
+  });
+
+  // ==== DIAGNOSTICS ENDPOINTS ====
+
+  // Get latest scraper run statistics
+  app.get("/api/auctions/diagnostics/latest", async (req, res) => {
+    try {
+      const { scraperDiagnosticsService } = await import('./services/scraperDiagnostics.js');
+      const stats = scraperDiagnosticsService.getLatestScrapeStats();
+      const metrics = scraperDiagnosticsService.calculateCoverageMetrics(stats);
+      
+      // Get last scrape timestamp
+      const lastScrapeTime = stats.length > 0 ? stats[0].timestamp : null;
+      
+      res.json({
+        success: true,
+        lastScrapeTime,
+        stats,
+        metrics,
+        summary: {
+          totalSources: stats.length,
+          totalDiscovered: stats.reduce((sum, s) => sum + s.discoveredUrls, 0),
+          totalSaved: stats.reduce((sum, s) => sum + s.successfulSaves, 0),
+          iowaDiscovered: stats.reduce((sum, s) => sum + s.iowaDiscovered, 0),
+          iowaSaved: stats.reduce((sum, s) => sum + s.iowaSaved, 0)
+        }
+      });
+    } catch (error) {
+      console.error("Diagnostics latest error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get latest diagnostics'
+      });
+    }
+  });
+
+  // Get historical scraper statistics
+  app.get("/api/auctions/diagnostics/history", async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      const { scraperDiagnosticsService } = await import('./services/scraperDiagnostics.js');
+      const stats = scraperDiagnosticsService.getHistoricalStats(days);
+      
+      res.json({
+        success: true,
+        days,
+        stats,
+        count: stats.length
+      });
+    } catch (error) {
+      console.error("Diagnostics history error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get historical diagnostics'
+      });
+    }
+  });
+
+  // Get coverage metrics
+  app.get("/api/auctions/diagnostics/coverage", async (req, res) => {
+    try {
+      const { scraperDiagnosticsService } = await import('./services/scraperDiagnostics.js');
+      const stats = scraperDiagnosticsService.getLatestScrapeStats();
+      const metrics = scraperDiagnosticsService.calculateCoverageMetrics(stats);
+      
+      // Sort by coverage percentage (lowest first to highlight issues)
+      const sortedMetrics = metrics.sort((a, b) => a.coverage_percentage - b.coverage_percentage);
+      
+      res.json({
+        success: true,
+        metrics: sortedMetrics,
+        summary: {
+          averageCoverage: metrics.length > 0 
+            ? Math.round(metrics.reduce((sum, m) => sum + m.coverage_percentage, 0) / metrics.length)
+            : 0,
+          lowCoverageCount: metrics.filter(m => m.coverage_percentage < 80).length,
+          iowaAverageCoverage: metrics.length > 0
+            ? Math.round(metrics.reduce((sum, m) => sum + m.iowa_coverage_percentage, 0) / metrics.length)
+            : 0
+        }
+      });
+    } catch (error) {
+      console.error("Diagnostics coverage error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get coverage metrics'
+      });
+    }
+  });
+
+  // Get missing Iowa auctions
+  app.get("/api/auctions/diagnostics/missing-iowa", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const { scraperDiagnosticsService } = await import('./services/scraperDiagnostics.js');
+      const missing = scraperDiagnosticsService.getMissingIowaAuctions(limit);
+      
+      // Group by source
+      const bySource: Record<string, any[]> = {};
+      missing.forEach(m => {
+        if (!bySource[m.source]) bySource[m.source] = [];
+        bySource[m.source].push(m);
+      });
+      
+      res.json({
+        success: true,
+        total: missing.length,
+        missing,
+        bySource: Object.fromEntries(
+          Object.entries(bySource).map(([k, v]) => [k, v.length])
+        )
+      });
+    } catch (error) {
+      console.error("Diagnostics missing Iowa error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get missing Iowa auctions'
+      });
+    }
+  });
+
+  // Get most recent auctions (newly scraped)
+  app.get("/api/auctions/diagnostics/recent-acquisitions", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      const recentAuctions = await db.query.auctions.findMany({
+        orderBy: [desc(auctions.scrapedAt)],
+        limit
+      });
+      
+      res.json({
+        success: true,
+        auctions: recentAuctions
+      });
+    } catch (error) {
+      console.error("Recent acquisitions error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get recent acquisitions'
+      });
+    }
+  });
+
+  // Get upcoming auctions (soonest auction dates)
+  app.get("/api/auctions/diagnostics/upcoming", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 15;
+      
+      const upcomingAuctions = await db.query.auctions.findMany({
+        where: sql`auction_date >= NOW()`,
+        orderBy: [asc(auctions.auctionDate)],
+        limit
+      });
+      
+      res.json({
+        success: true,
+        auctions: upcomingAuctions
+      });
+    } catch (error) {
+      console.error("Upcoming auctions error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get upcoming auctions'
       });
     }
   });
