@@ -93,6 +93,31 @@ export default function MapCentricHome() {
   useEffect(() => {
     setShowAuctionLayer(mapOverlays.showAuctions);
   }, [mapOverlays.showAuctions]);
+  
+  // Handle URL parameters to focus map on specific auction
+  useEffect(() => {
+    if (!mapRef) return;
+    
+    const params = new URLSearchParams(window.location.search);
+    const lat = params.get('lat');
+    const lng = params.get('lng');
+    const zoom = params.get('zoom');
+    const auctionId = params.get('auctionId');
+    
+    if (lat && lng) {
+      console.log(`📍 Focusing map on auction ${auctionId || 'unknown'} at ${lat}, ${lng}`);
+      
+      mapRef.flyTo({
+        center: [parseFloat(lng), parseFloat(lat)],
+        zoom: zoom ? parseInt(zoom) : 15,
+        essential: true,
+        duration: 2000
+      });
+      
+      // Clear URL params after focusing (optional, keeps URL clean)
+      window.history.replaceState({}, '', '/');
+    }
+  }, [mapRef]);
 
   // Map info state (UI controls visibility)
   const [mapInfo, setMapInfo] = useState<MapInfo>({

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -324,7 +324,17 @@ export default function AuctionDiagnostics() {
         </div>
       )}
       
-      <h1 className="text-3xl font-bold mb-6">Auction System Diagnostics</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Auction System Diagnostics</h1>
+        <Button 
+          onClick={() => window.location.href = '/'}
+          variant="outline"
+          size="lg"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Map
+        </Button>
+      </div>
 
       {/* Prominent Scraper Button */}
       <Card className="mb-6 border-2 border-red-500 bg-gradient-to-br from-red-50 to-orange-50">
@@ -591,6 +601,21 @@ export default function AuctionDiagnostics() {
                         </div>
                       )}
                     </div>
+                    {auction.latitude && auction.longitude && (
+                      <div className="mt-2 pt-2 border-t">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
+                          }}
+                        >
+                          <Map className="h-3 w-3 mr-1" />
+                          View on Map
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -651,6 +676,21 @@ export default function AuctionDiagnostics() {
                             <ExternalLink className="h-3 w-3" />
                             View Listing
                           </a>
+                        </div>
+                      )}
+                      {auction.latitude && auction.longitude && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full text-xs"
+                            onClick={() => {
+                              window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
+                            }}
+                          >
+                            <Map className="h-3 w-3 mr-1" />
+                            View on Map
+                          </Button>
                         </div>
                       )}
                     </div>
