@@ -410,16 +410,11 @@ export default function EnhancedMap({
   };
 
   // Function to load aggregated parcels from self-hosted database
+  // NOTE: Removed loadAggregatedParcels function - now using vector tiles instead of GeoJSON
   const loadAggregatedParcels = async () => {
-    if (!map.current || !showAggregatedParcels) {
-      // Clear data if not enabled
-      const source = map.current?.getSource('aggregated-parcels') as maplibregl.GeoJSONSource;
-      if (source) {
-        source.setData({ type: 'FeatureCollection', features: [] });
-        console.log('🔵 Aggregated parcels cleared (toggle OFF)');
-      }
-      return;
-    }
+    // This function is deprecated - ownership data now comes from vector tiles
+    // The 'parcels' vector tile source automatically provides 'ownership' source-layer
+    return;
     
     const zoom = map.current.getZoom();
     if (zoom <= 10) {
@@ -919,16 +914,8 @@ export default function EnhancedMap({
         }
       }
 
-      // Add aggregated parcels data source (self-hosted ownership groups)
-      if (!map.current!.getSource('aggregated-parcels')) {
-        map.current!.addSource('aggregated-parcels', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: []
-          }
-        });
-      }
+      // NOTE: Removed old GeoJSON 'aggregated-parcels' source
+      // Now using vector tiles 'parcels' source with 'ownership' source-layer instead
 
       // Add parcel outline layer if it doesn't exist
       if (!map.current!.getLayer('parcels-outline')) {
@@ -973,79 +960,100 @@ export default function EnhancedMap({
         map.current!.addLayer(fillLayer);
       }
 
-      // Add aggregated ownership layers from self-hosted database (zoom < 14)
-      if (!map.current!.getLayer('aggregated-ownership-fill')) {
+      // Add ownership group layers for self-hosted vector tiles (zoom < 14)
+      // These show aggregated adjacent parcels from parcel_aggregated table
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-fill')) {
         map.current!.addLayer({
-          id: 'aggregated-ownership-fill',
+          id: 'ownership-fill',
           type: 'fill',
-          source: 'aggregated-parcels',
+          source: 'parcels',
+          'source-layer': 'ownership',
           paint: {
             'fill-color': '#3b82f6',
-            'fill-opacity': 0.2
+            'fill-opacity': 0.3
           },
-          layout: {
-            'visibility': showAggregatedParcels ? 'visible' : 'none'
-          }
+          maxzoom: 14
         });
       }
 
-      if (!map.current!.getLayer('aggregated-ownership-outline')) {
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-outline')) {
         map.current!.addLayer({
-          id: 'aggregated-ownership-outline',
+          id: 'ownership-outline',
           type: 'line',
-          source: 'aggregated-parcels',
+          source: 'parcels',
+          'source-layer': 'ownership',
           paint: {
             'line-color': '#2563eb',
             'line-width': 2,
-            'line-opacity': 0.6
+            'line-opacity': 0.8
           },
-          layout: {
-            'visibility': showAggregatedParcels ? 'visible' : 'none'
-          }
+          maxzoom: 14
         });
       }
-      
-      if (!map.current!.getLayer('aggregated-ownership-labels')) {
+
+      if (useSelfHostedParcels && !map.current!.getLayer('ownership-labels')) {
         map.current!.addLayer({
-          id: 'aggregated-ownership-labels',
+          id: 'ownership-labels',
           type: 'symbol',
-          source: 'aggregated-parcels',
+          source: 'parcels',
+          'source-layer': 'ownership',
           layout: {
-            'text-field': ['get', 'DEEDHOLDER'],
+            'text-field': [
+              'concat',
+              ['get', 'owner'],
+              '\n(',
+              ['to-string', ['get', 'parcel_count']],
+              ' parcels, ',
+              ['to-string', ['get', 'acres']],
+              ' ac)'
+            ],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
             'text-size': 12,
-            'text-offset': [0, 0],
-            'visibility': showAggregatedParcels && showOwnerLabels ? 'visible' : 'none'
+            'text-anchor': 'center',
+            'text-allow-overlap': false,
+            'visibility': showOwnerLabels ? 'visible' : 'none'
           },
           paint: {
-            'text-color': '#1e40af',
-            'text-halo-color': '#ffffff',
-            'text-halo-width': 2
-          }
+            'text-color': '#ffffff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5
+          },
+          maxzoom: 14
         });
       }
 
-      // Add click handlers for aggregated ownership layers
-      const handleAggregatedOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        if (e.features && e.features.length > 0) {
-          const props = e.features[0].properties;
-          const html = `
-            <strong>Owner:</strong> ${props.DEEDHOLDER || 'Unknown'}<br>
-            <strong>Total Parcels:</strong> ${props.PARCEL_COUNT || props.COMBINED ? '2+' : '1'}<br>
-            <strong>Total Acres:</strong> ${props.TOTAL_ACRES ? Number(props.TOTAL_ACRES).toFixed(2) : 'N/A'}<br>
-            <strong>County:</strong> ${props.COUNTYNAME || 'N/A'}<br>
-            ${props.COMBINED ? '<strong>Original Parcels:</strong> ' + props.ORIGINAL_PARCELS + '<br>' : ''}
-            <small><em>Aggregated Ownership (Self-Hosted)</em></small>
-          `;
-          
-          new maplibregl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(html)
-            .addTo(map.current!);
-        }
-      };
+      // Add click handlers for ownership layers
+      if (useSelfHostedParcels) {
+        const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+          if (e.features && e.features.length > 0) {
+            const props = e.features[0].properties;
+            const html = `
+              <strong>Owner:</strong> ${props.owner || 'Unknown'}<br>
+              <strong>Parcels:</strong> ${props.parcel_count || 'N/A'}<br>
+              <strong>Acres:</strong> ${props.acres || 'N/A'}<br>
+              <small><em>Aggregated Adjacent Parcels</em></small>
+            `;
+            new maplibregl.Popup()
+              .setLngLat(e.lngLat)
+              .setHTML(html)
+              .addTo(map.current!);
+          }
+        };
 
-      map.current!.on('click', 'aggregated-ownership-fill', handleAggregatedOwnershipClick);
-      map.current!.on('click', 'aggregated-ownership-outline', handleAggregatedOwnershipClick);
+        map.current!.on('click', 'ownership-fill', handleOwnershipClick);
+        map.current!.on('click', 'ownership-outline', handleOwnershipClick);
+
+        // Add hover effects
+        map.current!.on('mouseenter', 'ownership-fill', () => {
+          if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+        });
+        map.current!.on('mouseleave', 'ownership-fill', () => {
+          if (map.current) map.current.getCanvas().style.cursor = '';
+        });
+      }
+
+      // NOTE: Removed old GeoJSON-based aggregated-ownership layers
+      // Now using vector tile-based ownership layers added above
 
       // Add hover effects for aggregated ownership layers
       map.current!.on('mouseenter', 'aggregated-ownership-fill', () => {
@@ -2621,32 +2629,7 @@ export default function EnhancedMap({
   }, [auctionFilters]);
 
   // Toggle aggregated parcels layer visibility
-  useEffect(() => {
-    if (!map.current) return;
-    
-    const layers = ['aggregated-ownership-fill', 'aggregated-ownership-outline', 'aggregated-ownership-labels'];
-    
-    layers.forEach(layerId => {
-      const layer = map.current?.getLayer(layerId);
-      if (layer) {
-        const visibility = layerId === 'aggregated-ownership-labels'
-          ? (showAggregatedParcels && showOwnerLabels ? 'visible' : 'none')
-          : (showAggregatedParcels ? 'visible' : 'none');
-        
-        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-      }
-    });
-    
-    // Load or clear data based on toggle
-    if (showAggregatedParcels) {
-      loadAggregatedParcels();
-    } else {
-      const source = map.current?.getSource('aggregated-parcels') as maplibregl.GeoJSONSource;
-      if (source) {
-        source.setData({ type: 'FeatureCollection', features: [] });
-      }
-    }
-  }, [showAggregatedParcels, showOwnerLabels]);
+  // NOTE: Removed showAggregatedParcels useEffect - now using vector tiles only
 
   // Toggle substations layer visibility
   useEffect(() => {
