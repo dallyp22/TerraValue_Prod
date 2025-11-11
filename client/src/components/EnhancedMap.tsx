@@ -2641,16 +2641,40 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
     
+    const zoom = map.current.getZoom();
     const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
     
     ownershipLayers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
-        const visibility = useSelfHostedParcels && map.current!.getZoom() < 14 ? 'visible' : 'none';
+        // Show when: toggle ON AND zoom < 14 AND not in Harrison County
+        const shouldShow = useSelfHostedParcels && zoom < 14 && !isInHarrisonCounty();
+        const visibility = shouldShow ? 'visible' : 'none';
         map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        console.log(`🔵 ${layerId}: ${visibility}`);
+        console.log(`🔵 ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels})`);
       }
     });
+  }, [useSelfHostedParcels]);
+  
+  // Also update visibility on zoom change
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const handleZoom = () => {
+      const zoom = map.current!.getZoom();
+      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
+      
+      ownershipLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer && useSelfHostedParcels) {
+          const shouldShow = zoom < 14 && !isInHarrisonCounty();
+          map.current?.setLayoutProperty(layerId, 'visibility', shouldShow ? 'visible' : 'none');
+        }
+      });
+    };
+    
+    map.current.on('zoom', handleZoom);
+    return () => map.current?.off('zoom', handleZoom);
   }, [useSelfHostedParcels]);
 
   // Toggle substations layer visibility
