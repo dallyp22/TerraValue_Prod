@@ -584,16 +584,12 @@ export default function EnhancedMap({
       console.log('Parcel data received:', data.features?.length || 0, 'features');
       
       if (data.features && data.features.length > 0) {
-        // IMPORTANT: Aggregate parcels by owner for Harrison County (and other non-self-hosted counties)
-        const aggregatedData = {
-          ...data,
-          features: aggregateParcelsByOwner(data.features)
-        };
-        
+        // Load raw ArcGIS parcels (no client-side aggregation)
+        // Aggregation now comes from database via self-hosted tiles when toggle is ON
         const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
         if (source) {
-          source.setData(aggregatedData);
-          console.log(`Loaded ${data.features.length} parcels → ${aggregatedData.features.length} after aggregation`);
+          source.setData(data);
+          console.log(`Loaded ${data.features.length} raw parcels from ArcGIS`);
         }
       } else if (data.properties?.exceededTransferLimit) {
         // Too many features - zoom in more
