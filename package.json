@@ -22,7 +22,9 @@
     "auctions:geocode": "tsx scripts/geocode-missing-auctions.ts",
     "auctions:geocode:test": "tsx scripts/test-geocoding-sample.ts",
     "auctions:archive": "tsx scripts/archive-past-auctions.ts",
-    "auctions:archive:dry-run": "tsx scripts/archive-past-auctions.ts --dry-run"
+    "auctions:archive:dry-run": "tsx scripts/archive-past-auctions.ts --dry-run",
+    "auctions:backfill-dates": "tsx scripts/backfill-auction-dates.ts",
+    "auctions:backfill-dates:dry-run": "tsx scripts/backfill-auction-dates.ts --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

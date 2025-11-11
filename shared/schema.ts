@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, json, index, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -91,7 +91,12 @@ export const auctions = pgTable("auctions", {
   rawData: json("raw_data"), // Full scraped data
   scrapedAt: timestamp("scraped_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-  status: text("status").default("active") // "active", "sold", "cancelled"
+  status: text("status").default("active"), // "active", "sold", "cancelled"
+  
+  // Date extraction tracking
+  needsDateReview: boolean("needs_date_review").default(false),
+  dateExtractionAttempted: timestamp("date_extraction_attempted"),
+  dateExtractionMethod: text("date_extraction_method") // "ai", "regex", "manual"
 });
 
 // Archived Auctions - Past auctions moved from active table

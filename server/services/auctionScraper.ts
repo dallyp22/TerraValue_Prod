@@ -5,6 +5,7 @@ import { auctions } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getCountyCentroid } from './iowaCountyCentroids.js';
 import { scraperDiagnosticsService } from './scraperDiagnostics.js';
+import { DateExtractorService } from './dateExtractor.js';
 
 // Scraper statistics interface for diagnostics
 export interface ScraperStats {
@@ -551,17 +552,45 @@ export class AuctionScraperService {
       }
     }
     
-    // Parse auction date
+    // Parse/extract auction date
     let auctionDate = null;
+    let needsDateReview = false;
+    let dateExtractionMethod = null;
+    
+    // First try to parse provided date
     if (auctionData.auction_date) {
       try {
         auctionDate = new Date(auctionData.auction_date);
-        // Only save if date is valid and in the future
-        if (isNaN(auctionDate.getTime()) || auctionDate < new Date()) {
+        if (isNaN(auctionDate.getTime())) {
           auctionDate = null;
+        } else {
+          dateExtractionMethod = 'scraped';
         }
       } catch (error) {
         auctionDate = null;
+      }
+    }
+    
+    // If no date found, try to extract from title/description using AI
+    if (!auctionDate && (auctionData.title || auctionData.description)) {
+      try {
+        const dateExtractor = new DateExtractorService();
+        const result = await dateExtractor.extractDateFromText(
+          auctionData.title,
+          auctionData.description || ''
+        );
+        
+        if (result.date) {
+          auctionDate = result.date;
+          dateExtractionMethod = result.method;
+          console.log(`      ✓ Extracted date: ${auctionDate.toLocaleDateString()} (${result.method})`);
+        } else {
+          needsDateReview = true;
+          console.log(`      ⚠ Could not extract date - flagged for review`);
+        }
+      } catch (extractError) {
+        console.log(`      ⚠ Date extraction failed - flagged for review`);
+        needsDateReview = true;
       }
     }
     
@@ -580,6 +609,9 @@ export class AuctionScraperService {
         landType: auctionData.land_type,
         latitude,
         longitude,
+        needsDateReview,
+        dateExtractionMethod,
+        dateExtractionAttempted: new Date(),
         rawData: { 
           ...auctionData, 
           isCountyLevel, // Flag to indicate approximate location
@@ -595,6 +627,9 @@ export class AuctionScraperService {
           longitude,
           county,
           state,
+          needsDateReview,
+          dateExtractionMethod,
+          dateExtractionAttempted: new Date(),
           updatedAt: new Date()
         }
       });

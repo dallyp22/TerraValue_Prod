@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { db } from "../server/db";
 import { auctions, archivedAuctions } from "@shared/schema";
-import { and, lt, eq, inArray } from "drizzle-orm";
+import { and, lt, eq, inArray, or, isNull } from "drizzle-orm";
 
 async function archivePastAuctions(dryRun: boolean = false) {
   console.log('🗄️  Archive Past Auctions Script');
@@ -19,12 +19,16 @@ async function archivePastAuctions(dryRun: boolean = false) {
   console.log(`   (Archiving auctions with auction_date before ${cutoffDate.toISOString()})\n`);
 
   try {
-    // Find auctions to archive
+    // Find auctions to archive (exclude those needing manual review)
     console.log('🔍 Finding auctions to archive...');
     const pastAuctions = await db.query.auctions.findMany({
       where: and(
         lt(auctions.auctionDate, cutoffDate),
-        eq(auctions.status, 'active')
+        eq(auctions.status, 'active'),
+        or(
+          eq(auctions.needsDateReview, false),
+          isNull(auctions.needsDateReview)
+        )
       )
     });
 

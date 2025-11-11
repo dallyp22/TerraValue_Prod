@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { auctions, archivedAuctions } from "@shared/schema";
-import { and, lt, eq, inArray } from "drizzle-orm";
+import { and, lt, eq, inArray, or, isNull } from "drizzle-orm";
 
 export class AuctionArchiverService {
   private intervalId: NodeJS.Timeout | null = null;
@@ -66,11 +66,15 @@ export class AuctionArchiverService {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 7);
       
-      // Find auctions to archive
+      // Find auctions to archive (exclude those needing manual review)
       const pastAuctions = await db.query.auctions.findMany({
         where: and(
           lt(auctions.auctionDate, cutoffDate),
-          eq(auctions.status, 'active')
+          eq(auctions.status, 'active'),
+          or(
+            eq(auctions.needsDateReview, false),
+            isNull(auctions.needsDateReview)
+          )
         )
       });
 

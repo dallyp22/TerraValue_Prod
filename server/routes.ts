@@ -376,6 +376,72 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Get auctions needing date review
+  app.get("/api/auctions/needs-review", async (req, res) => {
+    try {
+      const needsReview = await db.query.auctions.findMany({
+        where: eq(auctions.needsDateReview, true),
+        orderBy: [desc(auctions.scrapedAt)],
+        limit: 100
+      });
+      
+      res.json({ 
+        success: true,
+        count: needsReview.length,
+        auctions: needsReview 
+      });
+    } catch (error) {
+      console.error("Failed to get auctions needing review:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  });
+
+  // Manually set auction date for auctions needing review
+  app.post("/api/auctions/:id/set-date", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { auctionDate } = req.body;
+      
+      if (!auctionDate) {
+        return res.status(400).json({
+          success: false,
+          message: "auctionDate is required"
+        });
+      }
+      
+      const date = new Date(auctionDate);
+      if (isNaN(date.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid date format"
+        });
+      }
+      
+      await db.update(auctions)
+        .set({
+          auctionDate: date,
+          needsDateReview: false,
+          dateExtractionMethod: 'manual',
+          dateExtractionAttempted: new Date()
+        })
+        .where(eq(auctions.id, parseInt(id)));
+      
+      res.json({ 
+        success: true,
+        message: 'Auction date updated successfully'
+      });
+    } catch (error) {
+      console.error("Failed to set auction date:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  });
+
   // ===============================
   // Parcel Aggregation API
   // ===============================
