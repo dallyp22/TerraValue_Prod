@@ -466,8 +466,11 @@ export default function EnhancedMap({
   const loadParcels = async () => {
     // Skip loading if using self-hosted vector tiles (they load automatically)
     if (useSelfHostedParcels) {
+      console.log('🔵 Using self-hosted vector tiles - skipping ArcGIS load');
       return;
     }
+    
+    console.log('🟢 Loading ArcGIS parcels...');
     
     if (!map.current || map.current.getZoom() <= 12) {
       // Clear data if zoomed out
@@ -2647,7 +2650,7 @@ export default function EnhancedMap({
         const shouldShow = useSelfHostedParcels && zoom < 14 && !isInHarrisonCounty();
         const visibility = shouldShow ? 'visible' : 'none';
         map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        console.log(`🔵 ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels})`);
+        console.log(`🔵 Ownership layer ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels}, harrison: ${isInHarrisonCounty()})`);
       }
     });
   }, [useSelfHostedParcels]);
