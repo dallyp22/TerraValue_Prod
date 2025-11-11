@@ -975,8 +975,8 @@ export default function EnhancedMap({
           },
           layout: {
             'visibility': 'none'  // Hidden by default, toggle controls this
-          },
-          maxzoom: 14
+          }
+          // No maxzoom - show at all zoom levels when toggle is ON
         });
       }
 
@@ -993,8 +993,8 @@ export default function EnhancedMap({
           },
           layout: {
             'visibility': 'none'  // Hidden by default, toggle controls this
-          },
-          maxzoom: 14
+          }
+          // No maxzoom - show at all zoom levels when toggle is ON
         });
       }
 
@@ -2678,7 +2678,7 @@ export default function EnhancedMap({
       ownershipLayers.forEach(layerId => {
         const layer = map.current?.getLayer(layerId);
         if (layer && useSelfHostedParcels) {
-          const shouldShow = zoom < 14 && !isInHarrisonCounty();
+          const shouldShow = !isInHarrisonCounty();  // Show at all zoom levels
           map.current?.setLayoutProperty(layerId, 'visibility', shouldShow ? 'visible' : 'none');
         }
       });
