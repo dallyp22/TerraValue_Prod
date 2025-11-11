@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cleanupOpenAI } from "./services/openai";
+import { AuctionArchiverService } from "./services/auctionArchiver";
 
 const app = express();
 
@@ -117,15 +118,21 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 
+  // Start auction archiver service (runs daily to clean up past auctions)
+  const archiverService = new AuctionArchiverService();
+  archiverService.start();
+
   // Graceful shutdown handling
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, cleaning up...');
+    archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
     console.log('SIGINT received, cleaning up...');
+    archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
   });

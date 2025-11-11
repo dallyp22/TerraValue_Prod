@@ -94,6 +94,48 @@ export const auctions = pgTable("auctions", {
   status: text("status").default("active") // "active", "sold", "cancelled"
 });
 
+// Archived Auctions - Past auctions moved from active table
+export const archivedAuctions = pgTable("archived_auctions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  url: text("url").notNull(),
+  sourceWebsite: text("source_website").notNull(),
+  
+  // Auction details
+  auctionDate: timestamp("auction_date"),
+  auctionType: text("auction_type"),
+  auctioneer: text("auctioneer"),
+  
+  // Property details
+  address: text("address"),
+  county: text("county"),
+  state: text("state"),
+  acreage: real("acreage"),
+  landType: text("land_type"),
+  
+  // Geographic data
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  
+  // CSR2 & Valuation
+  csr2Mean: real("csr2_mean"),
+  csr2Min: integer("csr2_min"),
+  csr2Max: integer("csr2_max"),
+  estimatedValue: real("estimated_value"),
+  
+  // Metadata
+  rawData: json("raw_data"),
+  scrapedAt: timestamp("scraped_at"),
+  updatedAt: timestamp("updated_at"),
+  status: text("status"),
+  
+  // Archive metadata
+  archivedAt: timestamp("archived_at").defaultNow(),
+  archivedReason: text("archived_reason"), // e.g., "past_auction_date"
+  originalId: integer("original_id") // Original ID from auctions table
+});
+
 // Iowa Parcels - Property ownership data with PostGIS geometries
 export const parcels = pgTable("parcels", {
   id: serial("id").primaryKey(),
@@ -235,6 +277,8 @@ export type PropertyForm = z.infer<typeof propertyFormSchema>;
 export type PropertyImprovement = z.infer<typeof propertyImprovementSchema>;
 export type Auction = typeof auctions.$inferSelect;
 export type InsertAuction = typeof auctions.$inferInsert;
+export type ArchivedAuction = typeof archivedAuctions.$inferSelect;
+export type InsertArchivedAuction = typeof archivedAuctions.$inferInsert;
 export type Parcel = typeof parcels.$inferSelect;
 export type InsertParcel = typeof parcels.$inferInsert;
 export type ParcelOwnershipGroup = typeof parcelOwnershipGroups.$inferSelect;
