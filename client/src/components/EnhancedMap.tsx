@@ -2647,7 +2647,8 @@ export default function EnhancedMap({
     ownershipLayers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
-        const shouldShow = useSelfHostedParcels && zoom < 14 && !isInHarrisonCounty();
+        // Show at ALL zoom levels when toggle ON (not just zoom <14)
+        const shouldShow = useSelfHostedParcels && !isInHarrisonCounty();
         const visibility = shouldShow ? 'visible' : 'none';
         map.current?.setLayoutProperty(layerId, 'visibility', visibility);
         console.log(`🔵 Ownership layer ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels})`);
