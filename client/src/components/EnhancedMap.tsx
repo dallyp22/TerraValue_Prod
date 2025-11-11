@@ -891,27 +891,28 @@ export default function EnhancedMap({
         onMapReady(map.current!);
       }
       
-      // Add parcel data source if it doesn't exist
+      // Add BOTH parcel sources - toggle will control which layers are visible
+      
+      // Self-hosted vector tiles source
+      if (!map.current!.getSource('parcels-vector')) {
+        const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+        map.current!.addSource('parcels-vector', {
+          type: 'vector',
+          tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
+          minzoom: 10,
+          maxzoom: 18
+        });
+      }
+      
+      // ArcGIS GeoJSON source (original method)
       if (!map.current!.getSource('parcels')) {
-        if (useSelfHostedParcels) {
-          // Use self-hosted vector tiles
-          const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
-          map.current!.addSource('parcels', {
-            type: 'vector',
-            tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
-            minzoom: 10,
-            maxzoom: 18
-          });
-        } else {
-          // Use GeoJSON from ArcGIS (legacy)
-          map.current!.addSource('parcels', {
-            type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: []
-            }
-          });
-        }
+        map.current!.addSource('parcels', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          }
+        });
       }
 
       // NOTE: Removed old GeoJSON 'aggregated-parcels' source
@@ -962,30 +963,37 @@ export default function EnhancedMap({
 
       // Add ownership group layers for self-hosted vector tiles (zoom < 14)
       // These show aggregated adjacent parcels from parcel_aggregated table
-      if (useSelfHostedParcels && !map.current!.getLayer('ownership-fill')) {
+      // Always create these layers so toggle can show/hide them
+      if (!map.current!.getLayer('ownership-fill')) {
         map.current!.addLayer({
           id: 'ownership-fill',
           type: 'fill',
-          source: 'parcels',
+          source: 'parcels-vector',  // Use vector tile source
           'source-layer': 'ownership',
           paint: {
             'fill-color': '#3b82f6',
             'fill-opacity': 0.3
           },
+          layout: {
+            'visibility': 'none'  // Hidden by default, toggle controls this
+          },
           maxzoom: 14
         });
       }
 
-      if (useSelfHostedParcels && !map.current!.getLayer('ownership-outline')) {
+      if (!map.current!.getLayer('ownership-outline')) {
         map.current!.addLayer({
           id: 'ownership-outline',
           type: 'line',
-          source: 'parcels',
+          source: 'parcels-vector',  // Use vector tile source
           'source-layer': 'ownership',
           paint: {
             'line-color': '#2563eb',
             'line-width': 2,
             'line-opacity': 0.8
+          },
+          layout: {
+            'visibility': 'none'  // Hidden by default, toggle controls this
           },
           maxzoom: 14
         });
@@ -1022,9 +1030,8 @@ export default function EnhancedMap({
         });
       }
 
-      // Add click handlers for ownership layers
-      if (useSelfHostedParcels) {
-        const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+      // Add click handlers for ownership layers (always add, visibility controlled elsewhere)
+      const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
           if (e.features && e.features.length > 0) {
             const props = e.features[0].properties;
             const html = `
@@ -1047,10 +1054,9 @@ export default function EnhancedMap({
         map.current!.on('mouseenter', 'ownership-fill', () => {
           if (map.current) map.current.getCanvas().style.cursor = 'pointer';
         });
-        map.current!.on('mouseleave', 'ownership-fill', () => {
-          if (map.current) map.current.getCanvas().style.cursor = '';
-        });
-      }
+      map.current!.on('mouseleave', 'ownership-fill', () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
 
       // NOTE: Removed old GeoJSON-based aggregated-ownership layers
       // Now using vector tile-based ownership layers added above
@@ -2630,6 +2636,22 @@ export default function EnhancedMap({
 
   // Toggle aggregated parcels layer visibility
   // NOTE: Removed showAggregatedParcels useEffect - now using vector tiles only
+
+  // Toggle self-hosted ownership layers visibility
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
+    
+    ownershipLayers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        const visibility = useSelfHostedParcels && map.current!.getZoom() < 14 ? 'visible' : 'none';
+        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
+        console.log(`🔵 ${layerId}: ${visibility}`);
+      }
+    });
+  }, [useSelfHostedParcels]);
 
   // Toggle substations layer visibility
   useEffect(() => {
