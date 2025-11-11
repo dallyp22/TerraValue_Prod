@@ -467,6 +467,22 @@ export default function EnhancedMap({
     // Skip loading if using self-hosted vector tiles (they load automatically)
     if (useSelfHostedParcels) {
       console.log('🔵 Using self-hosted vector tiles - skipping ArcGIS load');
+      
+      // Ensure ArcGIS layers stay hidden
+      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+      });
+      
+      // Clear ArcGIS GeoJSON data to be safe
+      const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
+      if (source && source.setData) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+      }
+      
       return;
     }
     
