@@ -46,6 +46,7 @@ export default function MapCentricHome() {
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showAuctions: true,
+    showAggregatedParcels: false,
     showSubstations: true,
     showDatacenters: true,
     datacenterStates: {
@@ -352,7 +353,8 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
-          useSelfHostedParcels={false} // Using ArcGIS method - Harrison County works perfectly this way
+          showAggregatedParcels={mapOverlays.showAggregatedParcels}
+          useSelfHostedParcels={mapOverlays.showAggregatedParcels || false} // Toggle controls self-hosted parcels
         />
 
         {/* Map Controls */}

@@ -35,6 +35,7 @@ export interface AuctionFilters {
 
 export interface MapOverlays {
   showAuctions: boolean;
+  showAggregatedParcels?: boolean;
   showSubstations: boolean;
   showDatacenters: boolean;
   datacenterStates: {
@@ -488,6 +489,7 @@ export default function LeftSidebar({
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
                       showAuctions: allEnabled,
+                      showAggregatedParcels: allEnabled,
                       showSubstations: allEnabled,
                       showDatacenters: allEnabled,
                       showLakes: allEnabled,
@@ -536,6 +538,16 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">Auctions</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapOverlays.showAggregatedParcels || false}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showAggregatedParcels: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Aggregated Parcels</span>
+                <span className="text-xs text-slate-500 ml-1">(Self-Hosted)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox

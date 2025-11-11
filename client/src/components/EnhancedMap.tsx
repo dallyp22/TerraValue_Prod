@@ -67,6 +67,7 @@ interface EnhancedMapProps {
   showCityLabels?: boolean;
   showHighways?: boolean;
   useSelfHostedParcels?: boolean; // Enable self-hosted vector tiles instead of ArcGIS
+  showAggregatedParcels?: boolean; // Show self-hosted aggregated ownership parcels
 }
 
 export default function EnhancedMap({ 
@@ -95,7 +96,8 @@ export default function EnhancedMap({
   transmissionLineStates = { kansas: true, minnesota: true, missouri: true, nebraska: true, southDakota: true },
   transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
-  showHighways = true
+  showHighways = true,
+  showAggregatedParcels = false
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -404,6 +406,64 @@ export default function EnhancedMap({
       }
     } catch (error) {
       console.error('Failed to load auctions:', error);
+    }
+  };
+
+  // Function to load aggregated parcels from self-hosted database
+  const loadAggregatedParcels = async () => {
+    if (!map.current || !showAggregatedParcels) {
+      // Clear data if not enabled
+      const source = map.current?.getSource('aggregated-parcels') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+        console.log('🔵 Aggregated parcels cleared (toggle OFF)');
+      }
+      return;
+    }
+    
+    const zoom = map.current.getZoom();
+    if (zoom <= 10) {
+      console.log(`🔵 Aggregated parcels: zoom too low (${zoom.toFixed(1)}), need > 10`);
+      return;
+    }
+    
+    const bounds = map.current.getBounds();
+    const params = new URLSearchParams({
+      minLon: bounds.getWest().toString(),
+      minLat: bounds.getSouth().toString(),
+      maxLon: bounds.getEast().toString(),
+      maxLat: bounds.getNorth().toString()
+    });
+    
+    console.log(`🔵 Loading aggregated parcels from database (zoom: ${zoom.toFixed(1)})...`);
+    
+    try {
+      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const url = `${apiUrl}/api/parcels/aggregated?${params}`;
+      console.log(`🔵 Fetching: ${url}`);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success && data.features) {
+        console.log(`✅ Loaded ${data.features.length} aggregated ownership parcels from database`);
+        console.log(`   Sample owner: ${data.features[0]?.properties?.DEEDHOLDER || 'N/A'}`);
+        
+        const source = map.current?.getSource('aggregated-parcels') as maplibregl.GeoJSONSource;
+        if (source) {
+          source.setData({
+            type: 'FeatureCollection',
+            features: data.features
+          });
+          console.log(`✅ Data added to map source 'aggregated-parcels'`);
+        } else {
+          console.error('❌ Source "aggregated-parcels" not found!');
+        }
+      } else {
+        console.log(`⚠️ No features returned or API error:`, data);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load aggregated parcels:', error);
     }
   };
 
@@ -859,6 +919,17 @@ export default function EnhancedMap({
         }
       }
 
+      // Add aggregated parcels data source (self-hosted ownership groups)
+      if (!map.current!.getSource('aggregated-parcels')) {
+        map.current!.addSource('aggregated-parcels', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          }
+        });
+      }
+
       // Add parcel outline layer if it doesn't exist
       if (!map.current!.getLayer('parcels-outline')) {
         const outlineLayer: any = {
@@ -902,35 +973,96 @@ export default function EnhancedMap({
         map.current!.addLayer(fillLayer);
       }
 
-      // Add ownership group layers for self-hosted tiles (zoom < 14)
-      if (useSelfHostedParcels && !map.current!.getLayer('ownership-fill')) {
+      // Add aggregated ownership layers from self-hosted database (zoom < 14)
+      if (!map.current!.getLayer('aggregated-ownership-fill')) {
         map.current!.addLayer({
-          id: 'ownership-fill',
+          id: 'aggregated-ownership-fill',
           type: 'fill',
-          source: 'parcels',
-          'source-layer': 'ownership',
+          source: 'aggregated-parcels',
           paint: {
             'fill-color': '#3b82f6',
             'fill-opacity': 0.2
           },
-          maxzoom: 14 // Hide at high zoom when individual parcels show
+          layout: {
+            'visibility': showAggregatedParcels ? 'visible' : 'none'
+          }
         });
       }
 
-      if (useSelfHostedParcels && !map.current!.getLayer('ownership-outline')) {
+      if (!map.current!.getLayer('aggregated-ownership-outline')) {
         map.current!.addLayer({
-          id: 'ownership-outline',
+          id: 'aggregated-ownership-outline',
           type: 'line',
-          source: 'parcels',
-          'source-layer': 'ownership',
+          source: 'aggregated-parcels',
           paint: {
             'line-color': '#2563eb',
             'line-width': 2,
             'line-opacity': 0.6
           },
-          maxzoom: 14
+          layout: {
+            'visibility': showAggregatedParcels ? 'visible' : 'none'
+          }
         });
       }
+      
+      if (!map.current!.getLayer('aggregated-ownership-labels')) {
+        map.current!.addLayer({
+          id: 'aggregated-ownership-labels',
+          type: 'symbol',
+          source: 'aggregated-parcels',
+          layout: {
+            'text-field': ['get', 'DEEDHOLDER'],
+            'text-size': 12,
+            'text-offset': [0, 0],
+            'visibility': showAggregatedParcels && showOwnerLabels ? 'visible' : 'none'
+          },
+          paint: {
+            'text-color': '#1e40af',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+          }
+        });
+      }
+
+      // Add click handlers for aggregated ownership layers
+      const handleAggregatedOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (e.features && e.features.length > 0) {
+          const props = e.features[0].properties;
+          const html = `
+            <strong>Owner:</strong> ${props.DEEDHOLDER || 'Unknown'}<br>
+            <strong>Total Parcels:</strong> ${props.PARCEL_COUNT || props.COMBINED ? '2+' : '1'}<br>
+            <strong>Total Acres:</strong> ${props.TOTAL_ACRES ? Number(props.TOTAL_ACRES).toFixed(2) : 'N/A'}<br>
+            <strong>County:</strong> ${props.COUNTYNAME || 'N/A'}<br>
+            ${props.COMBINED ? '<strong>Original Parcels:</strong> ' + props.ORIGINAL_PARCELS + '<br>' : ''}
+            <small><em>Aggregated Ownership (Self-Hosted)</em></small>
+          `;
+          
+          new maplibregl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map.current!);
+        }
+      };
+
+      map.current!.on('click', 'aggregated-ownership-fill', handleAggregatedOwnershipClick);
+      map.current!.on('click', 'aggregated-ownership-outline', handleAggregatedOwnershipClick);
+
+      // Add hover effects for aggregated ownership layers
+      map.current!.on('mouseenter', 'aggregated-ownership-fill', () => {
+        map.current!.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current!.on('mouseleave', 'aggregated-ownership-fill', () => {
+        map.current!.getCanvas().style.cursor = '';
+      });
+
+      map.current!.on('mouseenter', 'aggregated-ownership-outline', () => {
+        map.current!.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current!.on('mouseleave', 'aggregated-ownership-outline', () => {
+        map.current!.getCanvas().style.cursor = '';
+      });
 
       if (useSelfHostedParcels && !map.current!.getLayer('ownership-labels')) {
         map.current!.addLayer({
@@ -2233,9 +2365,10 @@ export default function EnhancedMap({
       loadParcels();
     });
 
-      // Load parcels and auctions when map moves and update label visibility
+      // Load parcels, aggregated parcels, and auctions when map moves and update label visibility
       map.current.on('moveend', () => {
         loadParcels();
+        loadAggregatedParcels();
         loadAuctions();
         // Update label visibility based on new location
         updateLabelVisibility();
@@ -2486,6 +2619,34 @@ export default function EnhancedMap({
       loadAuctions();
     }
   }, [auctionFilters]);
+
+  // Toggle aggregated parcels layer visibility
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const layers = ['aggregated-ownership-fill', 'aggregated-ownership-outline', 'aggregated-ownership-labels'];
+    
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        const visibility = layerId === 'aggregated-ownership-labels'
+          ? (showAggregatedParcels && showOwnerLabels ? 'visible' : 'none')
+          : (showAggregatedParcels ? 'visible' : 'none');
+        
+        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
+      }
+    });
+    
+    // Load or clear data based on toggle
+    if (showAggregatedParcels) {
+      loadAggregatedParcels();
+    } else {
+      const source = map.current?.getSource('aggregated-parcels') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+  }, [showAggregatedParcels, showOwnerLabels]);
 
   // Toggle substations layer visibility
   useEffect(() => {
