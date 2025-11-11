@@ -557,17 +557,29 @@ export class AuctionScraperService {
     let needsDateReview = false;
     let dateExtractionMethod = null;
     
-    // First try to parse provided date
-    if (auctionData.auction_date) {
-      try {
-        auctionDate = new Date(auctionData.auction_date);
-        if (isNaN(auctionDate.getTime())) {
-          auctionDate = null;
-        } else {
-          dateExtractionMethod = 'scraped';
+    // Try multiple date field variations from Firecrawl
+    const dateFields = [
+      auctionData.auction_date,
+      auctionData.sale_date, 
+      auctionData.start_date,
+      auctionData.bid_deadline,
+      auctionData.event_date,
+      auctionData.date
+    ];
+    
+    for (const dateField of dateFields) {
+      if (dateField) {
+        try {
+          const parsed = new Date(dateField);
+          if (!isNaN(parsed.getTime())) {
+            auctionDate = parsed;
+            dateExtractionMethod = 'scraped';
+            console.log(`      ✓ Date from Firecrawl: ${auctionDate.toLocaleDateString()}`);
+            break;
+          }
+        } catch (error) {
+          // Continue to next date field
         }
-      } catch (error) {
-        auctionDate = null;
       }
     }
     

@@ -103,16 +103,23 @@ export class FirecrawlService {
         formats: [
           {
             type: "json",
-            prompt: "Extract land auction details including title, description, auction date, address/location, acreage/acres, land type/property type, county, and state. Return null for missing fields.",
+            prompt: "Extract land auction details. Be VERY thorough in finding the auction date - look for: 'Auction Date:', 'Sale Date:', 'Start Date:', 'Bidding Ends:', 'Bids Due:', dates in description or title, event dates or deadlines, any temporal information. Return the auction date in MM/DD/YYYY or Month DD, YYYY format. Also extract: title, description, address/location, acreage/acres, land type, county, state.",
             schema: {
               type: "object",
               properties: {
                 title: { type: "string" },
                 description: { type: "string" },
-                auction_date: { type: "string" },
-                date: { type: "string" },
+                // Multiple date fields to catch variations
+                auction_date: { type: "string", description: "Main auction date" },
+                sale_date: { type: "string", description: "Sale or auction date" },
+                start_date: { type: "string", description: "Start date or opening date" },
+                bid_deadline: { type: "string", description: "Bid deadline or closing date" },
+                event_date: { type: "string", description: "Event or auction date" },
+                date: { type: "string", description: "Any date found" },
+                // Location fields
                 address: { type: "string" },
                 location: { type: "string" },
+                // Property details
                 acreage: { type: "number" },
                 acres: { type: "number" },
                 land_type: { type: "string" },
