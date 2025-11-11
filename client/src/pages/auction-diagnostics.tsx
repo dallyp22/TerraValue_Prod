@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map } from 'lucide-react';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -36,6 +36,7 @@ export default function AuctionDiagnostics() {
   const [recentAuctions, setRecentAuctions] = useState<any[]>([]);
   const [upcomingAuctions, setUpcomingAuctions] = useState<any[]>([]);
   const [coverageMetrics, setCoverageMetrics] = useState<any>(null);
+  const [showCoverageTable, setShowCoverageTable] = useState(false);
   
   // Scrape progress tracking
   const [scrapeProgress, setScrapeProgress] = useState({
@@ -269,30 +270,47 @@ export default function AuctionDiagnostics() {
   }, []);
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Sticky Glassmorphism Header */}
+      <div className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-white/20 shadow-lg">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+                <Activity className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                  Auction Dashboard
+                </h1>
+                <p className="text-sm text-gray-600">System Diagnostics & Control Center</p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => window.location.href = '/'}
+              variant="outline"
+              className="shadow-md hover:shadow-lg transition-all duration-200"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Map
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Circular Progress Tracker - Fixed Top Right */}
       {scrapeProgress.isActive && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-4 bg-white border-2 border-blue-500 rounded-lg p-4 shadow-2xl animate-in fade-in slide-in-from-right-10">
-          <div className="relative w-28 h-28">
-            {/* Circular Progress */}
-            <svg className="w-28 h-28 transform -rotate-90">
+        <div className="fixed top-24 right-6 z-50 flex items-center gap-4 backdrop-blur-xl bg-white/90 border border-blue-200/50 rounded-2xl p-4 shadow-2xl animate-in fade-in slide-in-from-right-10">
+          <div className="relative w-20 h-20">
+            <svg className="w-20 h-20 transform -rotate-90">
+              <circle cx="40" cy="40" r="36" stroke="rgba(0, 0, 0, 0.06)" strokeWidth="8" fill="none" />
               <circle
-                cx="56"
-                cy="56"
-                r="48"
-                stroke="rgba(0, 0, 0, 0.06)"
-                strokeWidth="10"
-                fill="none"
-              />
-              <circle
-                cx="56"
-                cy="56"
-                r="48"
+                cx="40" cy="40" r="36"
                 stroke="url(#gradient)"
-                strokeWidth="10"
+                strokeWidth="8"
                 fill="none"
-                strokeDasharray={`${2 * Math.PI * 48}`}
-                strokeDashoffset={`${2 * Math.PI * 48 * (1 - scrapeProgress.completedSources / scrapeProgress.totalSources)}`}
+                strokeDasharray={`${2 * Math.PI * 36}`}
+                strokeDashoffset={`${2 * Math.PI * 36 * (1 - scrapeProgress.completedSources / scrapeProgress.totalSources)}`}
                 strokeLinecap="round"
                 className="transition-all duration-500"
               />
@@ -305,465 +323,430 @@ export default function AuctionDiagnostics() {
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {scrapeProgress.completedSources}
-                </div>
-                <div className="text-xs text-gray-500">of {scrapeProgress.totalSources}</div>
+                <div className="text-xl font-bold text-blue-600">{scrapeProgress.completedSources}</div>
+                <div className="text-[10px] text-gray-500">of {scrapeProgress.totalSources}</div>
               </div>
             </div>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <div className="text-sm font-bold text-gray-900 mb-1">🔄 Scraping Sources</div>
-            <div className="text-xs text-gray-600 mb-1 truncate max-w-[200px]">
-              Current: <span className="font-semibold">{scrapeProgress.currentSource}</span>
+          <div className="flex-1 min-w-[180px]">
+            <div className="text-sm font-bold text-gray-900 mb-1">🔄 Scraping</div>
+            <div className="text-xs text-gray-600 mb-1 truncate max-w-[180px]">
+              <span className="font-semibold">{scrapeProgress.currentSource}</span>
             </div>
-            <div className="text-xs font-semibold text-blue-600">
+            <div className="text-xs font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               {Math.round((scrapeProgress.completedSources / scrapeProgress.totalSources) * 100)}% Complete
             </div>
           </div>
         </div>
       )}
       
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Auction System Diagnostics</h1>
-        <Button 
-          onClick={() => window.location.href = '/'}
-          variant="outline"
-          size="lg"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Map
-        </Button>
-      </div>
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
 
-      {/* Prominent Scraper Button */}
-      <Card className="mb-6 border-2 border-red-500 bg-gradient-to-br from-red-50 to-orange-50">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold text-red-900 mb-2">Auction Data Collection</h2>
-              <p className="text-sm text-gray-700 mb-1">
-                Scrape all 24 auction sources to discover new listings and update existing ones.
-              </p>
-              <p className="text-xs text-gray-600">
-                Last run: {diagnosticsData?.lastScrapeTime 
-                  ? getRelativeTime(diagnosticsData.lastScrapeTime) 
-                  : recentAuctions.length > 0 
-                    ? getRelativeTime(recentAuctions[0].scrapedAt) + ' (estimated)'
-                    : 'Never'}
-              </p>
-            </div>
-            <Button 
-              onClick={startScrape} 
-              disabled={scraping}
-              size="lg"
-              className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-            >
-              {scraping ? (
-                <span className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Scraping...
-                </span>
-              ) : (
-                '🚀 RUN FULL SCRAPER'
-              )}
-            </Button>
-          </div>
-          {scrapeProgress.isActive && (
-            <div className="mt-4 pt-4 border-t">
-              <div className="text-sm text-gray-700 mb-2">
-                Processing: <span className="font-semibold">{scrapeProgress.currentSource}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${(scrapeProgress.completedSources / scrapeProgress.totalSources) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
-      <div className="grid gap-6">
-        {/* Status Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Database Status</CardTitle>
-            <CardDescription>Current auction data in the system</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p>Loading...</p>
-            ) : auctionData ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-blue-50 rounded">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {auctionData.auctions?.length || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Auctions Found</div>
+        {/* Hero Metrics Grid - Premium Design */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Scraper Control Card */}
+          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500 via-orange-500 to-amber-500 p-[2px] shadow-xl hover:shadow-2xl transition-all duration-300">
+            <div className="relative h-full rounded-2xl bg-white p-6">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-red-100 to-transparent rounded-full -mr-16 -mt-16 opacity-50"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg">
+                    <RefreshCw className="h-6 w-6 text-white" />
                   </div>
-                  <div className="p-4 bg-green-50 rounded">
-                    <div className="text-2xl font-bold text-green-600">
-                      {auctionData.total || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Total in DB</div>
-                  </div>
-                  <div className="p-4 bg-yellow-50 rounded">
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {auctionData.withoutCoordinates || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Without Coords</div>
-                  </div>
-                  <div className="p-4 bg-purple-50 rounded">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {auctionData.withCoordinates || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">With Coords</div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Data Collection</h3>
+                    <p className="text-sm text-gray-600">24 Auction Sources</p>
                   </div>
                 </div>
+                <p className="text-sm text-gray-700 mb-4">
+                  Last run: <span className="font-semibold">
+                    {diagnosticsData?.lastScrapeTime 
+                      ? getRelativeTime(diagnosticsData.lastScrapeTime) 
+                      : recentAuctions.length > 0 
+                        ? getRelativeTime(recentAuctions[0].scrapedAt) + ' (est.)'
+                        : 'Never'}
+                  </span>
+                </p>
+                <Button 
+                  onClick={startScrape} 
+                  disabled={scraping}
+                  size="lg"
+                  className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
+                >
+                  {scraping ? (
+                    <span className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Scraping...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <RefreshCw className="h-5 w-5" />
+                      RUN FULL SCRAPER
+                    </span>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
 
-                {auctionData.withoutCoordinates > 0 && (
-                  <Alert>
-                    <AlertDescription>
-                      ⚠️ {auctionData.withoutCoordinates} auctions don't have coordinates and won't show on the map.
-                      This usually means geocoding failed for those addresses.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {auctionData.total === 0 && (
-                  <Alert>
-                    <AlertDescription>
-                      ❌ No auctions in database. Click "Run Full Scraper" below to populate the database.
-                    </AlertDescription>
-                  </Alert>
+          {/* Quick Stats Card */}
+          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-[2px] shadow-xl hover:shadow-2xl transition-all duration-300">
+            <div className="relative h-full rounded-2xl bg-white p-6">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100 to-transparent rounded-full -mr-16 -mt-16 opacity-50"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
+                    <Database className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Database Status</h3>
+                    <p className="text-sm text-gray-600">Current System Data</p>
+                  </div>
+                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : auctionData ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                      <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                        {auctionData.total || 0}
+                      </div>
+                      <div className="text-xs text-gray-600 font-medium">Total Auctions</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                      <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                        {auctionData.withCoordinates || 0}
+                      </div>
+                      <div className="text-xs text-gray-600 font-medium">With Coords</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+                      <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                        {Object.keys(auctionData?.bySource || {}).length}
+                      </div>
+                      <div className="text-xs text-gray-600 font-medium">Active Sources</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                      <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                        {auctionData.withoutCoordinates || 0}
+                      </div>
+                      <div className="text-xs text-gray-600 font-medium">Need Coords</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">Click "Refresh Status" to load data</p>
                 )}
               </div>
-            ) : (
-              <p>Click "Refresh Status" to check</p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+        </div>
 
-        {/* Overview Section - Last Scrape Info */}
-        {diagnosticsData?.lastScrapeTime ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Last Scrape Activity</CardTitle>
-              <CardDescription>
-                {diagnosticsData.isEstimated 
-                  ? 'Based on most recent auction added (full monitoring starts on next scrape)'
-                  : 'Most recent data collection run'
-                }
-              </CardDescription>
+        <div className="grid gap-6">
+
+        {/* Last Scrape Activity - Compact */}
+        {diagnosticsData?.lastScrapeTime && (
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Last Scrape Activity</CardTitle>
+                  <CardDescription className="text-xs">
+                    {diagnosticsData.isEstimated ? 'Estimated from recent data' : 'Latest collection run'}
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="p-4 bg-indigo-50 rounded">
-                  <div className="text-xl font-bold text-indigo-600">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-200">
+                  <div className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     {getRelativeTime(diagnosticsData.lastScrapeTime)}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {diagnosticsData.isEstimated ? 'Last Addition' : 'Last Scrape'}
-                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Last Run</div>
                 </div>
-                <div className="p-4 bg-blue-50 rounded">
-                  <div className="text-2xl font-bold text-blue-600">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                     {diagnosticsData.summary?.totalDiscovered || auctionData?.total || 0}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {diagnosticsData.isEstimated ? 'Total Auctions' : 'URLs Found'}
-                  </div>
+                  <div className="text-xs text-gray-600 font-medium">URLs Found</div>
                 </div>
-                <div className="p-4 bg-green-50 rounded">
-                  <div className="text-2xl font-bold text-green-600">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                     {diagnosticsData.summary?.totalSaved || auctionData?.total || 0}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {diagnosticsData.isEstimated ? 'In Database' : 'Auctions Saved'}
-                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Saved</div>
                 </div>
-                <div className="p-4 bg-yellow-50 rounded">
-                  <div className="text-2xl font-bold text-yellow-600">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                     {diagnosticsData.summary?.iowaDiscovered || 
                      auctionData?.auctions?.filter((a: any) => 
                        a.state?.toLowerCase() === 'iowa' || a.state?.toLowerCase() === 'ia'
                      ).length || 0}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {diagnosticsData.isEstimated ? 'Iowa Auctions' : 'Iowa Found'}
-                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Iowa Found</div>
                 </div>
-                <div className="p-4 bg-purple-50 rounded">
-                  <div className="text-2xl font-bold text-purple-600">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                     {diagnosticsData.summary?.iowaSaved || 
                      auctionData?.auctions?.filter((a: any) => 
                        a.state?.toLowerCase() === 'iowa' || a.state?.toLowerCase() === 'ia'
                      ).length || 0}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {diagnosticsData.isEstimated ? 'Iowa in DB' : 'Iowa Saved'}
-                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Iowa Saved</div>
                 </div>
-              </div>
-              {diagnosticsData.isEstimated && (
-                <Alert className="mt-4">
-                  <AlertDescription className="text-xs">
-                    💡 Run "Run Full Scraper" to start collecting detailed coverage metrics with the new monitoring system.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        ) : recentAuctions.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Last Activity</CardTitle>
-              <CardDescription>Based on most recent auction in database</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-indigo-50 rounded">
-                  <div className="text-xl font-bold text-indigo-600">
-                    {getRelativeTime(recentAuctions[0].scrapedAt)}
-                  </div>
-                  <div className="text-sm text-gray-600">Last Addition</div>
-                </div>
-                <div className="p-4 bg-blue-50 rounded">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {auctionData?.total || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">Total Auctions</div>
-                </div>
-                <div className="p-4 bg-green-50 rounded">
-                  <div className="text-2xl font-bold text-green-600">
-                    {auctionData?.auctions?.filter((a: any) => 
-                      a.state?.toLowerCase() === 'iowa' || a.state?.toLowerCase() === 'ia'
-                    ).length || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">Iowa Auctions</div>
-                </div>
-                <div className="p-4 bg-purple-50 rounded">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {Object.keys(auctionData?.bySource || {}).length}
-                  </div>
-                  <div className="text-sm text-gray-600">Active Sources</div>
-                </div>
-              </div>
-              <Alert className="mt-4">
-                <AlertDescription className="text-xs">
-                  💡 Run "Run Full Scraper" to start collecting detailed coverage metrics with the new monitoring system.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Recent Acquisitions */}
-        {recentAuctions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Acquisitions</CardTitle>
-              <CardDescription>10 most recently added auctions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {recentAuctions.map((auction, i) => (
-                  <div key={i} className="p-3 border rounded-lg hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-semibold text-sm">{auction.title}</div>
-                      <Badge variant="outline" className="text-xs">{auction.sourceWebsite}</Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {auction.county && (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <MapPin className="h-3 w-3" />
-                          {auction.county}, {auction.state}
-                        </div>
-                      )}
-                      {auction.acreage && (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Ruler className="h-3 w-3" />
-                          {auction.acreage} acres
-                        </div>
-                      )}
-                      {auction.scrapedAt && (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Calendar className="h-3 w-3" />
-                          Added {getRelativeTime(auction.scrapedAt)}
-                        </div>
-                      )}
-                      {auction.auctionDate && (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          Auction: {new Date(auction.auctionDate).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                    {auction.latitude && auction.longitude && (
-                      <div className="mt-2 pt-2 border-t">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => {
-                            window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
-                          }}
-                        >
-                          <Map className="h-3 w-3 mr-1" />
-                          View on Map
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Upcoming Auctions */}
-        {upcomingAuctions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Upcoming Auctions</CardTitle>
-              <CardDescription>15 soonest auction dates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {upcomingAuctions.map((auction, i) => {
-                  const daysUntil = getDaysUntil(auction.auctionDate);
-                  const urgencyColor = daysUntil <= 2 ? 'bg-red-50 border-red-200' : daysUntil <= 7 ? 'bg-yellow-50 border-yellow-200' : 'border-gray-200';
-                  
-                  return (
-                    <div key={i} className={`p-3 border rounded-lg ${urgencyColor} transition-colors`}>
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="font-semibold text-sm">{auction.title}</div>
-                        <Badge variant={daysUntil <= 2 ? 'destructive' : daysUntil <= 7 ? 'default' : 'outline'} className="text-xs">
-                          {daysUntil === 0 ? 'Today!' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(auction.auctionDate).toLocaleDateString()}
-                        </div>
-                        {auction.county && (
-                          <div className="flex items-center gap-1 text-gray-600">
-                            <MapPin className="h-3 w-3" />
-                            {auction.county}, {auction.state}
-                          </div>
-                        )}
-                        {auction.acreage && (
-                          <div className="flex items-center gap-1 text-gray-600">
-                            <Ruler className="h-3 w-3" />
-                            {auction.acreage} acres
-                          </div>
-                        )}
-                        <div className="text-gray-600">
-                          {auction.sourceWebsite}
-                        </div>
-                      </div>
-                      {auction.url && (
-                        <div className="mt-2">
-                          <a 
-                            href={auction.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            View Listing
-                          </a>
-                        </div>
-                      )}
-                      {auction.latitude && auction.longitude && (
-                        <div className="mt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full text-xs"
-                            onClick={() => {
-                              window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
-                            }}
-                          >
-                            <Map className="h-3 w-3 mr-1" />
-                            View on Map
-                          </Button>
-                        </div>
-                      )}
+        {/* Recent & Upcoming Auctions - Side by Side Grid */}
+        {(recentAuctions.length > 0 || upcomingAuctions.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent Acquisitions */}
+            {recentAuctions.length > 0 && (
+              <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                      <TrendingUp className="h-4 w-4 text-white" />
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                    <div>
+                      <CardTitle className="text-lg">Recent Acquisitions</CardTitle>
+                      <CardDescription>Latest 10 additions</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {recentAuctions.map((auction, i) => (
+                      <div key={i} className="group p-3 border rounded-xl hover:shadow-md hover:border-green-300 transition-all duration-200 bg-white">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-semibold text-sm line-clamp-1">{auction.title}</div>
+                          <Badge variant="outline" className="text-xs shrink-0 ml-2">{auction.sourceWebsite}</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {auction.county && (
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <MapPin className="h-3 w-3" />
+                              {auction.county}, {auction.state}
+                            </div>
+                          )}
+                          {auction.acreage && (
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <Ruler className="h-3 w-3" />
+                              {auction.acreage} acres
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          {auction.latitude && auction.longitude && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              onClick={() => {
+                                window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
+                              }}
+                            >
+                              <Map className="h-3 w-3 mr-1" />
+                              Map
+                            </Button>
+                          )}
+                          {auction.url && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              asChild
+                            >
+                              <a href={auction.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Listing
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Upcoming Auctions */}
+            {upcomingAuctions.length > 0 && (
+              <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+                <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+                      <Calendar className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Upcoming Auctions</CardTitle>
+                      <CardDescription>Next 15 events</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {upcomingAuctions.map((auction, i) => {
+                      const daysUntil = getDaysUntil(auction.auctionDate);
+                      const urgencyColor = daysUntil <= 2 ? 'border-red-300 bg-red-50' : daysUntil <= 7 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white';
+                      
+                      return (
+                        <div key={i} className={`group p-3 border rounded-xl hover:shadow-md transition-all duration-200 ${urgencyColor}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="font-semibold text-sm line-clamp-1">{auction.title}</div>
+                            <Badge variant={daysUntil <= 2 ? 'destructive' : daysUntil <= 7 ? 'default' : 'outline'} className="text-xs shrink-0 ml-2">
+                              {daysUntil === 0 ? 'Today!' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil}d`}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(auction.auctionDate).toLocaleDateString()}
+                            </div>
+                            {auction.county && (
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <MapPin className="h-3 w-3" />
+                                {auction.county}
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            {auction.latitude && auction.longitude && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7"
+                                onClick={() => {
+                                  window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
+                                }}
+                              >
+                                <Map className="h-3 w-3 mr-1" />
+                                Map
+                              </Button>
+                            )}
+                            {auction.url && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7"
+                                asChild
+                              >
+                                <a href={auction.url} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-3 w-3 mr-1" />
+                                  Listing
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
 
         {/* Coverage Analysis Tab */}
         {coverageMetrics && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Coverage Analysis</CardTitle>
-              <CardDescription>Source-level scraping performance</CardDescription>
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                    <Activity className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Coverage Analysis</CardTitle>
+                    <CardDescription>Source-level scraping performance</CardDescription>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCoverageTable(!showCoverageTable)}
+                  className="hover:bg-blue-100"
+                >
+                  {showCoverageTable ? (
+                    <>
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Hide Details
+                    </>
+                  ) : (
+                    <>
+                      <ChevronRight className="h-4 w-4 mr-1" />
+                      Show Details
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="mb-4 grid grid-cols-3 gap-4">
-                <div className="p-3 bg-blue-50 rounded">
-                  <div className="text-2xl font-bold text-blue-600">
+            <CardContent className="pt-6">
+              <div className="mb-6 grid grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                  <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                     {coverageMetrics.summary?.averageCoverage || 0}%
                   </div>
-                  <div className="text-sm text-gray-600">Avg Coverage</div>
+                  <div className="text-sm text-gray-600 font-medium">Avg Coverage</div>
                 </div>
-                <div className="p-3 bg-yellow-50 rounded">
-                  <div className="text-2xl font-bold text-yellow-600">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                     {coverageMetrics.summary?.lowCoverageCount || 0}
                   </div>
-                  <div className="text-sm text-gray-600">Sources &lt;80%</div>
+                  <div className="text-sm text-gray-600 font-medium">Sources &lt;80%</div>
                 </div>
-                <div className="p-3 bg-green-50 rounded">
-                  <div className="text-2xl font-bold text-green-600">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                  <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                     {coverageMetrics.summary?.iowaAverageCoverage || 0}%
                   </div>
-                  <div className="text-sm text-gray-600">Iowa Avg</div>
+                  <div className="text-sm text-gray-600 font-medium">Iowa Avg</div>
                 </div>
               </div>
               
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Source</th>
-                      <th className="text-right p-2">Discovered</th>
-                      <th className="text-right p-2">Saved</th>
-                      <th className="text-right p-2">Coverage</th>
-                      <th className="text-right p-2">Iowa</th>
-                      <th className="text-right p-2">Missing</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {coverageMetrics.metrics?.map((metric: any, i: number) => (
-                      <tr key={i} className={`border-b ${metric.coverage_percentage < 80 ? 'bg-red-50' : ''}`}>
-                        <td className="p-2 font-medium">{metric.source}</td>
-                        <td className="text-right p-2">{metric.discovered}</td>
-                        <td className="text-right p-2">{metric.saved}</td>
-                        <td className="text-right p-2">
-                          <Badge variant={metric.coverage_percentage < 80 ? 'destructive' : 'default'}>
-                            {metric.coverage_percentage}%
-                          </Badge>
-                        </td>
-                        <td className="text-right p-2 text-gray-600">
-                          {metric.iowa_saved}/{metric.iowa_discovered}
-                        </td>
-                        <td className="text-right p-2 text-gray-600">
-                          {metric.missing_count}
-                        </td>
+              {showCoverageTable && (
+                <div className="overflow-x-auto rounded-lg border animate-in fade-in slide-in-from-top-4 duration-300">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold">Source</th>
+                        <th className="text-right p-3 font-semibold">Discovered</th>
+                        <th className="text-right p-3 font-semibold">Saved</th>
+                        <th className="text-right p-3 font-semibold">Coverage</th>
+                        <th className="text-right p-3 font-semibold">Iowa</th>
+                        <th className="text-right p-3 font-semibold">Missing</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {coverageMetrics.metrics?.map((metric: any, i: number) => (
+                        <tr key={i} className={`border-b hover:bg-slate-50 transition-colors ${metric.coverage_percentage < 80 ? 'bg-red-50/50' : ''}`}>
+                          <td className="p-3 font-medium">{metric.source}</td>
+                          <td className="text-right p-3">{metric.discovered}</td>
+                          <td className="text-right p-3">{metric.saved}</td>
+                          <td className="text-right p-3">
+                            <Badge variant={metric.coverage_percentage < 80 ? 'destructive' : 'default'} className="font-bold">
+                              {metric.coverage_percentage}%
+                            </Badge>
+                          </td>
+                          <td className="text-right p-3 text-gray-600">
+                            {metric.iowa_saved}/{metric.iowa_discovered}
+                          </td>
+                          <td className="text-right p-3 text-gray-600">
+                            {metric.missing_count}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1116,128 +1099,176 @@ export default function AuctionDiagnostics() {
 
         {/* Investigation Results */}
         {investigationResults && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Coordinate Investigation Results</CardTitle>
-              <CardDescription>Analysis of auction locations</CardDescription>
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                  <MapPin className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Coordinate Investigation</CardTitle>
+                  <CardDescription>Location data analysis</CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-blue-50 rounded">
-                    <div className="text-2xl font-bold text-blue-600">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                       {investigationResults.total}
                     </div>
-                    <div className="text-sm text-gray-600">Total Auctions</div>
+                    <div className="text-xs text-gray-600 font-medium">Total Auctions</div>
                   </div>
-                  <div className="p-4 bg-green-50 rounded">
-                    <div className="text-2xl font-bold text-green-600">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                       {investigationResults.withCoordinates}
                     </div>
-                    <div className="text-sm text-gray-600">With Coords</div>
+                    <div className="text-xs text-gray-600 font-medium">With Coords</div>
                   </div>
-                  <div className="p-4 bg-yellow-50 rounded">
-                    <div className="text-2xl font-bold text-yellow-600">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                       {investigationResults.canBeFixed}
                     </div>
-                    <div className="text-sm text-gray-600">Can Be Fixed</div>
+                    <div className="text-xs text-gray-600 font-medium">Can Be Fixed</div>
                   </div>
-                  <div className="p-4 bg-purple-50 rounded">
-                    <div className="text-2xl font-bold text-purple-600">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       {investigationResults.potentialTotal}
                     </div>
-                    <div className="text-sm text-gray-600">Potential Total</div>
+                    <div className="text-xs text-gray-600 font-medium">Potential Total</div>
                   </div>
                 </div>
 
                 {investigationResults.canBeFixed > 0 && (
-                  <Alert>
-                    <AlertDescription>
-                      🎯 <strong>{investigationResults.canBeFixed} auctions</strong> can be fixed by applying county-level coordinates!
-                      This will increase map coverage from <strong>{investigationResults.withCoordinates}</strong> to <strong>{investigationResults.potentialTotal}</strong> auctions.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {investigationResults.canBeFixed > 0 && (
-                  <Button 
-                    onClick={updateCoordinates} 
-                    disabled={updating}
-                    className="w-full"
-                  >
-                    {updating ? 'Updating...' : `Fix ${investigationResults.canBeFixed} Auctions with County Coordinates`}
-                  </Button>
+                  <>
+                    <Alert className="border-green-200 bg-green-50">
+                      <AlertDescription className="text-sm">
+                        🎯 <strong>{investigationResults.canBeFixed} auctions</strong> can be fixed! 
+                        Coverage: <strong>{investigationResults.withCoordinates}</strong> → <strong>{investigationResults.potentialTotal}</strong>
+                      </AlertDescription>
+                    </Alert>
+                    <Button 
+                      onClick={updateCoordinates} 
+                      disabled={updating}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg"
+                    >
+                      {updating ? (
+                        <span className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Updating...
+                        </span>
+                      ) : (
+                        `Fix ${investigationResults.canBeFixed} Auctions with County Coordinates`
+                      )}
+                    </Button>
+                  </>
                 )}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional Actions</CardTitle>
-            <CardDescription>Manage auction data and settings</CardDescription>
+        {/* Actions - Compact Grid */}
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+          <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 border-b">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-600 to-gray-600 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardDescription>Manage auction data and settings</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="flex gap-4 flex-wrap">
-            <Button onClick={checkAuctions} disabled={loading}>
-              {loading ? 'Loading...' : 'Refresh Status'}
-            </Button>
-            <Button 
-              onClick={investigateCoords} 
-              disabled={investigating}
-              variant="outline"
-            >
-              {investigating ? 'Investigating...' : 'Investigate Coordinates'}
-            </Button>
-            <Button 
-              onClick={() => setShowAddSource(!showAddSource)}
-              variant="outline"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Auction Source
-            </Button>
-            <Button 
-              onClick={validateCounties}
-              disabled={validating}
-              variant="outline"
-            >
-              {validating ? 'Validating...' : 'Validate Counties'}
-            </Button>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Button 
+                onClick={checkAuctions} 
+                disabled={loading}
+                variant="outline"
+                className="h-auto py-3 flex-col gap-2 hover:shadow-md transition-all"
+              >
+                <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+                <span className="text-xs">{loading ? 'Loading...' : 'Refresh Status'}</span>
+              </Button>
+              <Button 
+                onClick={investigateCoords} 
+                disabled={investigating}
+                variant="outline"
+                className="h-auto py-3 flex-col gap-2 hover:shadow-md transition-all"
+              >
+                <MapPin className={`h-5 w-5 ${investigating ? 'animate-pulse' : ''}`} />
+                <span className="text-xs">{investigating ? 'Checking...' : 'Investigate Coords'}</span>
+              </Button>
+              <Button 
+                onClick={() => setShowAddSource(!showAddSource)}
+                variant="outline"
+                className="h-auto py-3 flex-col gap-2 hover:shadow-md transition-all"
+              >
+                <Plus className="h-5 w-5" />
+                <span className="text-xs">Add Source</span>
+              </Button>
+              <Button 
+                onClick={validateCounties}
+                disabled={validating}
+                variant="outline"
+                className="h-auto py-3 flex-col gap-2 hover:shadow-md transition-all"
+              >
+                <CheckCircle className={`h-5 w-5 ${validating ? 'animate-pulse' : ''}`} />
+                <span className="text-xs">{validating ? 'Validating...' : 'Validate Counties'}</span>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
         {/* County Validation Results */}
         {validationResults && (
-          <Card className="border-green-200 bg-green-50">
-            <CardHeader>
-              <CardTitle className="text-green-900">County Validation Results</CardTitle>
-              <CardDescription>Checked coordinates against stored county names</CardDescription>
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">County Validation Results</CardTitle>
+                  <CardDescription>Coordinate-county consistency check</CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{validationResults.validated}</div>
-                  <div className="text-xs text-gray-600">Auctions Checked</div>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                    {validationResults.validated}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Checked</div>
                 </div>
-                <div className="p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{validationResults.fixed}</div>
-                  <div className="text-xs text-gray-600">Counties Fixed</div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    {validationResults.fixed}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Fixed</div>
                 </div>
-                <div className="p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">{validationResults.mismatches}</div>
-                  <div className="text-xs text-gray-600">Mismatches Found</div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                  <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                    {validationResults.mismatches}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Mismatches</div>
                 </div>
               </div>
               
               {validationResults.details && validationResults.details.length > 0 && (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  <div className="text-sm font-semibold mb-2">Fixed Auctions:</div>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  <div className="text-sm font-semibold mb-2 text-gray-700">Fixed Auctions:</div>
                   {validationResults.details.map((item: any, i: number) => (
-                    <div key={i} className="p-2 bg-white rounded text-xs">
-                      <div className="font-medium">{item.title.substring(0, 60)}...</div>
-                      <div className="text-gray-600">
-                        ❌ Was: {item.storedCounty} → ✅ Fixed to: {item.geocodedCounty}
+                    <div key={i} className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg text-xs">
+                      <div className="font-medium mb-1">{item.title.substring(0, 60)}...</div>
+                      <div className="text-gray-600 flex items-center gap-1">
+                        <span className="text-red-600">❌ {item.storedCounty}</span>
+                        <span>→</span>
+                        <span className="text-green-600">✅ {item.geocodedCounty}</span>
                       </div>
                     </div>
                   ))}
@@ -1249,75 +1280,90 @@ export default function AuctionDiagnostics() {
 
         {/* Add New Auction Source */}
         {showAddSource && (
-          <Card className="border-blue-200 bg-blue-50">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Add New Auction Source</CardTitle>
-              <CardDescription>Add a new website to scrape for Iowa farmland auctions</CardDescription>
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Add Auction Source</CardTitle>
+                    <CardDescription>Configure new scraping source</CardDescription>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowAddSource(false)}>✕</Button>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="pt-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="source-name">Source Name</Label>
+                  <Label htmlFor="source-name" className="text-sm font-medium">Source Name</Label>
                   <Input
                     id="source-name"
-                    placeholder="e.g., Spencer Auction Group"
+                    placeholder="Spencer Auction Group"
                     value={newSourceName}
                     onChange={(e) => setNewSourceName(e.target.value)}
+                    className="border-gray-300"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="source-url">Website URL</Label>
+                  <Label htmlFor="source-url" className="text-sm font-medium">Website URL</Label>
                   <Input
                     id="source-url"
-                    placeholder="e.g., https://spencerauctiongroup.com"
+                    placeholder="https://example.com"
                     value={newSourceUrl}
                     onChange={(e) => setNewSourceUrl(e.target.value)}
+                    className="border-gray-300"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="source-path">Auction Page Path (optional)</Label>
+                  <Label htmlFor="source-path" className="text-sm font-medium">Path (optional)</Label>
                   <Input
                     id="source-path"
-                    placeholder="e.g., /auctions/"
+                    placeholder="/auctions/"
                     value={newSourcePath}
                     onChange={(e) => setNewSourcePath(e.target.value)}
+                    className="border-gray-300"
                   />
                 </div>
               </div>
-              <Alert>
+              <Alert className="border-blue-200 bg-blue-50">
                 <AlertDescription className="text-xs">
-                  <strong>Note:</strong> New sources are added to the backend code. This is currently for reference.
-                  Spencer Auction Group is already configured and will appear once scraped.
+                  <strong>Info:</strong> Sources are configured in backend code. Use this to generate the config.
                 </AlertDescription>
               </Alert>
               <div className="flex gap-2">
                 <Button 
                   onClick={() => {
-                    alert(`Source info:\n\nName: ${newSourceName}\nURL: ${newSourceUrl}\nPath: ${newSourcePath || 'None'}\n\nAdd this to server/services/auctionScraper.ts in the sources array.`);
+                    alert(`Source config:\n\nName: ${newSourceName}\nURL: ${newSourceUrl}\nPath: ${newSourcePath || 'None'}\n\nAdd to server/services/auctionScraper.ts`);
                   }}
                   disabled={!newSourceName || !newSourceUrl}
+                  className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
                 >
-                  Generate Config Code
+                  Generate Config
                 </Button>
-                <Button 
-                  onClick={() => setShowAddSource(false)}
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
+                <Button onClick={() => setShowAddSource(false)} variant="outline">Cancel</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Current Auction Sources */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Configured Auction Sources (24)</CardTitle>
-            <CardDescription>Websites currently being scraped for auctions</CardDescription>
+        {/* Current Auction Sources - Compact */}
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                <Database className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Configured Sources (24)</CardTitle>
+                <CardDescription>Active auction scraping sources</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {[
                 'Farmers National', 'Midwest Ag Services', 'Iowa Land Company', 
                 'Peoples Company', 'High Point Land', 'Zomer Company',
@@ -1327,40 +1373,33 @@ export default function AuctionDiagnostics() {
                 'Spencer Auction Group', 'Sieren Auction Sales', 'Green Real Estate & Auction',
                 'Iowa Land Sales', 'Sullivan Auctioneers', 'BigIron',
                 'Central States Real Estate', 'The Acre Co'
-              ].map((source, idx) => (
-                <div key={idx} className="p-3 border rounded-lg bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-sm font-medium">{source}</span>
+              ].map((source, idx) => {
+                const isNew = ['Spencer Auction Group', 'Steffes Group', 'Sieren Auction Sales', 
+                  'Green Real Estate & Auction', 'Iowa Land Sales', 'Sullivan Auctioneers',
+                  'BigIron', 'Central States Real Estate', 'The Acre Co'].includes(source);
+                return (
+                  <div key={idx} className={`p-2 rounded-lg border ${isNew ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200'} hover:shadow-sm transition-all`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${isNew ? 'bg-purple-500' : 'bg-green-500'}`}></div>
+                      <span className="text-xs font-medium truncate">{source}</span>
+                    </div>
                   </div>
-                  {['Spencer Auction Group', 'Steffes Group', 'Sieren Auction Sales', 
-                    'Green Real Estate & Auction', 'Iowa Land Sales', 'Sullivan Auctioneers',
-                    'BigIron', 'Central States Real Estate', 'The Acre Co'].includes(source) && (
-                    <Badge variant="secondary" className="mt-2 text-xs">Recently Added</Badge>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <div className="mt-4 text-sm text-gray-600">
-              💡 Click "Run Full Scraper" to fetch auctions from all 24 sources (9 recently added)
-            </div>
+            <Alert className="mt-4 border-purple-200 bg-purple-50">
+              <AlertDescription className="text-xs">
+                <span className="font-semibold">💡 Tip:</span> Click "RUN FULL SCRAPER" above to fetch from all 24 sources (9 recently added)
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
 
-        {/* Map Bounds Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Search Bounds</CardTitle>
-            <CardDescription>Currently checking Iowa area</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-gray-600">
-              <div>Latitude: {mapBounds.minLat} to {mapBounds.maxLat}</div>
-              <div>Longitude: {mapBounds.minLon} to {mapBounds.maxLon}</div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      {/* Footer Spacer */}
+      <div className="h-8"></div>
+    </div>
     </div>
   );
 }

@@ -47,8 +47,8 @@ export default function MapCentricHome() {
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showAuctions: true,
     showAggregatedParcels: false,
-    showSubstations: true,
-    showDatacenters: true,
+    showSubstations: false,
+    showDatacenters: false,
     datacenterStates: {
       iowa: true,
       illinois: false,
@@ -61,7 +61,7 @@ export default function MapCentricHome() {
       lakes: true,
       reservoirs: true
     },
-    showPowerLines: true,
+    showPowerLines: false,
     powerLineVoltages: {
       kv345: true,
       kv161: true,
@@ -69,7 +69,7 @@ export default function MapCentricHome() {
       kv115: true,
       kv69: true
     },
-    showTransmissionLines: true,
+    showTransmissionLines: false,
     transmissionLineStates: {
       kansas: true,
       minnesota: true,
