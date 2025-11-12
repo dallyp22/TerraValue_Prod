@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -37,6 +39,15 @@ export default function AuctionDiagnostics() {
   const [upcomingAuctions, setUpcomingAuctions] = useState<any[]>([]);
   const [coverageMetrics, setCoverageMetrics] = useState<any>(null);
   const [showCoverageTable, setShowCoverageTable] = useState(false);
+  
+  // Schedule settings state
+  const [scheduleSettings, setScheduleSettings] = useState({
+    enabled: false,
+    cadence: 'daily',
+    scheduleTime: '00:00',
+    lastRun: null as string | null,
+    nextRun: null as string | null
+  });
   
   // Scrape progress tracking
   const [scrapeProgress, setScrapeProgress] = useState({
@@ -264,9 +275,45 @@ export default function AuctionDiagnostics() {
     return diffDays;
   };
 
+  // Load schedule settings
+  const loadScheduleSettings = async () => {
+    try {
+      const response = await fetch('/api/auctions/schedule');
+      const data = await response.json();
+      if (data.success && data.settings) {
+        setScheduleSettings(data.settings);
+      }
+    } catch (error) {
+      console.error('Failed to load schedule settings:', error);
+    }
+  };
+
+  // Update schedule settings
+  const updateScheduleSettings = async (updates: Partial<typeof scheduleSettings>) => {
+    try {
+      const newSettings = { ...scheduleSettings, ...updates };
+      setScheduleSettings(newSettings);
+      
+      const response = await fetch('/api/auctions/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        console.log('Schedule updated successfully');
+        loadScheduleSettings(); // Refresh to get calculated nextRun
+      }
+    } catch (error) {
+      console.error('Failed to update schedule:', error);
+    }
+  };
+
   useEffect(() => {
     checkAuctions();
     loadDiagnostics();
+    loadScheduleSettings();
   }, []);
 
   return (
@@ -385,6 +432,66 @@ export default function AuctionDiagnostics() {
                     </span>
                   )}
                 </Button>
+                
+                {/* Automatic Scraping Schedule */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-semibold text-gray-700">Automatic Scraping</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex items-center gap-2 col-span-3 mb-1">
+                      <Checkbox 
+                        id="auto-scrape-enabled"
+                        checked={scheduleSettings.enabled}
+                        onCheckedChange={(checked) => {
+                          updateScheduleSettings({ enabled: !!checked });
+                        }}
+                      />
+                      <Label htmlFor="auto-scrape-enabled" className="text-xs cursor-pointer">
+                        Enable Auto-Scrape
+                      </Label>
+                    </div>
+                    <Select 
+                      value={scheduleSettings.cadence}
+                      onValueChange={(value) => {
+                        updateScheduleSettings({ cadence: value });
+                      }}
+                      disabled={!scheduleSettings.enabled}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="every-other-day">Every Other Day</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="manual">Manual Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="time"
+                      value={scheduleSettings.scheduleTime}
+                      onChange={(e) => {
+                        updateScheduleSettings({ scheduleTime: e.target.value });
+                      }}
+                      disabled={!scheduleSettings.enabled}
+                      className="h-8 text-xs col-span-2"
+                    />
+                  </div>
+                  {scheduleSettings.enabled && scheduleSettings.nextRun && (
+                    <div className="text-xs text-gray-600 mt-2 flex items-center gap-1">
+                      <span className="font-medium">Next scrape:</span>
+                      <span>{new Date(scheduleSettings.nextRun).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {scheduleSettings.enabled && scheduleSettings.lastRun && (
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <span>Last run:</span>
+                      <span>{getRelativeTime(scheduleSettings.lastRun)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

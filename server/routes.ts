@@ -5,6 +5,7 @@ import { valuationService } from "./services/valuation.js";
 import { csr2Service } from "./services/csr2.js";
 import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
+import { automaticScraperService } from "./services/automaticScraper.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { parcelAggregationService } from "./services/parcelAggregation.js";
@@ -438,6 +439,67 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({
         success: false,
         message: "Internal server error"
+      });
+    }
+  });
+
+  // Get scraper schedule settings
+  app.get("/api/auctions/schedule", async (req, res) => {
+    try {
+      const settings = await automaticScraperService.getSettings();
+      res.json({ success: true, settings });
+    } catch (error) {
+      console.error("Failed to get schedule settings:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to get schedule settings' 
+      });
+    }
+  });
+
+  // Update scraper schedule settings
+  app.post("/api/auctions/schedule", async (req, res) => {
+    try {
+      const { enabled, cadence, scheduleTime } = req.body;
+      
+      // Validate inputs
+      if (enabled !== undefined && typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'Invalid enabled value' });
+      }
+      
+      if (cadence && !['daily', 'every-other-day', 'weekly', 'manual'].includes(cadence)) {
+        return res.status(400).json({ success: false, message: 'Invalid cadence' });
+      }
+      
+      if (scheduleTime && !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(scheduleTime)) {
+        return res.status(400).json({ success: false, message: 'Invalid time format' });
+      }
+      
+      const updates: any = { updatedAt: new Date() };
+      if (enabled !== undefined) updates.enabled = enabled;
+      if (cadence) updates.cadence = cadence;
+      if (scheduleTime) updates.scheduleTime = scheduleTime;
+      
+      // Calculate next run if settings changed
+      if (enabled && (cadence || scheduleTime)) {
+        const current = await automaticScraperService.getSettings();
+        const nextCadence = cadence || current.cadence;
+        const nextTime = scheduleTime || current.scheduleTime;
+        const now = new Date();
+        updates.nextRun = automaticScraperService['calculateNextRun'](now, nextCadence, nextTime);
+      }
+      
+      await automaticScraperService.updateSettings(updates);
+      
+      res.json({ 
+        success: true, 
+        message: 'Schedule updated successfully' 
+      });
+    } catch (error) {
+      console.error("Failed to update schedule:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update schedule' 
       });
     }
   });

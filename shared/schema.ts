@@ -99,6 +99,17 @@ export const auctions = pgTable("auctions", {
   dateExtractionMethod: text("date_extraction_method") // "ai", "regex", "manual"
 });
 
+// Scraper Schedule Settings - Configure automatic scraping
+export const scraperSettings = pgTable("scraper_settings", {
+  id: serial("id").primaryKey(),
+  enabled: boolean("enabled").default(false),
+  cadence: text("cadence").default("daily"), // "daily", "every-other-day", "weekly", "manual"
+  scheduleTime: text("schedule_time").default("00:00"), // HH:MM format (e.g., "00:00" for midnight)
+  lastRun: timestamp("last_run"),
+  nextRun: timestamp("next_run"),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
 // Archived Auctions - Past auctions moved from active table
 export const archivedAuctions = pgTable("archived_auctions", {
   id: serial("id").primaryKey(),
@@ -282,6 +293,8 @@ export type PropertyForm = z.infer<typeof propertyFormSchema>;
 export type PropertyImprovement = z.infer<typeof propertyImprovementSchema>;
 export type Auction = typeof auctions.$inferSelect;
 export type InsertAuction = typeof auctions.$inferInsert;
+export type ScraperSettings = typeof scraperSettings.$inferSelect;
+export type InsertScraperSettings = typeof scraperSettings.$inferInsert;
 export type ArchivedAuction = typeof archivedAuctions.$inferSelect;
 export type InsertArchivedAuction = typeof archivedAuctions.$inferInsert;
 export type Parcel = typeof parcels.$inferSelect;

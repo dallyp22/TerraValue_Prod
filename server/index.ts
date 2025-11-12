@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cleanupOpenAI } from "./services/openai";
 import { AuctionArchiverService } from "./services/auctionArchiver";
+import { automaticScraperService } from "./services/automaticScraper";
 
 const app = express();
 
@@ -122,9 +123,13 @@ app.use((req, res, next) => {
   const archiverService = new AuctionArchiverService();
   archiverService.start();
 
+  // Start automatic scraper service (runs on schedule if enabled)
+  automaticScraperService.start();
+
   // Graceful shutdown handling
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, cleaning up...');
+    automaticScraperService.stop();
     archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
@@ -132,6 +137,7 @@ app.use((req, res, next) => {
 
   process.on('SIGINT', async () => {
     console.log('SIGINT received, cleaning up...');
+    automaticScraperService.stop();
     archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
