@@ -11,12 +11,12 @@ async function archivePastAuctions(dryRun: boolean = false) {
     console.log('⚠️  DRY RUN MODE - No changes will be made\n');
   }
 
-  // Calculate cutoff date (7 days ago)
+  // Calculate cutoff date (end of yesterday - archives anything that occurred yesterday or before)
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 7);
+  cutoffDate.setHours(0, 0, 0, 0); // Start of today = end of yesterday
   
   console.log(`📅 Cutoff date: ${cutoffDate.toLocaleDateString()}`);
-  console.log(`   (Archiving auctions with auction_date before ${cutoffDate.toISOString()})\n`);
+  console.log(`   (Archiving auctions with auction_date before today - occurred yesterday or earlier)\n`);
 
   try {
     // Find auctions to archive (exclude those needing manual review)

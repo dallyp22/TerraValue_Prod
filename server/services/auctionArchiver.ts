@@ -62,9 +62,9 @@ export class AuctionArchiverService {
     try {
       console.log(`\n🗄️  [${startTime.toISOString()}] Running automated auction archiver...`);
       
-      // Calculate cutoff date (7 days ago)
+      // Calculate cutoff date (end of yesterday - archives anything that occurred yesterday or before)
       const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 7);
+      cutoffDate.setHours(0, 0, 0, 0); // Start of today = end of yesterday
       
       // Find auctions to archive (exclude those needing manual review)
       const pastAuctions = await db.query.auctions.findMany({
