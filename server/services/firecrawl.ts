@@ -103,12 +103,14 @@ export class FirecrawlService {
         formats: [
           {
             type: "json",
-            prompt: "Extract land auction details. Be VERY thorough in finding the auction date - look for: 'Auction Date:', 'Sale Date:', 'Start Date:', 'Bidding Ends:', 'Bids Due:', dates in description or title, event dates or deadlines, any temporal information. Return the auction date in MM/DD/YYYY or Month DD, YYYY format. Also extract: title, description, address/location, acreage/acres, land type, county, state.",
+            prompt: "Extract land auction details. Be VERY thorough in finding the auction date - look for: 'Auction Date:', 'Sale Date:', 'Start Date:', 'Bidding Ends:', 'Bids Due:', dates in description or title, event dates or deadlines, any temporal information. Return the auction date in MM/DD/YYYY or Month DD, YYYY format. ALSO check if the listing indicates it is SOLD or CLOSED - look for 'Sold', 'Sale Closed', 'Auction Closed', 'Contract Pending', etc. Also extract: title, description, address/location, acreage/acres, land type, county, state.",
             schema: {
               type: "object",
               properties: {
                 title: { type: "string" },
                 description: { type: "string" },
+                // Status detection
+                sold_status: { type: "string", description: "Is this listing sold/closed? Return 'sold', 'pending', or 'active'" },
                 // Multiple date fields to catch variations
                 auction_date: { type: "string", description: "Main auction date" },
                 sale_date: { type: "string", description: "Sale or auction date" },

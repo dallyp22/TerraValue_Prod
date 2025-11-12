@@ -552,6 +552,24 @@ export class AuctionScraperService {
       }
     }
     
+    // Check if listing is sold/closed
+    let auctionStatus = 'active';
+    const soldStatus = auctionData.sold_status?.toLowerCase();
+    
+    if (soldStatus === 'sold' || soldStatus === 'pending' || soldStatus === 'closed') {
+      auctionStatus = 'sold';
+      console.log(`      ⚠️ Listing marked as SOLD - will not appear on map`);
+    } else if (
+      auctionData.title?.toLowerCase().includes('sold') ||
+      auctionData.description?.toLowerCase().includes('sold') ||
+      auctionData.title?.toLowerCase().includes('closed') ||
+      auctionData.description?.toLowerCase().includes('sale closed') ||
+      auctionData.description?.toLowerCase().includes('auction closed')
+    ) {
+      auctionStatus = 'sold';
+      console.log(`      ⚠️ "Sold" detected in text - marking as sold`);
+    }
+    
     // Parse/extract auction date
     let auctionDate = null;
     let needsDateReview = false;
@@ -621,6 +639,7 @@ export class AuctionScraperService {
         landType: auctionData.land_type,
         latitude,
         longitude,
+        status: auctionStatus,
         needsDateReview,
         dateExtractionMethod,
         dateExtractionAttempted: new Date(),
@@ -635,6 +654,7 @@ export class AuctionScraperService {
           title: auctionData.title,
           description: auctionData.description,
           auctionDate: auctionDate,
+          status: auctionStatus,
           latitude, // Update coordinates if they were obtained
           longitude,
           county,
