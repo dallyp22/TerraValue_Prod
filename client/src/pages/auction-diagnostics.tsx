@@ -462,7 +462,7 @@ export default function AuctionDiagnostics() {
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Frequency" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white">
                         <SelectItem value="daily">Daily</SelectItem>
                         <SelectItem value="every-other-day">Every Other Day</SelectItem>
                         <SelectItem value="weekly">Weekly</SelectItem>
