@@ -41,6 +41,7 @@ export default function AuctionDiagnostics() {
   const [showCoverageTable, setShowCoverageTable] = useState(false);
   const [sourceStats, setSourceStats] = useState<any[]>([]);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [expandedDetail, setExpandedDetail] = useState<{source: string, category: string} | null>(null);
   
   // Schedule settings state
   const [scheduleSettings, setScheduleSettings] = useState({
@@ -243,6 +244,38 @@ export default function AuctionDiagnostics() {
       console.error('Failed to load source stats:', error);
       // Fallback: Calculate stats from auctionData
       calculateStatsFromAuctionData();
+    }
+  };
+
+  // Get auctions for a specific source and category
+  const getAuctionsBySourceCategory = (source: string, category: string) => {
+    if (!auctionData?.auctions) return [];
+    
+    return auctionData.auctions.filter((auction: any) => {
+      if (auction.sourceWebsite !== source) return false;
+      
+      switch(category) {
+        case 'active':
+          return auction.status === 'active';
+        case 'upcoming':
+          const auctionDate = auction.auctionDate ? new Date(auction.auctionDate) : null;
+          return auctionDate && auctionDate >= new Date() && auction.status === 'active';
+        case 'needs_review':
+          return auction.needsDateReview === true;
+        case 'sold':
+          return auction.status === 'sold';
+        default:
+          return false;
+      }
+    });
+  };
+
+  // Toggle detail expansion
+  const toggleDetailExpansion = (source: string, category: string) => {
+    if (expandedDetail?.source === source && expandedDetail?.category === category) {
+      setExpandedDetail(null);
+    } else {
+      setExpandedDetail({ source, category });
     }
   };
 
@@ -947,29 +980,141 @@ export default function AuctionDiagnostics() {
                               <tr className="bg-slate-50">
                                 <td colSpan={7} className="p-4">
                                   <div className="grid grid-cols-4 gap-3 text-xs">
-                                    <div className="p-3 bg-white rounded-lg border">
-                                      <div className="font-semibold text-gray-700 mb-1">Active Listings</div>
+                                    <div 
+                                      className="p-3 bg-white rounded-lg border hover:shadow-md transition-all cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDetailExpansion(stat.source_website, 'active');
+                                      }}
+                                    >
+                                      <div className="font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                        Active Listings
+                                        {expandedDetail?.source === stat.source_website && expandedDetail?.category === 'active' ? 
+                                          <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                      </div>
                                       <div className="text-lg font-bold text-green-600">{stat.active_count}</div>
                                       <div className="text-gray-500 mt-1">
                                         {stat.active_with_dates} with dates ({Math.round(100 * parseInt(stat.active_with_dates) / Math.max(1, parseInt(stat.active_count)))}%)
                                       </div>
                                     </div>
-                                    <div className="p-3 bg-white rounded-lg border">
-                                      <div className="font-semibold text-gray-700 mb-1">Upcoming Events</div>
+                                    <div 
+                                      className="p-3 bg-white rounded-lg border hover:shadow-md transition-all cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDetailExpansion(stat.source_website, 'upcoming');
+                                      }}
+                                    >
+                                      <div className="font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                        Upcoming Events
+                                        {expandedDetail?.source === stat.source_website && expandedDetail?.category === 'upcoming' ? 
+                                          <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                      </div>
                                       <div className="text-lg font-bold text-purple-600">{stat.upcoming_count}</div>
                                       <div className="text-gray-500 mt-1">Future auctions</div>
                                     </div>
-                                    <div className="p-3 bg-white rounded-lg border">
-                                      <div className="font-semibold text-gray-700 mb-1">Needs Review</div>
+                                    <div 
+                                      className="p-3 bg-white rounded-lg border hover:shadow-md transition-all cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDetailExpansion(stat.source_website, 'needs_review');
+                                      }}
+                                    >
+                                      <div className="font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                        Needs Review
+                                        {expandedDetail?.source === stat.source_website && expandedDetail?.category === 'needs_review' ? 
+                                          <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                      </div>
                                       <div className="text-lg font-bold text-amber-600">{stat.needs_review}</div>
                                       <div className="text-gray-500 mt-1">No date found</div>
                                     </div>
-                                    <div className="p-3 bg-white rounded-lg border">
-                                      <div className="font-semibold text-gray-700 mb-1">Sold/Archived</div>
+                                    <div 
+                                      className="p-3 bg-white rounded-lg border hover:shadow-md transition-all cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDetailExpansion(stat.source_website, 'sold');
+                                      }}
+                                    >
+                                      <div className="font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                        Sold/Archived
+                                        {expandedDetail?.source === stat.source_website && expandedDetail?.category === 'sold' ? 
+                                          <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                      </div>
                                       <div className="text-lg font-bold text-gray-600">{stat.sold_count}</div>
                                       <div className="text-gray-500 mt-1">Hidden from map</div>
                                     </div>
                                   </div>
+                                  
+                                  {/* Expanded Listing Details */}
+                                  {expandedDetail?.source === stat.source_website && (
+                                    <div className="mt-4 p-3 bg-white rounded-lg border">
+                                      <div className="font-semibold text-sm mb-3 flex items-center gap-2">
+                                        <span className="capitalize">
+                                          {expandedDetail.category === 'needs_review' ? 'Needs Review' : 
+                                           expandedDetail.category === 'upcoming' ? 'Upcoming Events' :
+                                           expandedDetail.category === 'active' ? 'Active Listings' : 'Sold/Archived'}
+                                        </span>
+                                        <Badge variant="outline">
+                                          {getAuctionsBySourceCategory(stat.source_website, expandedDetail.category).length} auctions
+                                        </Badge>
+                                      </div>
+                                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {getAuctionsBySourceCategory(stat.source_website, expandedDetail.category).map((auction: any, idx: number) => (
+                                          <div key={idx} className="p-2 border rounded-lg hover:bg-slate-50 transition-colors text-xs">
+                                            <div className="font-semibold mb-1">{auction.title}</div>
+                                            <div className="grid grid-cols-2 gap-2 text-gray-600">
+                                              {auction.county && (
+                                                <div className="flex items-center gap-1">
+                                                  <MapPin className="h-3 w-3" />
+                                                  {auction.county}, {auction.state}
+                                                </div>
+                                              )}
+                                              {auction.acreage && (
+                                                <div className="flex items-center gap-1">
+                                                  <Ruler className="h-3 w-3" />
+                                                  {auction.acreage} acres
+                                                </div>
+                                              )}
+                                              {auction.auctionDate && (
+                                                <div className="flex items-center gap-1">
+                                                  <Calendar className="h-3 w-3" />
+                                                  {new Date(auction.auctionDate).toLocaleDateString()}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 mt-2">
+                                              {auction.latitude && auction.longitude && (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="text-xs h-6"
+                                                  onClick={() => {
+                                                    window.location.href = `/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=15&auctionId=${auction.id}`;
+                                                  }}
+                                                >
+                                                  <Map className="h-3 w-3 mr-1" />
+                                                  Map
+                                                </Button>
+                                              )}
+                                              {auction.url && (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="text-xs h-6"
+                                                  asChild
+                                                >
+                                                  <a href={auction.url} target="_blank" rel="noopener noreferrer">
+                                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                                    Listing
+                                                  </a>
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
                                   {stat.last_scraped && (
                                     <div className="mt-3 text-xs text-gray-500">
                                       Last scraped: {getRelativeTime(stat.last_scraped)}
