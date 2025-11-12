@@ -57,7 +57,7 @@ export default function AuctionDiagnostics() {
     isActive: false,
     currentSource: '',
     completedSources: 0,
-    totalSources: 24,
+    totalSources: 50,
     currentSourceProgress: 0
   });
 
@@ -84,7 +84,7 @@ export default function AuctionDiagnostics() {
       isActive: true,
       currentSource: 'Initializing...',
       completedSources: 0,
-      totalSources: 24,
+      totalSources: 50,
       currentSourceProgress: 0
     });
     
@@ -112,8 +112,8 @@ export default function AuctionDiagnostics() {
             setScrapeProgress({
               isActive: false,
               currentSource: 'Complete!',
-              completedSources: 24,
-              totalSources: 24,
+              completedSources: 50,
+              totalSources: 50,
               currentSourceProgress: 100
             });
             setScraping(false);
@@ -519,7 +519,7 @@ export default function AuctionDiagnostics() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Data Collection</h3>
-                    <p className="text-sm text-gray-600">24 Auction Sources</p>
+                    <p className="text-sm text-gray-600">50 Auction Sources</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-700 mb-4">
@@ -1740,7 +1740,7 @@ export default function AuctionDiagnostics() {
                 <Database className="h-4 w-4 text-white" />
               </div>
               <div>
-                <CardTitle className="text-lg">Configured Sources (24)</CardTitle>
+                <CardTitle className="text-lg">Configured Sources (50)</CardTitle>
                 <CardDescription>Active auction scraping sources</CardDescription>
               </div>
             </div>
@@ -1748,6 +1748,7 @@ export default function AuctionDiagnostics() {
           <CardContent className="pt-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {[
+                // Original 24 sources
                 'Farmers National', 'Midwest Ag Services', 'Iowa Land Company', 
                 'Peoples Company', 'High Point Land', 'Zomer Company',
                 'Land Search', 'DreamDirt', 'LandWatch',
@@ -1755,11 +1756,25 @@ export default function AuctionDiagnostics() {
                 'Randy Pryor Real Estate', 'Jim Schaben Real Estate', 'Denison Livestock',
                 'Spencer Auction Group', 'Sieren Auction Sales', 'Green Real Estate & Auction',
                 'Iowa Land Sales', 'Sullivan Auctioneers', 'BigIron',
-                'Central States Real Estate', 'The Acre Co'
+                'Central States Real Estate', 'The Acre Co',
+                // New 26 sources
+                'Al Hughes Auction', 'Arrowhead Realty', 'Bergren Real Estate', 'Brock Auction',
+                'Daugherty Auction', 'Dvorak Auction', 'Fox Auction', 'Gary Juranek Auctioneers',
+                'Hallberg Auction', 'Hertz Real Estate', 'Jim Hughes Real Estate', 'KILOTERRA',
+                'Land.com', 'MACI', 'McGuire Auction', 'Merit Auctions',
+                'Osborn Auction', 'Premier Land & Auction', 'Rice Auction', 'Smith Land Service',
+                'Stabe Auction', 'Stalcup Agricultural', 'United Country Loess Hills',
+                'Vander Werff & Associates', 'Wayne Hansen Auctions', 'Whitaker Marketing Group'
               ].map((source, idx) => {
-                const isNew = ['Spencer Auction Group', 'Steffes Group', 'Sieren Auction Sales', 
-                  'Green Real Estate & Auction', 'Iowa Land Sales', 'Sullivan Auctioneers',
-                  'BigIron', 'Central States Real Estate', 'The Acre Co'].includes(source);
+                const isNew = [
+                  'Al Hughes Auction', 'Arrowhead Realty', 'Bergren Real Estate', 'Brock Auction',
+                  'Daugherty Auction', 'Dvorak Auction', 'Fox Auction', 'Gary Juranek Auctioneers',
+                  'Hallberg Auction', 'Hertz Real Estate', 'Jim Hughes Real Estate', 'KILOTERRA',
+                  'Land.com', 'MACI', 'McGuire Auction', 'Merit Auctions',
+                  'Osborn Auction', 'Premier Land & Auction', 'Rice Auction', 'Smith Land Service',
+                  'Stabe Auction', 'Stalcup Agricultural', 'United Country Loess Hills',
+                  'Vander Werff & Associates', 'Wayne Hansen Auctions', 'Whitaker Marketing Group'
+                ].includes(source);
                 return (
                   <div key={idx} className={`p-2 rounded-lg border ${isNew ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200'} hover:shadow-sm transition-all`}>
                     <div className="flex items-center gap-2">
@@ -1772,7 +1787,7 @@ export default function AuctionDiagnostics() {
             </div>
             <Alert className="mt-4 border-purple-200 bg-purple-50">
               <AlertDescription className="text-xs">
-                <span className="font-semibold">💡 Tip:</span> Click "RUN FULL SCRAPER" above to fetch from all 24 sources (9 recently added)
+                <span className="font-semibold">💡 Tip:</span> Click "RUN FULL SCRAPER" above to fetch from all 50 sources (26 recently added)
               </AlertDescription>
             </Alert>
           </CardContent>

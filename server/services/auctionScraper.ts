@@ -59,7 +59,7 @@ export class AuctionScraperService {
     isActive: false,
     currentSource: '',
     completedSources: 0,
-    totalSources: 24,
+    totalSources: 50,
     currentSourceProgress: 0
   };
 
@@ -95,7 +95,39 @@ export class AuctionScraperService {
     { name: 'Sullivan Auctioneers', url: 'https://www.sullivanauctioneers.com' },
     { name: 'BigIron', url: 'https://www.bigiron.com', searchPath: '/Lots?distance=500&filter=Open&industry=RealEstate&provider=BigIron%7CSullivan&categories=Real+Estate+%3A+Farmland+Property%7CReal+Estate+%3A+Acreage+Property' },
     { name: 'Central States Real Estate', url: 'https://centralstatesrealestate.com', searchPath: '/properties/land-auctions/' },
-    { name: 'The Acre Co', url: 'https://theacreco.com' }
+    { name: 'The Acre Co', url: 'https://theacreco.com' },
+    
+    // New sources - Batch 1 (10 sources)
+    { name: 'Al Hughes Auction', url: 'https://alhughesauction.com', searchPath: '/upcoming-auctions/' },
+    { name: 'Arrowhead Realty', url: 'https://www.arrowheadrealtycompany.com', searchPath: '/towns/atlantic-homes-for-sale/farmland-auctions/' },
+    { name: 'Bergren Real Estate', url: 'https://bergrenrealestateandauction.com' },
+    { name: 'Brock Auction', url: 'https://brockauction.com', searchPath: '/auction-category/land-ranch-auctions/' },
+    { name: 'Daugherty Auction', url: 'https://www.daughertyauction.com', searchPath: '/upcoming-auctions' },
+    { name: 'Dvorak Auction', url: 'https://www.dvorakauctionservice.com', searchPath: '/real-estate-for-sale-auction' },
+    { name: 'Fox Auction', url: 'https://foxauctioncompany.com', searchPath: '/current-auctions/' },
+    { name: 'Gary Juranek Auctioneers', url: 'https://www.juranekonlineauctions.com' },
+    { name: 'Hallberg Auction', url: 'https://hallbergauction.hibid.com', searchPath: '/company/71843/hallberg-auction-llc' },
+    { name: 'Hertz Real Estate', url: 'https://www.hertz.ag', searchPath: '/real-estate/auctions' },
+    
+    // New sources - Batch 2 (10 sources)
+    { name: 'Jim Hughes Real Estate', url: 'https://jimhughesrealestate.placebids.net', searchPath: '/auctions' },
+    { name: 'KILOTERRA', url: 'https://kiloterra.com', searchPath: '/properties/' },
+    { name: 'Land.com', url: 'https://www.land.com' },
+    { name: 'MACI', url: 'https://sellmaci.com', searchPath: '/farmland' },
+    { name: 'McGuire Auction', url: 'https://mcguireauction.hibid.com' },
+    { name: 'Merit Auctions', url: 'https://meritauctions.com', searchPath: '/auctions/land/' },
+    { name: 'Osborn Auction', url: 'https://osbornauction.com', searchPath: '/category/auctions/' },
+    { name: 'Premier Land & Auction', url: 'https://premierlandsales.com', searchPath: '/active-auctions' },
+    { name: 'Rice Auction', url: 'https://riceauctioncompany.com', searchPath: '/auctions/?_sft_productcategory=land' },
+    { name: 'Smith Land Service', url: 'https://www.smithlandservice.com', searchPath: '/land-auctions.php' },
+    
+    // New sources - Batch 3 (6 sources)
+    { name: 'Stabe Auction', url: 'https://stabeauctionandrealty.com', searchPath: '/upcoming-and-past-auctions/' },
+    { name: 'Stalcup Agricultural', url: 'https://www.stalcupag.com', searchPath: '/real-estate/farm-auctions/' },
+    { name: 'United Country Loess Hills', url: 'https://www.ucloesshills.com', searchPath: '/auctions' },
+    { name: 'Vander Werff & Associates', url: 'https://vw72.com', searchPath: '/farmland-equipment-or-real-estate-auctioneers-proven-results/' },
+    { name: 'Wayne Hansen Auctions', url: 'https://www.waynehansen.com', searchPath: '/auctions' },
+    { name: 'Whitaker Marketing Group', url: 'https://www.wmgauction.com', searchPath: '/auctions/' }
   ];
 
   // Get stats from last scrape
