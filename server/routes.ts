@@ -443,6 +443,39 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Get source-level statistics
+  app.get("/api/auctions/source-stats", async (req, res) => {
+    try {
+      const stats = await db.execute(sql`
+        SELECT 
+          source_website,
+          COUNT(*) as total_auctions,
+          COUNT(*) FILTER (WHERE status = 'active') as active_count,
+          COUNT(*) FILTER (WHERE status = 'sold') as sold_count,
+          COUNT(*) FILTER (WHERE auction_date IS NOT NULL) as with_dates,
+          COUNT(*) FILTER (WHERE auction_date IS NOT NULL AND status = 'active') as active_with_dates,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE auction_date IS NOT NULL) / NULLIF(COUNT(*), 0), 1) as date_percentage,
+          COUNT(*) FILTER (WHERE needs_date_review = true) as needs_review,
+          COUNT(*) FILTER (WHERE auction_date >= NOW() AND status = 'active') as upcoming_count,
+          MAX(scraped_at) as last_scraped
+        FROM auctions
+        GROUP BY source_website
+        ORDER BY total_auctions DESC
+      `);
+      
+      res.json({ 
+        success: true, 
+        stats: stats.rows 
+      });
+    } catch (error) {
+      console.error("Failed to get source stats:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to get source statistics' 
+      });
+    }
+  });
+
   // Get scraper schedule settings
   app.get("/api/auctions/schedule", async (req, res) => {
     try {

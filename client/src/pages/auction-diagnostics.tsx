@@ -39,6 +39,8 @@ export default function AuctionDiagnostics() {
   const [upcomingAuctions, setUpcomingAuctions] = useState<any[]>([]);
   const [coverageMetrics, setCoverageMetrics] = useState<any>(null);
   const [showCoverageTable, setShowCoverageTable] = useState(false);
+  const [sourceStats, setSourceStats] = useState<any[]>([]);
+  const [expandedSource, setExpandedSource] = useState<string | null>(null);
   
   // Schedule settings state
   const [scheduleSettings, setScheduleSettings] = useState({
@@ -226,6 +228,19 @@ export default function AuctionDiagnostics() {
     return auctionData?.auctions?.filter((a: any) => a.status === 'excluded') || [];
   }, [auctionData]);
 
+  // Load source statistics
+  const loadSourceStats = async () => {
+    try {
+      const response = await fetch('/api/auctions/source-stats');
+      const data = await response.json();
+      if (data.success) {
+        setSourceStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to load source stats:', error);
+    }
+  };
+
   // Load diagnostic data
   const loadDiagnostics = async () => {
     try {
@@ -314,6 +329,7 @@ export default function AuctionDiagnostics() {
     checkAuctions();
     loadDiagnostics();
     loadScheduleSettings();
+    loadSourceStats();
   }, []);
 
   return (
@@ -762,8 +778,8 @@ export default function AuctionDiagnostics() {
           </div>
         )}
 
-        {/* Coverage Analysis Tab */}
-        {coverageMetrics && (
+        {/* Coverage Analysis - Enhanced with Source Stats */}
+        {sourceStats.length > 0 && (
           <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
               <div className="flex items-center justify-between">
@@ -772,8 +788,8 @@ export default function AuctionDiagnostics() {
                     <Activity className="h-4 w-4 text-white" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Coverage Analysis</CardTitle>
-                    <CardDescription>Source-level scraping performance</CardDescription>
+                    <CardTitle className="text-lg">Source Analysis</CardTitle>
+                    <CardDescription>Date extraction and listing stats per source</CardDescription>
                   </div>
                 </div>
                 <Button
@@ -800,21 +816,21 @@ export default function AuctionDiagnostics() {
               <div className="mb-6 grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
                   <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    {coverageMetrics.summary?.averageCoverage || 0}%
+                    {sourceStats.filter((s: any) => parseInt(s.active_count) > 0).length}
                   </div>
-                  <div className="text-sm text-gray-600 font-medium">Avg Coverage</div>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
-                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                    {coverageMetrics.summary?.lowCoverageCount || 0}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Sources &lt;80%</div>
+                  <div className="text-sm text-gray-600 font-medium">Active Sources</div>
                 </div>
                 <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
                   <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                    {coverageMetrics.summary?.iowaAverageCoverage || 0}%
+                    {Math.round(sourceStats.reduce((sum: number, s: any) => sum + parseFloat(s.date_percentage || 0), 0) / sourceStats.length)}%
                   </div>
-                  <div className="text-sm text-gray-600 font-medium">Iowa Avg</div>
+                  <div className="text-sm text-gray-600 font-medium">Avg Date Extraction</div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                    {sourceStats.filter((s: any) => parseFloat(s.date_percentage || 0) < 50).length}
+                  </div>
+                  <div className="text-sm text-gray-600 font-medium">Sources &lt;50% Dates</div>
                 </div>
               </div>
               
@@ -824,32 +840,79 @@ export default function AuctionDiagnostics() {
                     <thead className="bg-slate-50">
                       <tr className="border-b">
                         <th className="text-left p-3 font-semibold">Source</th>
-                        <th className="text-right p-3 font-semibold">Discovered</th>
-                        <th className="text-right p-3 font-semibold">Saved</th>
-                        <th className="text-right p-3 font-semibold">Coverage</th>
-                        <th className="text-right p-3 font-semibold">Iowa</th>
-                        <th className="text-right p-3 font-semibold">Missing</th>
+                        <th className="text-right p-3 font-semibold">Total</th>
+                        <th className="text-right p-3 font-semibold">Active</th>
+                        <th className="text-right p-3 font-semibold">Sold</th>
+                        <th className="text-right p-3 font-semibold">With Dates</th>
+                        <th className="text-right p-3 font-semibold">Date %</th>
+                        <th className="text-right p-3 font-semibold">Upcoming</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {coverageMetrics.metrics?.map((metric: any, i: number) => (
-                        <tr key={i} className={`border-b hover:bg-slate-50 transition-colors ${metric.coverage_percentage < 80 ? 'bg-red-50/50' : ''}`}>
-                          <td className="p-3 font-medium">{metric.source}</td>
-                          <td className="text-right p-3">{metric.discovered}</td>
-                          <td className="text-right p-3">{metric.saved}</td>
-                          <td className="text-right p-3">
-                            <Badge variant={metric.coverage_percentage < 80 ? 'destructive' : 'default'} className="font-bold">
-                              {metric.coverage_percentage}%
-                            </Badge>
-                          </td>
-                          <td className="text-right p-3 text-gray-600">
-                            {metric.iowa_saved}/{metric.iowa_discovered}
-                          </td>
-                          <td className="text-right p-3 text-gray-600">
-                            {metric.missing_count}
-                          </td>
-                        </tr>
-                      ))}
+                      {sourceStats.map((stat: any, i: number) => {
+                        const datePercentage = parseFloat(stat.date_percentage || 0);
+                        const isExpanded = expandedSource === stat.source_website;
+                        
+                        return (
+                          <>
+                            <tr 
+                              key={i} 
+                              className={`border-b hover:bg-slate-50 transition-colors cursor-pointer ${datePercentage < 50 ? 'bg-yellow-50/50' : ''}`}
+                              onClick={() => setExpandedSource(isExpanded ? null : stat.source_website)}
+                            >
+                              <td className="p-3 font-medium flex items-center gap-2">
+                                {isExpanded ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                {stat.source_website}
+                              </td>
+                              <td className="text-right p-3">{stat.total_auctions}</td>
+                              <td className="text-right p-3 text-green-600 font-medium">{stat.active_count}</td>
+                              <td className="text-right p-3 text-gray-500">{stat.sold_count}</td>
+                              <td className="text-right p-3 text-blue-600 font-medium">{stat.with_dates}</td>
+                              <td className="text-right p-3">
+                                <Badge variant={datePercentage < 50 ? 'destructive' : datePercentage < 75 ? 'default' : 'outline'} className="font-bold">
+                                  {datePercentage}%
+                                </Badge>
+                              </td>
+                              <td className="text-right p-3 text-purple-600 font-medium">{stat.upcoming_count}</td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-slate-50">
+                                <td colSpan={7} className="p-4">
+                                  <div className="grid grid-cols-4 gap-3 text-xs">
+                                    <div className="p-3 bg-white rounded-lg border">
+                                      <div className="font-semibold text-gray-700 mb-1">Active Listings</div>
+                                      <div className="text-lg font-bold text-green-600">{stat.active_count}</div>
+                                      <div className="text-gray-500 mt-1">
+                                        {stat.active_with_dates} with dates ({Math.round(100 * parseInt(stat.active_with_dates) / Math.max(1, parseInt(stat.active_count)))}%)
+                                      </div>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-lg border">
+                                      <div className="font-semibold text-gray-700 mb-1">Upcoming Events</div>
+                                      <div className="text-lg font-bold text-purple-600">{stat.upcoming_count}</div>
+                                      <div className="text-gray-500 mt-1">Future auctions</div>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-lg border">
+                                      <div className="font-semibold text-gray-700 mb-1">Needs Review</div>
+                                      <div className="text-lg font-bold text-amber-600">{stat.needs_review}</div>
+                                      <div className="text-gray-500 mt-1">No date found</div>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-lg border">
+                                      <div className="font-semibold text-gray-700 mb-1">Sold/Archived</div>
+                                      <div className="text-lg font-bold text-gray-600">{stat.sold_count}</div>
+                                      <div className="text-gray-500 mt-1">Hidden from map</div>
+                                    </div>
+                                  </div>
+                                  {stat.last_scraped && (
+                                    <div className="mt-3 text-xs text-gray-500">
+                                      Last scraped: {getRelativeTime(stat.last_scraped)}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
