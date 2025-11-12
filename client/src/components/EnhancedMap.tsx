@@ -1040,11 +1040,12 @@ export default function EnhancedMap({
         });
       }
 
-      if (useSelfHostedParcels && !map.current!.getLayer('ownership-labels')) {
+      // Always create ownership-labels layer (visibility controlled by useEffect)
+      if (!map.current!.getLayer('ownership-labels')) {
         map.current!.addLayer({
           id: 'ownership-labels',
           type: 'symbol',
-          source: 'parcels',
+          source: 'parcels-vector',  // Use vector tile source (not 'parcels')
           'source-layer': 'ownership',
           layout: {
             'text-field': [
@@ -1060,14 +1061,13 @@ export default function EnhancedMap({
             'text-size': 12,
             'text-anchor': 'center',
             'text-allow-overlap': false,
-            'visibility': showOwnerLabels ? 'visible' : 'none'
+            'visibility': 'none'  // Hidden by default, controlled by useEffect
           },
           paint: {
             'text-color': '#ffffff',
-            'text-halo-color': '#000000',
-            'text-halo-width': 1.5
-          },
-          maxzoom: 14
+            'text-halo-color': '#2563eb',
+            'text-halo-width': 2
+          }
         });
       }
 
@@ -1077,13 +1077,12 @@ export default function EnhancedMap({
             const props = e.features[0].properties;
             const normalizedOwner = props.normalized_owner || props.owner;
             
-            // Set selected parcel and update highlight
+            // Set selected parcel and update highlight filter
             setSelectedParcelId(normalizedOwner);
             
-            // Update highlight layer filter and visibility
+            // Update highlight layer filter (visibility handled by useEffect)
             if (map.current && normalizedOwner) {
               map.current.setFilter('ownership-selected', ['==', ['get', 'normalized_owner'], normalizedOwner]);
-              map.current.setLayoutProperty('ownership-selected', 'visibility', 'visible');
             }
             
             const html = `
@@ -1111,9 +1110,7 @@ export default function EnhancedMap({
           // If not clicking on a parcel, clear selection
           if (features.length === 0 && selectedParcelId) {
             setSelectedParcelId(null);
-            if (map.current!.getLayer('ownership-selected')) {
-              map.current!.setLayoutProperty('ownership-selected', 'visibility', 'none');
-            }
+            // Visibility will be handled by useEffect
           }
         });
 
@@ -2732,6 +2729,14 @@ export default function EnhancedMap({
       console.log(`🔵 Ownership labels: ${labelVisibility} (parcels: ${useSelfHostedParcels}, labels: ${showOwnerLabels})`);
     }
     
+    // Handle ownership-selected layer (only show if parcels enabled and something selected)
+    const ownershipSelectedLayer = map.current?.getLayer('ownership-selected');
+    if (ownershipSelectedLayer) {
+      const shouldShowSelected = useSelfHostedParcels && selectedParcelId && !isInHarrisonCounty();
+      const selectedVisibility = shouldShowSelected ? 'visible' : 'none';
+      map.current?.setLayoutProperty('ownership-selected', 'visibility', selectedVisibility);
+    }
+    
     // Hide/show ArcGIS parcel layers based on toggle
     const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
     arcgisLayers.forEach(layerId => {
@@ -2743,7 +2748,7 @@ export default function EnhancedMap({
         console.log(`🟢 ArcGIS layer ${layerId}: ${visibility} (always hidden by default)`);
       }
     });
-  }, [useSelfHostedParcels, showOwnerLabels]);
+  }, [useSelfHostedParcels, showOwnerLabels, selectedParcelId]);
   
   // Also update visibility on zoom change
   useEffect(() => {
