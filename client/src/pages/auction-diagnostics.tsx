@@ -235,10 +235,71 @@ export default function AuctionDiagnostics() {
       const data = await response.json();
       if (data.success) {
         setSourceStats(data.stats);
+      } else {
+        // Fallback: Calculate stats from auctionData if API not available
+        calculateStatsFromAuctionData();
       }
     } catch (error) {
       console.error('Failed to load source stats:', error);
+      // Fallback: Calculate stats from auctionData
+      calculateStatsFromAuctionData();
     }
+  };
+
+  // Calculate source stats from existing auction data (fallback)
+  const calculateStatsFromAuctionData = () => {
+    if (!auctionData?.auctions) return;
+    
+    const statsBySource: any = {};
+    
+    auctionData.auctions.forEach((auction: any) => {
+      const source = auction.sourceWebsite || 'Unknown';
+      if (!statsBySource[source]) {
+        statsBySource[source] = {
+          source_website: source,
+          total_auctions: 0,
+          active_count: 0,
+          sold_count: 0,
+          with_dates: 0,
+          active_with_dates: 0,
+          needs_review: 0,
+          upcoming_count: 0,
+          last_scraped: auction.scrapedAt
+        };
+      }
+      
+      const stat = statsBySource[source];
+      stat.total_auctions++;
+      
+      if (auction.status === 'active') stat.active_count++;
+      if (auction.status === 'sold') stat.sold_count++;
+      if (auction.auctionDate) stat.with_dates++;
+      if (auction.auctionDate && auction.status === 'active') stat.active_with_dates++;
+      if (auction.needsDateReview) stat.needs_review++;
+      
+      const auctionDate = auction.auctionDate ? new Date(auction.auctionDate) : null;
+      if (auctionDate && auctionDate >= new Date() && auction.status === 'active') {
+        stat.upcoming_count++;
+      }
+      
+      // Track most recent scrape time
+      if (auction.scrapedAt && (!stat.last_scraped || auction.scrapedAt > stat.last_scraped)) {
+        stat.last_scraped = auction.scrapedAt;
+      }
+    });
+    
+    // Calculate percentages and convert to array
+    const statsArray = Object.values(statsBySource).map((stat: any) => ({
+      ...stat,
+      date_percentage: stat.total_auctions > 0 
+        ? ((stat.with_dates / stat.total_auctions) * 100).toFixed(1)
+        : '0'
+    }));
+    
+    // Sort by total auctions descending
+    statsArray.sort((a: any, b: any) => b.total_auctions - a.total_auctions);
+    
+    setSourceStats(statsArray);
   };
 
   // Load diagnostic data
@@ -331,6 +392,13 @@ export default function AuctionDiagnostics() {
     loadScheduleSettings();
     loadSourceStats();
   }, []);
+
+  // Recalculate source stats when auction data changes
+  useEffect(() => {
+    if (auctionData?.auctions && sourceStats.length === 0) {
+      calculateStatsFromAuctionData();
+    }
+  }, [auctionData]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
