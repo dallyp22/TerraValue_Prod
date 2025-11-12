@@ -109,6 +109,7 @@ export default function EnhancedMap({
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
   const [selectedDatacenter, setSelectedDatacenter] = useState<any>(null);
+  const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
   const [selectedLake, setSelectedLake] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
@@ -1020,6 +1021,25 @@ export default function EnhancedMap({
         });
       }
 
+      // Add selected parcel highlight layer
+      if (!map.current!.getLayer('ownership-selected')) {
+        map.current!.addLayer({
+          id: 'ownership-selected',
+          type: 'line',
+          source: 'parcels-vector',
+          'source-layer': 'ownership',
+          paint: {
+            'line-color': '#fbbf24',  // Yellow/amber highlight
+            'line-width': 4,
+            'line-opacity': 1
+          },
+          layout: {
+            'visibility': 'none'
+          },
+          filter: ['==', ['get', 'normalized_owner'], '']  // Initially show nothing
+        });
+      }
+
       if (useSelfHostedParcels && !map.current!.getLayer('ownership-labels')) {
         map.current!.addLayer({
           id: 'ownership-labels',
@@ -1055,6 +1075,17 @@ export default function EnhancedMap({
       const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
           if (e.features && e.features.length > 0) {
             const props = e.features[0].properties;
+            const normalizedOwner = props.normalized_owner || props.owner;
+            
+            // Set selected parcel and update highlight
+            setSelectedParcelId(normalizedOwner);
+            
+            // Update highlight layer filter and visibility
+            if (map.current && normalizedOwner) {
+              map.current.setFilter('ownership-selected', ['==', ['get', 'normalized_owner'], normalizedOwner]);
+              map.current.setLayoutProperty('ownership-selected', 'visibility', 'visible');
+            }
+            
             const html = `
               <strong>Owner:</strong> ${props.owner || 'Unknown'}<br>
               <strong>Parcels:</strong> ${props.parcel_count || 'N/A'}<br>
@@ -1070,6 +1101,21 @@ export default function EnhancedMap({
 
         map.current!.on('click', 'ownership-fill', handleOwnershipClick);
         map.current!.on('click', 'ownership-outline', handleOwnershipClick);
+
+        // Clear selection when clicking elsewhere on map
+        map.current!.on('click', (e) => {
+          const features = map.current!.queryRenderedFeatures(e.point, {
+            layers: ['ownership-fill', 'ownership-outline']
+          });
+          
+          // If not clicking on a parcel, clear selection
+          if (features.length === 0 && selectedParcelId) {
+            setSelectedParcelId(null);
+            if (map.current!.getLayer('ownership-selected')) {
+              map.current!.setLayoutProperty('ownership-selected', 'visibility', 'none');
+            }
+          }
+        });
 
         // Add hover effects
         map.current!.on('mouseenter', 'ownership-fill', () => {
@@ -2665,8 +2711,8 @@ export default function EnhancedMap({
     const zoom = map.current.getZoom();
     
     // Show/hide ownership layers (blue aggregated parcels)
-    const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
-    ownershipLayers.forEach(layerId => {
+    const ownershipFillOutline = ['ownership-fill', 'ownership-outline'];
+    ownershipFillOutline.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
         // Show at ALL zoom levels when toggle ON (not just zoom <14)
@@ -2676,6 +2722,15 @@ export default function EnhancedMap({
         console.log(`🔵 Ownership layer ${layerId}: ${visibility} (zoom: ${zoom.toFixed(1)}, toggle: ${useSelfHostedParcels})`);
       }
     });
+    
+    // Handle ownership-labels separately (controlled by both toggles)
+    const ownershipLabelsLayer = map.current?.getLayer('ownership-labels');
+    if (ownershipLabelsLayer) {
+      const shouldShowLabels = useSelfHostedParcels && showOwnerLabels && !isInHarrisonCounty();
+      const labelVisibility = shouldShowLabels ? 'visible' : 'none';
+      map.current?.setLayoutProperty('ownership-labels', 'visibility', labelVisibility);
+      console.log(`🔵 Ownership labels: ${labelVisibility} (parcels: ${useSelfHostedParcels}, labels: ${showOwnerLabels})`);
+    }
     
     // Hide/show ArcGIS parcel layers based on toggle
     const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
@@ -2688,7 +2743,7 @@ export default function EnhancedMap({
         console.log(`🟢 ArcGIS layer ${layerId}: ${visibility} (always hidden by default)`);
       }
     });
-  }, [useSelfHostedParcels]);
+  }, [useSelfHostedParcels, showOwnerLabels]);
   
   // Also update visibility on zoom change
   useEffect(() => {
