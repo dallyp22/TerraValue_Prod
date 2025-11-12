@@ -570,11 +570,11 @@ export default function EnhancedMap({
           map.current.setLayoutProperty('parcels-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
         }
         
-        // Re-enable parcel layers (for both GeoJSON and vector tiles)
+        // Keep parcel layers hidden by default (user can enable via controls)
         const parcelFill = map.current.getLayer('parcels-fill');
         const parcelOutline = map.current.getLayer('parcels-outline');
-        if (parcelFill) map.current.setLayoutProperty('parcels-fill', 'visibility', 'visible');
-        if (parcelOutline) map.current.setLayoutProperty('parcels-outline', 'visibility', 'visible');
+        if (parcelFill) map.current.setLayoutProperty('parcels-fill', 'visibility', 'none');
+        if (parcelOutline) map.current.setLayoutProperty('parcels-outline', 'visibility', 'none');
         
         // Re-enable ownership layers if using self-hosted tiles
         if (useSelfHostedParcels && map.current.getZoom() < 14) {
@@ -2682,10 +2682,10 @@ export default function EnhancedMap({
     arcgisLayers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
-        // Hide ArcGIS layers when toggle is ON
-        const visibility = useSelfHostedParcels ? 'none' : 'visible';
+        // Keep ArcGIS layers hidden by default (user can enable via layer controls)
+        const visibility = 'none';
         map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        console.log(`🟢 ArcGIS layer ${layerId}: ${visibility} (toggle: ${useSelfHostedParcels})`);
+        console.log(`🟢 ArcGIS layer ${layerId}: ${visibility} (always hidden by default)`);
       }
     });
   }, [useSelfHostedParcels]);
