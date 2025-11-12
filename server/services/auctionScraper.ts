@@ -585,18 +585,17 @@ export class AuctionScraperService {
       auctionData.date
     ];
     
+    const dateExtractor = new DateExtractorService();
+    
     for (const dateField of dateFields) {
       if (dateField) {
-        try {
-          const parsed = new Date(dateField);
-          if (!isNaN(parsed.getTime())) {
-            auctionDate = parsed;
-            dateExtractionMethod = 'scraped';
-            console.log(`      ✓ Date from Firecrawl: ${auctionDate.toLocaleDateString()}`);
-            break;
-          }
-        } catch (error) {
-          // Continue to next date field
+        // Use flexible parser to handle various date formats (DD-MM-YYYY, MM/DD/YYYY, etc.)
+        const parsed = (dateExtractor as any).parseFlexibleDate(dateField);
+        if (parsed) {
+          auctionDate = parsed;
+          dateExtractionMethod = 'scraped';
+          console.log(`      ✓ Date from Firecrawl: ${auctionDate.toLocaleDateString()} (from: ${dateField})`);
+          break;
         }
       }
     }
@@ -604,7 +603,6 @@ export class AuctionScraperService {
     // If no date found, try to extract from title/description using AI
     if (!auctionDate && (auctionData.title || auctionData.description)) {
       try {
-        const dateExtractor = new DateExtractorService();
         const result = await dateExtractor.extractDateFromText(
           auctionData.title,
           auctionData.description || ''

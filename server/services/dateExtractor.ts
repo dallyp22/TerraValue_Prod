@@ -13,6 +13,65 @@ export interface DateExtractionResult {
 
 export class DateExtractorService {
   /**
+   * Parse date string with flexible format support
+   * Handles: MM/DD/YYYY, DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, "Month DD, YYYY"
+   */
+  private parseFlexibleDate(dateStr: string): Date | null {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    
+    const trimmed = dateStr.trim();
+    
+    // Try standard new Date() first (handles ISO, "Month DD, YYYY", etc.)
+    let date = new Date(trimmed);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+    
+    // Try DD-MM-YYYY format (European with dashes)
+    const ddmmyyyyDash = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (ddmmyyyyDash) {
+      const [_, day, month, year] = ddmmyyyyDash;
+      // Use local date constructor to avoid timezone issues
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(date.getTime())) return date;
+    }
+    
+    // Try DD/MM/YYYY format (European with slashes)
+    const ddmmyyyySlash = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyySlash) {
+      const [_, day, month, year] = ddmmyyyySlash;
+      // Determine if it's DD/MM or MM/DD based on values
+      const dayNum = parseInt(day);
+      const monthNum = parseInt(month);
+      
+      // If first number > 12, it must be DD/MM/YYYY
+      if (dayNum > 12) {
+        date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } 
+      // If second number > 12, it must be MM/DD/YYYY
+      else if (monthNum > 12) {
+        date = new Date(parseInt(year), parseInt(day) - 1, parseInt(month));
+      }
+      // Ambiguous - try MM/DD/YYYY (US format) first
+      else {
+        date = new Date(trimmed); // Let JavaScript parse it
+      }
+      
+      if (!isNaN(date.getTime())) return date;
+    }
+    
+    // Try YYYY-MM-DD (ISO format) - use local constructor to avoid timezone
+    const yyyymmdd = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (yyyymmdd) {
+      const [_, year, month, day] = yyyymmdd;
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(date.getTime())) return date;
+    }
+    
+    return null;
+  }
+
+  /**
    * Extract auction date from title and description
    * Tries regex patterns first (fast, free), falls back to AI if needed
    */
