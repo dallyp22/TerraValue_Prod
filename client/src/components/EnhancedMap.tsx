@@ -939,6 +939,9 @@ export default function EnhancedMap({
           id: 'parcels-outline',
           type: 'line',
           source: 'parcels',
+          layout: {
+            visibility: 'none' // Hidden by default
+          },
           paint: {
             'line-color': '#10b981',
             'line-width': 2,
@@ -961,6 +964,9 @@ export default function EnhancedMap({
           id: 'parcels-fill',
           type: 'fill',
           source: 'parcels',
+          layout: {
+            visibility: 'none' // Hidden by default
+          },
           paint: {
             'fill-color': '#10b981',
             'fill-opacity': 0.15
