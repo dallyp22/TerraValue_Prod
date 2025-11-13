@@ -30,8 +30,8 @@ export async function generateParcelTile(
     
     let sql: string;
     
-    if (z < 14) {
-      // Show aggregated ADJACENT parcels for lower zoom levels (like Harrison County)
+    if (z <= 14) {
+      // Show aggregated ADJACENT parcels up to zoom 14 (inclusive)
       // Uses parcel_aggregated table which only combines touching parcels
       // EXCLUDE Harrison County - it has its own Mapbox tileset
       sql = `
