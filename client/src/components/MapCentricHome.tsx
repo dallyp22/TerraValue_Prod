@@ -46,7 +46,7 @@ export default function MapCentricHome() {
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showAuctions: true,
-    showAggregatedParcels: false,
+    showAggregatedParcels: true,
     showSubstations: false,
     showDatacenters: false,
     datacenterStates: {
