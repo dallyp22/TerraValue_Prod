@@ -934,53 +934,37 @@ export default function EnhancedMap({
       // NOTE: Removed old GeoJSON 'aggregated-parcels' source
       // Now using vector tiles 'parcels' source with 'ownership' source-layer instead
 
-      // Add parcel outline layer if it doesn't exist
+      // Add parcel outline layer (GeoJSON only - green ArcGIS parcels, always hidden)
       if (!map.current!.getLayer('parcels-outline')) {
-        const outlineLayer: any = {
+        map.current!.addLayer({
           id: 'parcels-outline',
           type: 'line',
           source: 'parcels',
           layout: {
-            visibility: 'none' // Hidden by default
+            visibility: 'none'
           },
           paint: {
             'line-color': '#10b981',
             'line-width': 2,
             'line-opacity': 0.8
           }
-        };
-        
-        // Add source-layer for vector tiles
-        if (useSelfHostedParcels) {
-          outlineLayer['source-layer'] = 'parcels';
-          outlineLayer.minzoom = 14; // Only show individual parcels at high zoom
-        }
-        
-        map.current!.addLayer(outlineLayer);
+        });
       }
 
-      // Add parcel fill layer if it doesn't exist
+      // Add parcel fill layer (GeoJSON only - green ArcGIS parcels, always hidden)
       if (!map.current!.getLayer('parcels-fill')) {
-        const fillLayer: any = {
+        map.current!.addLayer({
           id: 'parcels-fill',
           type: 'fill',
           source: 'parcels',
           layout: {
-            visibility: 'none' // Hidden by default
+            visibility: 'none'
           },
           paint: {
             'fill-color': '#10b981',
             'fill-opacity': 0.15
           }
-        };
-        
-        // Add source-layer for vector tiles
-        if (useSelfHostedParcels) {
-          fillLayer['source-layer'] = 'parcels';
-          fillLayer.minzoom = 14; // Only show individual parcels at high zoom
-        }
-        
-        map.current!.addLayer(fillLayer);
+        });
       }
 
       // Add ownership group layers for self-hosted vector tiles (zoom < 14)
@@ -1236,13 +1220,7 @@ export default function EnhancedMap({
         minzoom: 13
         };
         
-        // Add source-layer for vector tiles
-        if (useSelfHostedParcels) {
-          labelLayer['source-layer'] = 'parcels';
-          // Update text field for vector tile properties
-          labelLayer.layout['text-field'] = ['get', 'owner']; // Vector tiles use simplified property names
-        }
-        
+        // No source-layer - this is GeoJSON only (green ArcGIS parcels, always hidden)
         map.current!.addLayer(labelLayer);
       }
 
