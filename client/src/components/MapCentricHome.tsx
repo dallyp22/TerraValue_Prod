@@ -349,7 +349,7 @@ export default function MapCentricHome() {
       />
 
       {/* Map Container */}
-      <div className="relative w-full h-screen overflow-hidden">
+      <div className="relative w-full h-screen">
         <EnhancedMap
           drawModeEnabled={drawModeEnabled}
           onParcelClick={handleParcelClick}
@@ -387,17 +387,29 @@ export default function MapCentricHome() {
           showLegend={mapInfo.showLegend}
         />
 
-        {/* Mobile Toggle Buttons */}
-        <div className="lg:hidden">
-          {/* Left Sidebar Toggle */}
-          <Button
-            onClick={() => setLeftSidebarOpen(true)}
-            className="fixed top-4 left-4 z-20 bg-white hover:bg-slate-50 text-slate-800 shadow-lg touch-target"
-            size="icon"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
+        {/* Mobile Toggle Buttons - ALWAYS SHOW for debugging */}
+        <Button
+          onClick={() => {
+            console.log('Hamburger clicked!');
+            setLeftSidebarOpen(true);
+          }}
+          onTouchEnd={(e) => {
+            console.log('Hamburger touched!');
+            e.preventDefault();
+            e.stopPropagation();
+            setLeftSidebarOpen(true);
+          }}
+          className="fixed top-4 left-4 z-50 bg-red-500 hover:bg-red-600 text-white shadow-2xl touch-target lg:hidden"
+          size="icon"
+          style={{ 
+            touchAction: 'manipulation',
+            minWidth: '48px',
+            minHeight: '48px',
+            WebkitTapHighlightColor: 'rgba(255, 0, 0, 0.3)'
+          }}
+        >
+          <Menu className="h-6 w-6" />
+        </Button>
 
         {/* Unified Top-Left Control Panel - Desktop Only */}
         {mapInfo.showScrapingModule && (

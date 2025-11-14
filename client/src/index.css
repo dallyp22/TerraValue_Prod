@@ -14,10 +14,31 @@
   touch-action: pan-x pan-y;
 }
 
-/* Fix iOS click delay */
-* {
+/* Fix iOS click delay - but NOT on map elements */
+body, 
+html,
+div:not(.maplibregl-canvas-container):not(.maplibregl-map),
+p, span, h1, h2, h3, h4, h5, h6 {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-  -webkit-touch-callout: none;
+}
+
+/* HTML and body must allow touch events */
+html, body {
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Explicitly ALLOW map elements to handle touches */
+.maplibregl-canvas-container,
+.maplibregl-canvas,
+.maplibregl-map {
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: pan-x pan-y !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
 /* Ensure buttons and interactive elements are clickable on iOS */

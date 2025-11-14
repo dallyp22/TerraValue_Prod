@@ -24,7 +24,10 @@ async function archivePastAuctions(dryRun: boolean = false) {
     const pastAuctions = await db.query.auctions.findMany({
       where: and(
         lt(auctions.auctionDate, cutoffDate),
-        eq(auctions.status, 'active'),
+        or(
+          eq(auctions.status, 'active'),
+          eq(auctions.status, 'sold')
+        ),
         or(
           eq(auctions.needsDateReview, false),
           isNull(auctions.needsDateReview)

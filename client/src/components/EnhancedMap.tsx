@@ -618,6 +618,12 @@ export default function EnhancedMap({
       // Initialize map with satellite imagery and state borders
       map.current = new maplibregl.Map({
       container: mapContainer.current,
+      interactive: true,
+      trackResize: true,
+      touchZoomRotate: true,
+      touchPitch: false,
+      dragRotate: false,
+      pitchWithRotate: false,
       style: {
         version: 8,
         glyphs: `https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=${import.meta.env.VITE_MAPBOX_PUBLIC_KEY || ''}`,
@@ -3033,7 +3039,11 @@ export default function EnhancedMap({
 
   return (
     <>
-      <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full" />
+      <div 
+        ref={mapContainer} 
+        className="absolute top-0 left-0 w-full h-full"
+        style={{ touchAction: 'pan-x pan-y' }}
+      />
       {selectedAuction && (
         <AuctionDetailsPanel
           auction={selectedAuction}
