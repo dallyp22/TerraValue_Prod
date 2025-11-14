@@ -38,7 +38,14 @@ export async function generateParcelTile(
         WITH mvtgeom AS (
           SELECT 
             ST_AsMVTGeom(
-              ST_Transform(geom, 3857),
+              ST_Simplify(
+                geom_3857,
+                CASE 
+                  WHEN $1 <= 10 THEN 100
+                  WHEN $1 <= 12 THEN 50
+                  ELSE 10
+                END
+              ),
               ST_TileEnvelope($1, $2, $3),
               4096,
               256,
@@ -49,7 +56,7 @@ export async function generateParcelTile(
             ROUND(total_acres::numeric, 1) as acres,
             county
           FROM parcel_aggregated
-          WHERE ST_Transform(geom, 3857) && ST_TileEnvelope($1, $2, $3)
+          WHERE geom_3857 && ST_TileEnvelope($1, $2, $3)
             AND county != 'HARRISON'  -- Exclude Harrison County
         )
         SELECT ST_AsMVT(mvtgeom.*, 'ownership', 4096, 'geom')
