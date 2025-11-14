@@ -152,12 +152,12 @@ export default function RightSidebar({
   if (!selectedItem) {
     return (
       <>
-        {isOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
-            onClick={onClose}
-          />
-        )}
+        <div
+          className={`fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300 ${
+            isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={onClose}
+        />
         <div
           className={`
             right-sidebar
@@ -166,7 +166,7 @@ export default function RightSidebar({
             bg-white
             overflow-y-auto
             border-l border-slate-200
-            z-[1001] lg:z-10
+            z-40 lg:z-10
             transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
           `}
@@ -203,12 +203,12 @@ export default function RightSidebar({
 
     return (
       <>
-        {isOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
-            onClick={onClose}
-          />
-        )}
+        <div
+          className={`fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300 ${
+            isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={onClose}
+        />
         <div
           className={`
             right-sidebar
@@ -217,7 +217,7 @@ export default function RightSidebar({
             bg-white
             overflow-y-auto
             border-l border-slate-200
-            z-[1001] lg:z-10
+            z-40 lg:z-10
             transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
           `}
@@ -471,12 +471,12 @@ export default function RightSidebar({
 
     return (
       <>
-        {isOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
-            onClick={onClose}
-          />
-        )}
+        <div
+          className={`fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300 ${
+            isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={onClose}
+        />
         <div
           className={`
             right-sidebar
@@ -485,7 +485,7 @@ export default function RightSidebar({
             bg-white
             overflow-y-auto
             border-l border-slate-200
-            z-[1001] lg:z-10
+            z-40 lg:z-10
             transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
           `}

@@ -186,12 +186,12 @@ export default function LeftSidebar({
   return (
     <>
       {/* Mobile backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      <div
+        className={`fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300 ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
+      />
 
       {/* Sidebar */}
       <div
@@ -202,7 +202,7 @@ export default function LeftSidebar({
           bg-white
           overflow-y-auto
           border-r border-slate-200
-          z-[1001] lg:z-10
+          z-40 lg:z-10
           transition-transform duration-300
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}

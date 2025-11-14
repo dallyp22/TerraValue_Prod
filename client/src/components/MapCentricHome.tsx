@@ -392,7 +392,7 @@ export default function MapCentricHome() {
           {/* Left Sidebar Toggle */}
           <Button
             onClick={() => setLeftSidebarOpen(true)}
-            className="fixed top-4 left-4 z-[998] bg-white hover:bg-slate-50 text-slate-800 shadow-lg"
+            className="fixed top-4 left-4 z-20 bg-white hover:bg-slate-50 text-slate-800 shadow-lg touch-target"
             size="icon"
           >
             <Menu className="h-5 w-5" />
