@@ -1122,8 +1122,11 @@ export default function EnhancedMap({
           }
         };
 
+        // Add both click and touch handlers for iOS compatibility
         map.current!.on('click', 'ownership-fill', handleOwnershipClick);
         map.current!.on('click', 'ownership-outline', handleOwnershipClick);
+        map.current!.on('touchend', 'ownership-fill', handleOwnershipClick);
+        map.current!.on('touchend', 'ownership-outline', handleOwnershipClick);
 
         // Clear selection when clicking elsewhere on map
         map.current!.on('click', (e) => {
@@ -1429,9 +1432,11 @@ export default function EnhancedMap({
         }
       };
 
-      // Add click handlers for Harrison County layers
+      // Add click and touch handlers for Harrison County layers (iOS compatibility)
       map.current!.on('click', 'harrison-parcels-outline', handleHarrisonParcelClick);
       map.current!.on('click', 'harrison-parcels-fill', handleHarrisonParcelClick);
+      map.current!.on('touchend', 'harrison-parcels-outline', handleHarrisonParcelClick);
+      map.current!.on('touchend', 'harrison-parcels-fill', handleHarrisonParcelClick);
 
       // Add click handlers for regular parcels (all other counties)
       const handleRegularParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
@@ -1812,8 +1817,11 @@ export default function EnhancedMap({
             }
           };
 
+          // Add both click and touch handlers for iOS compatibility
           map.current.on('click', 'auction-markers', handleAuctionClick);
           map.current.on('click', 'auction-markers-bg', handleAuctionClick);
+          map.current.on('touchend', 'auction-markers', handleAuctionClick);
+          map.current.on('touchend', 'auction-markers-bg', handleAuctionClick);
 
           // Add substations polygon layer
           map.current.addLayer({
