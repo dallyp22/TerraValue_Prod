@@ -1027,19 +1027,33 @@ export default function EnhancedMap({
 
       // Add click handlers for ownership layers (always add, visibility controlled elsewhere)
       const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+          // Check if a feature (auction, substation, datacenter, lake) was just clicked - if so, ignore parcel click
+          if (featureClickedRef.current) {
+            console.log('Ignoring parcel click - feature was clicked');
+            return;
+          }
+          
+          // Double-check by querying rendered features at click point
+          const auctionFeatures = map.current?.queryRenderedFeatures(e.point, {
+            layers: ['auction-markers', 'auction-markers-bg']
+          });
+          if (auctionFeatures && auctionFeatures.length > 0) {
+            return; // Auction marker takes priority
+          }
+          
           if (e.features && e.features.length > 0) {
             const feature = e.features[0];
             const props = feature.properties;
             const owner = props.owner;  // Use 'owner' property from vector tiles
             
-            console.log('🔍 Parcel clicked:', {
+            console.log('🔍 Aggregated parcel clicked:', {
               owner,
               parcel_count: props.parcel_count,
               acres_db: props.acres,
               county: props.county
             });
             
-            // Calculate acres from geometry
+            // Calculate acres from geometry using Turf.js
             let calculatedAcres = 0;
             try {
               if (feature.geometry) {
@@ -1069,17 +1083,36 @@ export default function EnhancedMap({
               }, 100);
             }
             
-            const html = `
-              <strong>Owner:</strong> ${props.owner || 'Unknown'}<br>
-              <strong>Parcels:</strong> ${props.parcel_count || 'N/A'}<br>
-              <strong>Acres:</strong> ${Math.round(calculatedAcres).toLocaleString()} acres<br>
-              <strong>County:</strong> ${props.county || 'N/A'}<br>
-              <small><em>Calculated from geometry</em></small>
-            `;
-            new maplibregl.Popup()
-              .setLngLat(e.lngLat)
-              .setHTML(html)
-              .addTo(map.current!);
+            // Create parcel object matching Harrison County structure
+            const parcel = {
+              owner_name: owner || 'Unknown',
+              address: owner || 'N/A',
+              acres: Math.round(calculatedAcres * 100) / 100, // Round to 2 decimals like Harrison
+              coordinates: [e.lngLat.lng, e.lngLat.lat],
+              parcel_number: `${props.county}-AGG-${props.parcel_count}`, // Synthetic parcel number
+              parcel_class: 'Aggregated',
+              county: props.county || 'Unknown',
+              geometry: feature.geometry, // Include geometry for CSR2 calculation
+              allGeometries: [feature.geometry] // Wrap in array like Harrison County
+            };
+            
+            // Trigger valuation workflow (same as Harrison County)
+            onParcelClick(parcel);
+            
+            // Show popup only if NOT in drawing mode
+            if (!drawModeEnabledRef.current) {
+              const html = `
+                <strong>Owner:</strong> ${owner}<br>
+                <strong>Parcels:</strong> ${props.parcel_count}<br>
+                <strong>Acres:</strong> ${Math.round(calculatedAcres).toLocaleString()} acres<br>
+                <strong>County:</strong> ${props.county}<br>
+                <small><em>Click to start valuation</em></small>
+              `;
+              new maplibregl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map.current!);
+            }
           }
         };
 
