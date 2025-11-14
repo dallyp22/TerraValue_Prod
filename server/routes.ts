@@ -1479,7 +1479,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       const limit = parseInt(req.query.limit as string) || 15;
       
       const upcomingAuctions = await db.query.auctions.findMany({
-        where: sql`auction_date >= NOW()`,
+        where: sql`auction_date::date >= CURRENT_DATE`,  // Include all of today's auctions
         orderBy: [asc(auctions.auctionDate)],
         limit
       });
