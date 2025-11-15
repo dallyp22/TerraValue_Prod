@@ -48,7 +48,8 @@ export class AuctionArchiverService {
   }
 
   /**
-   * Archive auctions that are 7+ days past their auction date
+   * Archive auctions that are past their date OR marked as sold
+   * Enhanced with AI-detected sold status
    */
   async archivePastAuctions() {
     if (this.isRunning) {
@@ -60,31 +61,64 @@ export class AuctionArchiverService {
     const startTime = new Date();
     
     try {
-      console.log(`\n🗄️  [${startTime.toISOString()}] Running automated auction archiver...`);
+      console.log(`\n🗄️  [${startTime.toISOString()}] Running automated auction archiver (AI-enhanced)...`);
       
-      // Calculate cutoff date (end of yesterday - archives anything that occurred yesterday or before)
+      // Calculate cutoff date (end of yesterday)
       const cutoffDate = new Date();
-      cutoffDate.setHours(0, 0, 0, 0); // Start of today = end of yesterday
+      cutoffDate.setHours(0, 0, 0, 0);
       
-      // Find auctions to archive (exclude those needing manual review)
-      const pastAuctions = await db.query.auctions.findMany({
-        where: and(
-          lt(auctions.auctionDate, cutoffDate),
-          eq(auctions.status, 'active'),
-          or(
-            eq(auctions.needsDateReview, false),
-            isNull(auctions.needsDateReview)
-          )
-        )
+      // Find auctions to archive - THREE categories:
+      // 1. Past auction dates (traditional)
+      // 2. Status = 'sold' (from scraper detection)
+      // 3. AI-enriched sold indicators
+      
+      const allAuctions = await db.query.auctions.findMany();
+      
+      const toArchive = allAuctions.filter(auction => {
+        // Category 1: Past auction date (traditional method)
+        const isPastDate = auction.auctionDate && 
+                          new Date(auction.auctionDate) < cutoffDate &&
+                          !auction.needsDateReview;
+        
+        // Category 2: Explicitly marked as sold by scraper
+        const isMarkedSold = auction.status === 'sold';
+        
+        // Category 3: AI-enriched data indicates sold
+        const aiDetectedSold = auction.enrichmentStatus === 'completed' && (
+          // Check enriched description for sold indicators
+          auction.enrichedDescription?.toLowerCase().includes('sold') ||
+          auction.enrichedDescription?.toLowerCase().includes('sale closed') ||
+          auction.enrichedDescription?.toLowerCase().includes('auction closed') ||
+          auction.enrichedDescription?.toLowerCase().includes('contract pending') ||
+          // Check if possession date is in the past (property already transferred)
+          (auction.possession?.toLowerCase().includes('immediate') && isPastDate)
+        );
+        
+        return (isPastDate || isMarkedSold || aiDetectedSold) && auction.status !== 'archived';
       });
 
-      if (pastAuctions.length === 0) {
+      if (toArchive.length === 0) {
         console.log('   ✅ No auctions to archive');
         this.isRunning = false;
         return;
       }
 
-      console.log(`   📦 Found ${pastAuctions.length} auctions to archive (older than ${cutoffDate.toLocaleDateString()})`);
+      // Count by reason
+      const byReason = {
+        pastDate: toArchive.filter(a => a.auctionDate && new Date(a.auctionDate) < cutoffDate).length,
+        markedSold: toArchive.filter(a => a.status === 'sold').length,
+        aiDetected: toArchive.filter(a => 
+          a.enrichedDescription?.toLowerCase().includes('sold') ||
+          a.enrichedDescription?.toLowerCase().includes('closed')
+        ).length
+      };
+
+      console.log(`   📦 Found ${toArchive.length} auctions to archive:`);
+      console.log(`      - ${byReason.pastDate} past auction date`);
+      console.log(`      - ${byReason.markedSold} marked as sold`);
+      console.log(`      - ${byReason.aiDetected} AI-detected sold`);
+
+      const pastAuctions = toArchive;
 
       // Archive the auctions
       let archived = 0;
@@ -92,7 +126,17 @@ export class AuctionArchiverService {
       
       for (const auction of pastAuctions) {
         try {
-          // Copy to archived_auctions table
+          // Determine archive reason
+          let archiveReason = 'past_auction_date';
+          if (auction.status === 'sold') {
+            archiveReason = 'marked_sold';
+          } else if (auction.enrichedDescription?.toLowerCase().includes('sold')) {
+            archiveReason = 'ai_detected_sold';
+          } else if (auction.enrichedDescription?.toLowerCase().includes('closed')) {
+            archiveReason = 'ai_detected_closed';
+          }
+          
+          // Copy to archived_auctions table (including enriched fields)
           await db.insert(archivedAuctions).values({
             title: auction.title,
             description: auction.description,
@@ -116,7 +160,7 @@ export class AuctionArchiverService {
             scrapedAt: auction.scrapedAt,
             updatedAt: auction.updatedAt,
             status: auction.status,
-            archivedReason: 'past_auction_date',
+            archivedReason: archiveReason,
             originalId: auction.id
           });
           archived++;
@@ -145,7 +189,7 @@ export class AuctionArchiverService {
       const duration = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
 
       console.log(`   ✅ Archive complete in ${duration}s`);
-      console.log(`      Archived: ${archived} auctions`);
+      console.log(`      Archived: ${archived} auctions (${byReason.pastDate} past date, ${byReason.markedSold} marked sold, ${byReason.aiDetected} AI-detected)`);
       console.log(`      Deleted: ${deleted} from active table`);
       if (failed > 0) {
         console.log(`      Failed: ${failed} auctions`);

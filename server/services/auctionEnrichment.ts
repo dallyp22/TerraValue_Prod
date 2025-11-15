@@ -74,11 +74,17 @@ CRITICAL INSTRUCTIONS:
    - Possession date/terms
 
 7. **Key Highlights**: Extract 3-10 bullet points of the most important selling features.
+8. **SOLD STATUS**: CRITICALLY IMPORTANT - Check if this auction/listing is SOLD, CLOSED, or COMPLETED:
+   - Look for: "SOLD", "Sale Closed", "Auction Closed", "Contract Pending", "Under Contract"
+   - Check for past tense: "was sold", "has been sold", "auction was held"
+   - Return "sold" if definitely sold, "active" if still available, "unknown" if unclear
 
 Return your analysis as a JSON object with the following structure:
 {
   "enrichedTitle": "STANDARDIZED TITLE in format: {Acreage} Acres {County} County",
   "enrichedDescription": "Clean, well-formatted description paragraph",
+  "soldStatus": "sold" or "active" or "unknown",
+  "soldIndicators": "Any text that indicates this was sold/closed" or null,
   "enrichedAuctionHouse": "Company Name" or null,
   "enrichedAuctionDate": "YYYY-MM-DD" or null,
   "enrichedAuctionLocation": "Where auction is held" or null,
@@ -172,6 +178,12 @@ export class AuctionEnrichmentService {
 
       const enrichedData = JSON.parse(completion.choices[0].message.content || '{}');
 
+      // Check if AI detected this auction as sold
+      const aiDetectedSold = enrichedData.soldStatus === 'sold';
+      if (aiDetectedSold) {
+        console.log(`   🏷️  AI detected SOLD status: ${enrichedData.soldIndicators || 'indicators found in text'}`);
+      }
+
       // Validate and structure the result
       const result: EnrichmentResult = {
         enrichedTitle: enrichedData.enrichedTitle || auction.title || 'Untitled Auction',
@@ -232,7 +244,9 @@ export class AuctionEnrichmentService {
           enrichmentStatus: 'completed',
           enrichedAt: new Date(),
           enrichmentVersion: 'v1',
-          enrichmentError: null
+          enrichmentError: null,
+          // Update status to 'sold' if AI detected it
+          status: aiDetectedSold ? 'sold' : auction.status
         })
         .where(eq(auctions.id, auctionId));
 
