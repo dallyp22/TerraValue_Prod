@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { getCountyCentroid } from './iowaCountyCentroids.js';
 import { scraperDiagnosticsService } from './scraperDiagnostics.js';
 import { DateExtractorService } from './dateExtractor.js';
+import { enrichmentQueue } from './enrichmentQueue.js';
 
 // Scraper statistics interface for diagnostics
 export interface ScraperStats {
@@ -204,6 +205,10 @@ export class AuctionScraperService {
     this.scrapeProgress.isActive = false;
     this.scrapeProgress.currentSource = 'Complete!';
     this.scrapeProgress.completedSources = this.sources.length;
+    
+    // Start enrichment queue processing in background (non-blocking)
+    console.log('\n📋 Starting enrichment queue processing in background...');
+    enrichmentQueue.startProcessing();
     
     return results;
   }
@@ -656,7 +661,7 @@ export class AuctionScraperService {
     
     // Insert or update auction
     try {
-      await db.insert(auctions).values({
+      const result = await db.insert(auctions).values({
         title: auctionData.title,
         description: auctionData.description,
         url: auctionData.url,
@@ -673,6 +678,7 @@ export class AuctionScraperService {
         needsDateReview,
         dateExtractionMethod,
         dateExtractionAttempted: new Date(),
+        enrichmentStatus: 'pending', // Set initial enrichment status
         rawData: { 
           ...auctionData, 
           isCountyLevel, // Flag to indicate approximate location
@@ -694,7 +700,14 @@ export class AuctionScraperService {
           dateExtractionAttempted: new Date(),
           updatedAt: new Date()
         }
-      });
+      }).returning();
+      
+      // Add to enrichment queue for AI processing (non-blocking)
+      if (result && result.length > 0) {
+        const auctionId = result[0].id;
+        enrichmentQueue.add(auctionId, 'normal');
+        console.log(`      📋 Added to enrichment queue: ID ${auctionId}`);
+      }
     } catch (dbError) {
       // If onConflictDoUpdate doesn't work, just log and continue
       console.log(`    DB insert failed for: ${auctionData.title}`);

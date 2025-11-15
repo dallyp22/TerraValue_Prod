@@ -60,6 +60,11 @@ export default function AuctionDiagnostics() {
     totalSources: 50,
     currentSourceProgress: 0
   });
+  
+  // Enrichment tracking
+  const [enrichmentStats, setEnrichmentStats] = useState<any>(null);
+  const [enrichmentErrors, setEnrichmentErrors] = useState<any[]>([]);
+  const [enriching, setEnriching] = useState(false);
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -360,6 +365,64 @@ export default function AuctionDiagnostics() {
     }
   };
 
+  // Load enrichment statistics
+  const loadEnrichmentStats = async () => {
+    try {
+      const [stats, errors] = await Promise.all([
+        fetch('/api/auctions/enrichment-stats').then(r => r.json()),
+        fetch('/api/auctions/enrichment-errors').then(r => r.json())
+      ]);
+      
+      setEnrichmentStats(stats.stats || null);
+      setEnrichmentErrors(errors.errors || []);
+    } catch (error) {
+      console.error('Failed to load enrichment stats:', error);
+    }
+  };
+
+  // Enrich all pending auctions
+  const handleEnrichAll = async () => {
+    setEnriching(true);
+    try {
+      const response = await fetch('/api/auctions/enrich-all', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('Enrichment started in background! Refresh in a few minutes to see results.');
+        // Reload stats after a delay
+        setTimeout(loadEnrichmentStats, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to start enrichment:', error);
+      alert('Failed to start enrichment process');
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  // Retry failed enrichments
+  const handleRetryFailed = async () => {
+    setEnriching(true);
+    try {
+      const response = await fetch('/api/auctions/retry-failed-enrichments', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('Retry enrichment started in background!');
+        setTimeout(loadEnrichmentStats, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to retry enrichments:', error);
+      alert('Failed to retry enrichments');
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   // Format relative time
   const getRelativeTime = (timestamp: string) => {
     const now = new Date();
@@ -424,6 +487,7 @@ export default function AuctionDiagnostics() {
     loadDiagnostics();
     loadScheduleSettings();
     loadSourceStats();
+    loadEnrichmentStats();
   }, []);
 
   // Recalculate source stats when auction data changes
@@ -1794,6 +1858,136 @@ export default function AuctionDiagnostics() {
         </Card>
 
       </div>
+
+      {/* AI Enrichment Status */}
+      {enrichmentStats && (
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+          <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">AI Enrichment Status</CardTitle>
+                  <CardDescription>OpenAI-powered data standardization</CardDescription>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => loadEnrichmentStats()}
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-violet-100"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={handleEnrichAll}
+                  disabled={enriching || enrichmentStats.pending === 0}
+                  variant="default"
+                  size="sm"
+                  className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600"
+                >
+                  {enriching ? 'Processing...' : `Enrich All (${enrichmentStats.pending})`}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  {enrichmentStats.total}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Total Auctions</div>
+              </div>
+              <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  {enrichmentStats.completed}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Enriched</div>
+              </div>
+              <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                <div className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                  {enrichmentStats.pending}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Pending</div>
+              </div>
+              <div className="p-4 rounded-xl bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200">
+                <div className="text-3xl font-bold bg-gradient-to-r from-red-600 to-rose-600 bg-clip-text text-transparent">
+                  {enrichmentStats.failed}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Failed</div>
+              </div>
+              <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+                <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+                  {enrichmentStats.total > 0 ? Math.round((enrichmentStats.completed / enrichmentStats.total) * 100) : 0}%
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Completion Rate</div>
+              </div>
+            </div>
+
+            {/* Failed Enrichments */}
+            {enrichmentStats.failed > 0 && enrichmentErrors.length > 0 && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-sm text-gray-700">Failed Enrichments ({enrichmentErrors.length})</h4>
+                  <Button
+                    onClick={handleRetryFailed}
+                    disabled={enriching}
+                    variant="outline"
+                    size="sm"
+                    className="hover:bg-red-100"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Retry Failed
+                  </Button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold">Auction</th>
+                        <th className="text-left p-3 font-semibold">Error</th>
+                        <th className="text-right p-3 font-semibold">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichmentErrors.slice(0, 10).map((error: any) => (
+                        <tr key={error.id} className="border-b hover:bg-gray-50">
+                          <td className="p-3">
+                            <div className="max-w-md truncate">{error.title}</div>
+                            <div className="text-xs text-gray-500">ID: {error.id}</div>
+                          </td>
+                          <td className="p-3 text-red-600 text-xs">{error.error}</td>
+                          <td className="p-3 text-right">
+                            <a
+                              href={error.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-700 text-xs"
+                            >
+                              View Listing →
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {enrichmentErrors.length > 10 && (
+                    <div className="p-3 bg-gray-50 text-sm text-gray-600 text-center">
+                      ... and {enrichmentErrors.length - 10} more errors
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Footer Spacer */}
       <div className="h-8"></div>

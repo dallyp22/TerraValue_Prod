@@ -26,7 +26,10 @@
     "auctions:backfill-dates": "tsx scripts/backfill-auction-dates.ts",
     "auctions:backfill-dates:dry-run": "tsx scripts/backfill-auction-dates.ts --dry-run",
     "auctions:mark-sold": "tsx scripts/mark-sold-auctions.ts",
-    "auctions:mark-sold:dry-run": "tsx scripts/mark-sold-auctions.ts --dry-run"
+    "auctions:mark-sold:dry-run": "tsx scripts/mark-sold-auctions.ts --dry-run",
+    "auctions:enrich": "tsx scripts/reprocess-auctions.ts",
+    "auctions:enrich:force": "tsx scripts/reprocess-auctions.ts --force",
+    "auctions:enrich:status": "tsx scripts/check-enrichment-status.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

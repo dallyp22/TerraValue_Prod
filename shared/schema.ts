@@ -96,7 +96,49 @@ export const auctions = pgTable("auctions", {
   // Date extraction tracking
   needsDateReview: boolean("needs_date_review").default(false),
   dateExtractionAttempted: timestamp("date_extraction_attempted"),
-  dateExtractionMethod: text("date_extraction_method") // "ai", "regex", "manual"
+  dateExtractionMethod: text("date_extraction_method"), // "ai", "regex", "manual"
+  
+  // AI Enriched standardized fields
+  enrichedTitle: text("enriched_title"),
+  enrichedDescription: text("enriched_description"),
+  enrichedAuctionHouse: text("enriched_auction_house"),
+  enrichedAuctionDate: timestamp("enriched_auction_date"),
+  enrichedAuctionLocation: text("enriched_auction_location"), // Where auction is held
+  enrichedPropertyLocation: text("enriched_property_location"), // Where land is located
+  
+  // Legal description parsing
+  legalDescription: text("legal_description"),
+  legalDescriptionParsed: json("legal_description_parsed"), // Township, Range, Section breakdown
+  legalDescriptionSource: text("legal_description_source"), // "original", "ai_extracted"
+  
+  // Comprehensive property details
+  soilMentions: text("soil_mentions"), // Soil quality notes from listing
+  cropHistory: text("crop_history"), // Mentioned crops or usage
+  improvements: json("improvements"), // Buildings, fencing, irrigation, etc.
+  utilities: json("utilities"), // Electric, water, gas availability
+  roadAccess: text("road_access"), // Type of road access
+  drainage: text("drainage"), // Drainage system details
+  tillablePercent: real("tillable_percent"),
+  crpDetails: text("crp_details"),
+  waterRights: text("water_rights"),
+  mineralRights: text("mineral_rights"),
+  zoningInfo: text("zoning_info"),
+  taxInfo: text("tax_info"),
+  sellerMotivation: text("seller_motivation"), // Estate, retirement, etc.
+  financingOptions: text("financing_options"),
+  possession: text("possession"), // When buyer can take possession
+  keyHighlights: json("key_highlights"), // Array of key selling points
+  
+  // Geocoding enhancements
+  geocodingMethod: text("geocoding_method"), // "address", "legal_description", "county_centroid", "manual"
+  geocodingConfidence: real("geocoding_confidence"), // 0-100 score
+  geocodingSource: text("geocoding_source"), // API used
+  
+  // AI enrichment tracking
+  enrichmentStatus: text("enrichment_status").default("pending"), // "pending", "processing", "completed", "failed"
+  enrichedAt: timestamp("enriched_at"),
+  enrichmentVersion: text("enrichment_version").default("v1"), // Track enrichment algorithm version
+  enrichmentError: text("enrichment_error")
 });
 
 // Scraper Schedule Settings - Configure automatic scraping

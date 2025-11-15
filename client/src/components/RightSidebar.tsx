@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, DollarSign, TrendingUp, Calendar, MapPin, Ruler, ExternalLink, Calculator, Save, Share2, BarChart3, FileText, Sprout, Eye } from 'lucide-react';
+import { X, DollarSign, TrendingUp, Calendar, MapPin, Ruler, ExternalLink, Calculator, Save, Share2, BarChart3, FileText, Sprout, Eye, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
@@ -8,6 +8,13 @@ import { Card, CardContent } from './ui/card';
 import { format, differenceInDays } from 'date-fns';
 import type { Auction } from '@shared/schema';
 import { SoilDataPanel } from './SoilDataPanel';
+import {
+  getComprehensiveAuctionData,
+  getFormattedAuctionDate,
+  getKeyHighlights,
+  getPropertyDetails,
+  isEnriched
+} from '../lib/auctionDisplayHelpers';
 
 interface RightSidebarProps {
   isOpen: boolean;
