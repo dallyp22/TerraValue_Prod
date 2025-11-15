@@ -1201,6 +1201,121 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // ==================== ENRICHMENT ROUTES (must be before /:id route) ====================
+  // Get enrichment statistics
+  app.get("/api/auctions/enrichment-stats", async (req, res) => {
+    try {
+      const { auctionEnrichmentService } = await import('./services/auctionEnrichment.js');
+      const stats = await auctionEnrichmentService.getEnrichmentStats();
+      
+      res.json({
+        success: true,
+        stats
+      });
+    } catch (error) {
+      console.error("Enrichment stats error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get enrichment statistics'
+      });
+    }
+  });
+
+  // Get enrichment errors
+  app.get("/api/auctions/enrichment-errors", async (req, res) => {
+    try {
+      const failedAuctions = await db.query.auctions.findMany({
+        where: eq(auctions.enrichmentStatus, 'failed'),
+        limit: 50
+      });
+      
+      res.json({
+        success: true,
+        errors: failedAuctions.map(a => ({
+          id: a.id,
+          title: a.title,
+          error: a.enrichmentError,
+          url: a.url
+        }))
+      });
+    } catch (error) {
+      console.error("Enrichment errors error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get enrichment errors'
+      });
+    }
+  });
+
+  // Enrich all pending auctions
+  app.post("/api/auctions/enrich-all", async (req, res) => {
+    try {
+      const { enrichAllPendingAuctions } = await import('./services/enrichmentQueue.js');
+      const { Pool } = await import('@neondatabase/serverless');
+      
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      
+      // Start enrichment in background
+      enrichAllPendingAuctions(pool).then(stats => {
+        console.log('✅ Enrichment complete:', stats);
+        pool.end();
+      }).catch(error => {
+        console.error('❌ Enrichment failed:', error);
+        pool.end();
+      });
+      
+      res.json({
+        success: true,
+        message: 'Enrichment started in background'
+      });
+    } catch (error) {
+      console.error("Enrich all error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start enrichment'
+      });
+    }
+  });
+
+  // Retry failed enrichments
+  app.post("/api/auctions/retry-failed-enrichments", async (req, res) => {
+    try {
+      // Reset failed auctions to pending
+      await db.update(auctions)
+        .set({ 
+          enrichmentStatus: 'pending',
+          enrichmentError: null
+        })
+        .where(eq(auctions.enrichmentStatus, 'failed'));
+      
+      const { enrichAllPendingAuctions } = await import('./services/enrichmentQueue.js');
+      const { Pool } = await import('@neondatabase/serverless');
+      
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      
+      // Start enrichment in background
+      enrichAllPendingAuctions(pool).then(stats => {
+        console.log('✅ Retry enrichment complete:', stats);
+        pool.end();
+      }).catch(error => {
+        console.error('❌ Retry enrichment failed:', error);
+        pool.end();
+      });
+      
+      res.json({
+        success: true,
+        message: 'Retry enrichment started in background'
+      });
+    } catch (error) {
+      console.error("Retry enrichments error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retry enrichments'
+      });
+    }
+  });
+  // ==================== END ENRICHMENT ROUTES ====================
+
   // Get auction details
   app.get("/api/auctions/:id", async (req, res) => {
     try {
@@ -1254,6 +1369,34 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({ 
         success: false, 
         message: error instanceof Error ? error.message : 'Failed to calculate valuation' 
+      });
+    }
+  });
+
+  // Enrich single auction
+  app.post("/api/auctions/:id/enrich", async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid auction ID' 
+        });
+      }
+      
+      const { auctionEnrichmentService } = await import('./services/auctionEnrichment.js');
+      const result = await auctionEnrichmentService.enrichAuction(auctionId);
+      
+      res.json({
+        success: true,
+        enrichment: result
+      });
+    } catch (error) {
+      console.error("Enrich auction error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to enrich auction'
       });
     }
   });
@@ -1493,140 +1636,6 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({
         success: false,
         message: 'Failed to get upcoming auctions'
-      });
-    }
-  });
-
-  // Get enrichment statistics
-  app.get("/api/auctions/enrichment-stats", async (req, res) => {
-    try {
-      const { auctionEnrichmentService } = await import('./services/auctionEnrichment.js');
-      const stats = await auctionEnrichmentService.getEnrichmentStats();
-      
-      res.json({
-        success: true,
-        stats
-      });
-    } catch (error) {
-      console.error("Enrichment stats error:", error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get enrichment statistics'
-      });
-    }
-  });
-
-  // Get enrichment errors
-  app.get("/api/auctions/enrichment-errors", async (req, res) => {
-    try {
-      const failedAuctions = await db.query.auctions.findMany({
-        where: eq(auctions.enrichmentStatus, 'failed'),
-        limit: 50
-      });
-      
-      res.json({
-        success: true,
-        errors: failedAuctions.map(a => ({
-          id: a.id,
-          title: a.title,
-          error: a.enrichmentError,
-          url: a.url
-        }))
-      });
-    } catch (error) {
-      console.error("Enrichment errors error:", error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get enrichment errors'
-      });
-    }
-  });
-
-  // Enrich single auction
-  app.post("/api/auctions/:id/enrich", async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const { auctionEnrichmentService } = await import('./services/auctionEnrichment.js');
-      
-      const result = await auctionEnrichmentService.enrichAuction(auctionId);
-      
-      res.json({
-        success: true,
-        enrichment: result
-      });
-    } catch (error) {
-      console.error("Enrich auction error:", error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to enrich auction'
-      });
-    }
-  });
-
-  // Enrich all pending auctions
-  app.post("/api/auctions/enrich-all", async (req, res) => {
-    try {
-      const { enrichAllPendingAuctions } = await import('./services/enrichmentQueue.js');
-      const { Pool } = await import('@neondatabase/serverless');
-      
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      
-      // Start enrichment in background
-      enrichAllPendingAuctions(pool).then(stats => {
-        console.log('✅ Enrichment complete:', stats);
-        pool.end();
-      }).catch(error => {
-        console.error('❌ Enrichment failed:', error);
-        pool.end();
-      });
-      
-      res.json({
-        success: true,
-        message: 'Enrichment started in background'
-      });
-    } catch (error) {
-      console.error("Enrich all error:", error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to start enrichment'
-      });
-    }
-  });
-
-  // Retry failed enrichments
-  app.post("/api/auctions/retry-failed-enrichments", async (req, res) => {
-    try {
-      // Reset failed auctions to pending
-      await db.update(auctions)
-        .set({ 
-          enrichmentStatus: 'pending',
-          enrichmentError: null
-        })
-        .where(eq(auctions.enrichmentStatus, 'failed'));
-      
-      const { enrichAllPendingAuctions } = await import('./services/enrichmentQueue.js');
-      const { Pool } = await import('@neondatabase/serverless');
-      
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      
-      // Start enrichment in background
-      enrichAllPendingAuctions(pool).then(stats => {
-        console.log('✅ Retry enrichment complete:', stats);
-        pool.end();
-      }).catch(error => {
-        console.error('❌ Retry enrichment failed:', error);
-        pool.end();
-      });
-      
-      res.json({
-        success: true,
-        message: 'Retry enrichment started in background'
-      });
-    } catch (error) {
-      console.error("Retry enrichments error:", error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to retry enrichments'
       });
     }
   });
