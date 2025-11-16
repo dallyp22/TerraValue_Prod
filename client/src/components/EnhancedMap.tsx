@@ -2859,20 +2859,29 @@ export default function EnhancedMap({
     
     const handleZoom = () => {
       const zoom = map.current!.getZoom();
-      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels'];
+      const harrison = isInHarrisonCounty();
       
-      ownershipLayers.forEach(layerId => {
+      // Update parcel fill and outline layers (not labels - those need separate toggle)
+      const ownershipShapes = ['ownership-fill', 'ownership-outline'];
+      ownershipShapes.forEach(layerId => {
         const layer = map.current?.getLayer(layerId);
         if (layer && useSelfHostedParcels) {
-          const shouldShow = !isInHarrisonCounty();  // Show at all zoom levels
+          const shouldShow = !harrison;  // Show at all zoom levels
           map.current?.setLayoutProperty(layerId, 'visibility', shouldShow ? 'visible' : 'none');
         }
       });
+      
+      // Update ownership-labels separately - requires BOTH toggles
+      const labelLayer = map.current?.getLayer('ownership-labels');
+      if (labelLayer) {
+        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels && !harrison;
+        map.current?.setLayoutProperty('ownership-labels', 'visibility', shouldShowLabels ? 'visible' : 'none');
+      }
     };
     
     map.current.on('zoom', handleZoom);
     return () => map.current?.off('zoom', handleZoom);
-  }, [useSelfHostedParcels]);
+  }, [useSelfHostedParcels, showOwnerLabels]); // Added showOwnerLabels dependency
 
   // Toggle substations layer visibility
   useEffect(() => {
