@@ -76,7 +76,7 @@ export class OpenAIService {
     // Only create a new assistant if we don't have one
     console.log("Creating new agricultural database assistant with gpt-4o model");
     const assistant = await openai.beta.assistants.create({
-      name: "TerraValue Agricultural Database Assistant",
+      name: "FarmScope AI Agricultural Database Assistant",
       instructions: "You are an expert agricultural land appraiser with access to comprehensive land value databases. Search through the provided agricultural data files to find specific land values by county and state. Focus on accurate dollar per acre values for different land types including Irrigated, Dryland, Pasture, and CRP land. Always return exact values from the database when available.",
       model: "gpt-4o",
       tools: [{ type: "file_search" }],

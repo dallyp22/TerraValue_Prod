@@ -311,7 +311,7 @@ export async function geocodeWithOSM(
       countrycodes: 'us'
     })}`, {
       headers: {
-        'User-Agent': 'TerraValue-Agricultural-Valuation/1.0'
+        'User-Agent': 'FarmScope-AI-Agricultural-Valuation/1.0'
       }
     });
     

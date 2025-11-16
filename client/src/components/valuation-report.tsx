@@ -165,7 +165,7 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
       // Add professional header to first page
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('TerraValue Property Valuation Report', margin, margin - 5);
+      pdf.text('FarmScope AI Property Valuation Report', margin, margin - 5);
       
       // Add date
       pdf.setFontSize(10);
@@ -264,7 +264,7 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
       // Generate filename with property address and timestamp
       const propertyAddress = valuation.address?.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_') || 'Property';
       const timestamp = Date.now();
-      const filename = `TerraValue_Valuation_${propertyAddress}_${new Date().toISOString().split('T')[0]}_${timestamp}.pdf`;
+      const filename = `FarmScope_AI_Valuation_${propertyAddress}_${new Date().toISOString().split('T')[0]}_${timestamp}.pdf`;
 
       // Save the PDF
       pdf.save(filename);

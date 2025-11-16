@@ -263,7 +263,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
       })}`,
       {
         headers: {
-          'User-Agent': 'TerraValue-Agricultural-Valuation/1.0'
+          'User-Agent': 'FarmScope-AI-Agricultural-Valuation/1.0'
         }
       }
     );

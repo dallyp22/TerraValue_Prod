@@ -10,7 +10,7 @@ export function Footer() {
               <div className="bg-slate-900 p-3 rounded-2xl">
                 <ChartLine className="text-white h-5 w-5" />
               </div>
-              <span className="font-light text-slate-900 text-xl tracking-wide">TerraValue</span>
+              <span className="font-light text-slate-900 text-xl tracking-wide">FarmScope AI</span>
             </div>
             <p className="text-sm text-slate-600 leading-relaxed max-w-sm font-light">
               AI-powered agricultural land valuation for informed investment decisions using authentic market data.

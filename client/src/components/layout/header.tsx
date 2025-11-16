@@ -11,7 +11,7 @@ export function Header() {
               <ChartLine className="text-white h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-light text-slate-900 tracking-wide">TerraValue</h1>
+              <h1 className="text-xl sm:text-2xl font-light text-slate-900 tracking-wide">FarmScope AI</h1>
               <p className="text-xs text-slate-500 hidden sm:block font-light">AI-Powered Agricultural Valuation</p>
             </div>
           </div>
