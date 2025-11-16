@@ -166,29 +166,28 @@ export function AuctionDetailsPanel({ auction, onClose, onStartValuation }: Auct
                   <Calculator className="h-4 w-4" />
                   CSR2 Valuation
                 </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <div className="text-muted-foreground">CSR2 Rating</div>
-                <div className="font-bold text-lg">{csr2Mean.toFixed(1)}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Est. Value/Acre</div>
-                <div className="font-bold text-lg">
-                  {estimatedValue ? formatCurrency(estimatedValue) : 'N/A'}
+                
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">CSR2 Rating</div>
+                    <div className="font-bold text-lg">{csr2Mean.toFixed(1)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Est. Value/Acre</div>
+                    <div className="font-bold text-lg">
+                      {estimatedValue ? formatCurrency(estimatedValue) : 'N/A'}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {auction.acreage && estimatedValue && (
-              <div className="pt-2 border-t border-green-200 dark:border-green-800">
-                <div className="text-muted-foreground text-sm">Total Estimated Value</div>
-                <div className="font-bold text-xl text-green-700 dark:text-green-300">
-                  {formatCurrency(estimatedValue * auction.acreage)}
-                </div>
-              </div>
-            )}
+                {auction.acreage && estimatedValue && (
+                  <div className="pt-2 border-t border-green-200 dark:border-green-800">
+                    <div className="text-muted-foreground text-sm">Total Estimated Value</div>
+                    <div className="font-bold text-xl text-green-700 dark:text-green-300">
+                      {formatCurrency(estimatedValue * auction.acreage)}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <Button
