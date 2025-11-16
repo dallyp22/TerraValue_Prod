@@ -2539,6 +2539,13 @@ export default function EnhancedMap({
     updateLabelVisibility();
   }, [showOwnerLabels]);
 
+  // Reload auctions when filters change (ensures filters persist during zoom/pan)
+  useEffect(() => {
+    if (map.current && showAuctionLayer) {
+      loadAuctions();
+    }
+  }, [auctionFilters, showAuctionLayer]);
+
   // Handle clearing drawn polygons
   useEffect(() => {
     if (!draw.current || !clearDrawnPolygons) return;

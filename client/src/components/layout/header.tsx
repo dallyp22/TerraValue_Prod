@@ -25,12 +25,6 @@ export function Header() {
               <Gavel className="h-4 w-4" />
               Auctions
             </Link>
-            <Link href="#" className="text-slate-500 font-light hover:text-slate-900 transition-colors duration-200">
-              Market Reports
-            </Link>
-            <Link href="#" className="text-slate-500 font-light hover:text-slate-900 transition-colors duration-200">
-              Analytics
-            </Link>
           </nav>
           
           {/* Mobile & Desktop Actions */}

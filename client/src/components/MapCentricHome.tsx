@@ -29,7 +29,7 @@ export default function MapCentricHome() {
   // Filter state
   const [filters, setFilters] = useState<AuctionFilters>({
     searchLocation: '',
-    auctionDateRange: 'all',
+    auctionDateRange: '90', // Default to next 90 days
     minAcreage: 0,
     maxAcreage: 1000,
     minCSR2: 5,

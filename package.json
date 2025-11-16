@@ -29,7 +29,8 @@
     "auctions:mark-sold:dry-run": "tsx scripts/mark-sold-auctions.ts --dry-run",
     "auctions:enrich": "tsx scripts/reprocess-auctions.ts",
     "auctions:enrich:force": "tsx scripts/reprocess-auctions.ts --force",
-    "auctions:enrich:status": "tsx scripts/check-enrichment-status.ts"
+    "auctions:enrich:status": "tsx scripts/check-enrichment-status.ts",
+    "auctions:recent": "tsx scripts/view-recent-auctions.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
