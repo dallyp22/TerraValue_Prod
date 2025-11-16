@@ -315,6 +315,11 @@ export default function RightSidebar({
                 <BarChart3 className="h-4 w-4 mr-1" />
                 Analysis
               </TabsTrigger>
+              <TabsTrigger value="enriched" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent" disabled={auction.enrichmentStatus !== 'completed'}>
+                <Sparkles className="h-4 w-4 mr-1" />
+                AI Insights
+                {auction.enrichmentStatus === 'completed' && <Badge variant="secondary" className="ml-2 text-xs">✨</Badge>}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="tab-content p-6 space-y-4">
@@ -424,6 +429,249 @@ export default function RightSidebar({
                         </div>
                       )}
                     </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="enriched" className="tab-content p-6 space-y-6">
+              {/* AI Enrichment Badge */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 border border-violet-200 rounded-lg">
+                <Sparkles className="h-4 w-4 text-violet-600" />
+                <span className="text-sm font-medium text-violet-900">AI-Enhanced Property Profile</span>
+              </div>
+
+              {/* Standardized Information */}
+              {(auction.enrichedAuctionHouse || auction.enrichedAuctionLocation || auction.enrichedPropertyLocation) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-600" />
+                    Auction Information
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {auction.enrichedAuctionHouse && (
+                      <div>
+                        <span className="text-slate-500">Auction House:</span>
+                        <p className="font-medium text-slate-800">{auction.enrichedAuctionHouse}</p>
+                      </div>
+                    )}
+                    {auction.enrichedAuctionLocation && (
+                      <div>
+                        <span className="text-slate-500">Auction Location:</span>
+                        <p className="text-slate-700">{auction.enrichedAuctionLocation}</p>
+                      </div>
+                    )}
+                    {auction.enrichedPropertyLocation && (
+                      <div>
+                        <span className="text-slate-500">Property Location:</span>
+                        <p className="text-slate-700">{auction.enrichedPropertyLocation}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Key Highlights */}
+              {auction.keyHighlights && Array.isArray(auction.keyHighlights) && auction.keyHighlights.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-600" />
+                    Key Highlights
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {auction.keyHighlights.map((highlight: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm">
+                        <span className="text-amber-600 mt-0.5">•</span>
+                        <span className="text-slate-700">{highlight}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Legal Description */}
+              {auction.legalDescription && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-slate-600" />
+                    Legal Description
+                  </h4>
+                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded border border-slate-200 font-mono">
+                    {auction.legalDescription}
+                  </p>
+                </div>
+              )}
+
+              {/* Soil & Land Quality */}
+              {(auction.soilMentions || auction.tillablePercent || auction.drainage || auction.cropHistory) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Sprout className="h-4 w-4 text-green-600" />
+                    Soil & Land Quality
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {auction.soilMentions && (
+                      <div>
+                        <span className="text-slate-500">Soil Quality:</span>
+                        <p className="text-slate-700">{auction.soilMentions}</p>
+                      </div>
+                    )}
+                    {auction.tillablePercent && (
+                      <div>
+                        <span className="text-slate-500">Tillable:</span>
+                        <p className="font-medium text-green-700">{auction.tillablePercent}%</p>
+                      </div>
+                    )}
+                    {auction.drainage && (
+                      <div>
+                        <span className="text-slate-500">Drainage:</span>
+                        <p className="text-slate-700">{auction.drainage}</p>
+                      </div>
+                    )}
+                    {auction.cropHistory && (
+                      <div>
+                        <span className="text-slate-500">Crop History:</span>
+                        <p className="text-slate-700">{auction.cropHistory}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Improvements */}
+              {auction.improvements && Array.isArray(auction.improvements) && auction.improvements.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                    Property Improvements
+                  </h4>
+                  <ul className="space-y-2">
+                    {auction.improvements.map((improvement: any, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm bg-blue-50 p-2 rounded">
+                        <span className="text-blue-600 font-semibold capitalize">{improvement.type}:</span>
+                        <span className="text-slate-700">{improvement.description}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Infrastructure */}
+              {(auction.utilities || auction.roadAccess) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-slate-600" />
+                    Infrastructure & Access
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {auction.utilities && (
+                      <div>
+                        <span className="text-slate-500">Utilities:</span>
+                        <div className="flex gap-2 mt-1 flex-wrap">
+                          {auction.utilities.electric && <Badge variant="outline" className="bg-green-50">⚡ Electric</Badge>}
+                          {auction.utilities.water && <Badge variant="outline" className="bg-blue-50">💧 Water</Badge>}
+                          {auction.utilities.gas && <Badge variant="outline" className="bg-orange-50">🔥 Gas</Badge>}
+                        </div>
+                        {auction.utilities.description && (
+                          <p className="text-slate-700 mt-1">{auction.utilities.description}</p>
+                        )}
+                      </div>
+                    )}
+                    {auction.roadAccess && (
+                      <div>
+                        <span className="text-slate-500">Road Access:</span>
+                        <p className="text-slate-700">{auction.roadAccess}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Rights & Regulations */}
+              {(auction.waterRights || auction.mineralRights || auction.crpDetails || auction.zoningInfo || auction.taxInfo) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3">Rights & Regulations</h4>
+                  <div className="space-y-2 text-sm">
+                    {auction.crpDetails && (
+                      <div>
+                        <span className="text-slate-500">CRP:</span>
+                        <p className="text-slate-700">{auction.crpDetails}</p>
+                      </div>
+                    )}
+                    {auction.waterRights && (
+                      <div>
+                        <span className="text-slate-500">Water Rights:</span>
+                        <p className="text-slate-700">{auction.waterRights}</p>
+                      </div>
+                    )}
+                    {auction.mineralRights && (
+                      <div>
+                        <span className="text-slate-500">Mineral Rights:</span>
+                        <p className="text-slate-700">{auction.mineralRights}</p>
+                      </div>
+                    )}
+                    {auction.zoningInfo && (
+                      <div>
+                        <span className="text-slate-500">Zoning:</span>
+                        <p className="text-slate-700">{auction.zoningInfo}</p>
+                      </div>
+                    )}
+                    {auction.taxInfo && (
+                      <div>
+                        <span className="text-slate-500">Tax Info:</span>
+                        <p className="text-slate-700">{auction.taxInfo}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction Terms */}
+              {(auction.sellerMotivation || auction.financingOptions || auction.possession) && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-3">Transaction Terms</h4>
+                  <div className="space-y-2 text-sm">
+                    {auction.sellerMotivation && (
+                      <div>
+                        <span className="text-slate-500">Seller Motivation:</span>
+                        <p className="text-slate-700">{auction.sellerMotivation}</p>
+                      </div>
+                    )}
+                    {auction.financingOptions && (
+                      <div>
+                        <span className="text-slate-500">Financing:</span>
+                        <p className="text-slate-700">{auction.financingOptions}</p>
+                      </div>
+                    )}
+                    {auction.possession && (
+                      <div>
+                        <span className="text-slate-500">Possession:</span>
+                        <p className="text-slate-700">{auction.possession}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Geocoding Quality Footer */}
+              {(auction.geocodingMethod || auction.geocodingConfidence) && (
+                <div className="pt-4 border-t border-slate-200">
+                  <div className="text-xs text-slate-500 space-y-1">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {auction.geocodingMethod && (
+                        <span>Location Method: {auction.geocodingMethod}</span>
+                      )}
+                    </div>
+                    {auction.geocodingConfidence && (
+                      <div>Confidence: {auction.geocodingConfidence}%</div>
+                    )}
+                    {auction.geocodingSource && (
+                      <div>Source: {auction.geocodingSource}</div>
+                    )}
+                    {auction.enrichedAt && (
+                      <div>Enriched: {format(new Date(auction.enrichedAt), 'MMM dd, yyyy h:mm a')}</div>
+                    )}
                   </div>
                 </div>
               )}
