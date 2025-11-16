@@ -335,12 +335,20 @@ export default function EnhancedMap({
       maxLon: bounds.getEast().toString()
     });
     
-    // Add filter params if provided
+    // Add filter params if provided (check for undefined, not truthy, to handle 0 values)
     if (auctionFilters) {
-      if (auctionFilters.minAcreage) params.append('minAcreage', auctionFilters.minAcreage.toString());
-      if (auctionFilters.maxAcreage) params.append('maxAcreage', auctionFilters.maxAcreage.toString());
-      if (auctionFilters.minCSR2) params.append('minCSR2', auctionFilters.minCSR2.toString());
-      if (auctionFilters.maxCSR2) params.append('maxCSR2', auctionFilters.maxCSR2.toString());
+      if (auctionFilters.minAcreage !== undefined && auctionFilters.minAcreage !== null) {
+        params.append('minAcreage', auctionFilters.minAcreage.toString());
+      }
+      if (auctionFilters.maxAcreage !== undefined && auctionFilters.maxAcreage !== null) {
+        params.append('maxAcreage', auctionFilters.maxAcreage.toString());
+      }
+      if (auctionFilters.minCSR2 !== undefined && auctionFilters.minCSR2 !== null) {
+        params.append('minCSR2', auctionFilters.minCSR2.toString());
+      }
+      if (auctionFilters.maxCSR2 !== undefined && auctionFilters.maxCSR2 !== null) {
+        params.append('maxCSR2', auctionFilters.maxCSR2.toString());
+      }
       if (auctionFilters.auctionDateRange && auctionFilters.auctionDateRange !== 'all') {
         params.append('auctionDateRange', auctionFilters.auctionDateRange);
       }
@@ -350,8 +358,12 @@ export default function EnhancedMap({
       if (auctionFilters.counties?.length > 0) {
         auctionFilters.counties.forEach((county: string) => params.append('counties[]', county));
       }
-      if (auctionFilters.minValue) params.append('minValue', auctionFilters.minValue.toString());
-      if (auctionFilters.maxValue) params.append('maxValue', auctionFilters.maxValue.toString());
+      if (auctionFilters.minValue !== undefined && auctionFilters.minValue !== null) {
+        params.append('minValue', auctionFilters.minValue.toString());
+      }
+      if (auctionFilters.maxValue !== undefined && auctionFilters.maxValue !== null) {
+        params.append('maxValue', auctionFilters.maxValue.toString());
+      }
     }
     
     try {
