@@ -1034,7 +1034,7 @@ export default function EnhancedMap({
             'text-size': 12,
             'text-anchor': 'center',
             'text-allow-overlap': false,
-            'visibility': (useSelfHostedParcels && showOwnerLabels) ? 'visible' : 'none'  // Use initial prop values
+            'visibility': 'none'  // Always start hidden, useEffect will control based on both toggles
           },
           paint: {
             'text-color': '#ffffff',
