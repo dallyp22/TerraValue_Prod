@@ -2496,14 +2496,8 @@ export default function EnhancedMap({
       }
     });
 
-      // Load parcels, aggregated parcels, and auctions when map moves and update label visibility
-      map.current.on('moveend', () => {
-        loadParcels();
-        loadAggregatedParcels();
-        loadAuctions();
-        // Update label visibility based on new location
-        updateLabelVisibility();
-      });
+      // Note: moveend listener is now managed by useEffect hook to ensure
+      // it always has the latest loadAuctions reference with current filters
 
       // Handle polygon drawn
       map.current.on('draw.create', (e) => {
@@ -2558,6 +2552,28 @@ export default function EnhancedMap({
       loadAuctions();
     }
   }, [loadAuctions]);
+
+  // Re-attach moveend listener whenever loadAuctions changes to ensure current filters are used
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const moveHandler = () => {
+      loadParcels();
+      loadAggregatedParcels();
+      loadAuctions();
+      updateLabelVisibility();
+    };
+    
+    // Attach the new listener with current loadAuctions reference
+    map.current.on('moveend', moveHandler);
+    
+    // Cleanup: remove listener when effect re-runs or unmounts
+    return () => {
+      if (map.current) {
+        map.current.off('moveend', moveHandler);
+      }
+    };
+  }, [loadAuctions]); // Re-run when loadAuctions changes (when filters change)
 
   // Handle clearing drawn polygons
   useEffect(() => {
