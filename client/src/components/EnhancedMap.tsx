@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -316,7 +316,8 @@ export default function EnhancedMap({
   };
 
   // Function to load auctions within current map bounds
-  const loadAuctions = async () => {
+  // Memoized to ensure filters persist during zoom/pan
+  const loadAuctions = useCallback(async () => {
     if (!map.current || !showAuctionLayer) {
       // Clear auction markers if layer is disabled
       const source = map.current?.getSource('auctions') as maplibregl.GeoJSONSource;
@@ -408,7 +409,7 @@ export default function EnhancedMap({
     } catch (error) {
       console.error('Failed to load auctions:', error);
     }
-  };
+  }, [auctionFilters, showAuctionLayer]); // Dependencies ensure latest filter values are always used
 
   // Function to load aggregated parcels from self-hosted database
   // NOTE: Removed loadAggregatedParcels function - now using vector tiles instead of GeoJSON
@@ -2539,12 +2540,12 @@ export default function EnhancedMap({
     updateLabelVisibility();
   }, [showOwnerLabels]);
 
-  // Reload auctions when filters change (ensures filters persist during zoom/pan)
+  // Reload auctions when filters change (loadAuctions is memoized with useCallback)
   useEffect(() => {
-    if (map.current && showAuctionLayer) {
+    if (map.current) {
       loadAuctions();
     }
-  }, [auctionFilters, showAuctionLayer]);
+  }, [loadAuctions]);
 
   // Handle clearing drawn polygons
   useEffect(() => {
