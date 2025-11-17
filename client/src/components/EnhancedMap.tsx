@@ -106,6 +106,11 @@ export default function EnhancedMap({
   const drawModeEnabledRef = useRef(drawModeEnabled);
   const featureClickedRef = useRef<boolean>(false); // Track if any feature (auction, substation, datacenter, lake) was just clicked
   
+  // Double-tap detection for mobile devices
+  const lastTapTime = useRef<number>(0);
+  const lastTapPosition = useRef<{ x: number; y: number } | null>(null);
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
   const [selectedDatacenter, setSelectedDatacenter] = useState<any>(null);
@@ -1052,6 +1057,51 @@ export default function EnhancedMap({
             return;
           }
           
+          // Double-tap detection for mobile/tablet devices
+          if (isTouchDevice) {
+            const now = Date.now();
+            const timeSinceLastTap = now - lastTapTime.current;
+            const currentPosition = { x: e.point.x, y: e.point.y };
+            
+            // Check if this is a double-tap (within 300ms and within 20px)
+            if (lastTapPosition.current) {
+              const distance = Math.sqrt(
+                Math.pow(currentPosition.x - lastTapPosition.current.x, 2) +
+                Math.pow(currentPosition.y - lastTapPosition.current.y, 2)
+              );
+              
+              if (timeSinceLastTap < 300 && distance < 20) {
+                // This is a double-tap! Proceed with parcel selection
+                console.log('✅ Double-tap detected on mobile - opening parcel');
+                lastTapTime.current = 0; // Reset
+                lastTapPosition.current = null;
+              } else {
+                // First tap or tap too far apart
+                console.log('👆 First tap on mobile - tap again to open parcel');
+                lastTapTime.current = now;
+                lastTapPosition.current = currentPosition;
+                
+                // Show visual feedback for first tap
+                toast({
+                  title: "Tap Again to Open",
+                  description: "Double-tap to open parcel details",
+                  duration: 1500
+                });
+                return; // Don't open parcel yet
+              }
+            } else {
+              // First tap ever
+              lastTapTime.current = now;
+              lastTapPosition.current = currentPosition;
+              toast({
+                title: "Tap Again to Open",
+                description: "Double-tap to open parcel details",
+                duration: 1500
+              });
+              return;
+            }
+          }
+          
           // Double-check by querying rendered features at click point
           const auctionFeatures = map.current?.queryRenderedFeatures(e.point, {
             layers: ['auction-markers', 'auction-markers-bg']
@@ -1545,6 +1595,47 @@ export default function EnhancedMap({
         if (featureClickedRef.current) {
           console.log('Ignoring parcel click - feature was clicked');
           return;
+        }
+        
+        // Double-tap detection for mobile/tablet devices
+        if (isTouchDevice) {
+          const now = Date.now();
+          const timeSinceLastTap = now - lastTapTime.current;
+          const currentPosition = { x: e.point.x, y: e.point.y };
+          
+          if (lastTapPosition.current) {
+            const distance = Math.sqrt(
+              Math.pow(currentPosition.x - lastTapPosition.current.x, 2) +
+              Math.pow(currentPosition.y - lastTapPosition.current.y, 2)
+            );
+            
+            if (timeSinceLastTap < 300 && distance < 20) {
+              // Double-tap confirmed
+              console.log('✅ Double-tap detected - opening parcel');
+              lastTapTime.current = 0;
+              lastTapPosition.current = null;
+            } else {
+              // First tap or timeout
+              lastTapTime.current = now;
+              lastTapPosition.current = currentPosition;
+              toast({
+                title: "Tap Again to Open",
+                description: "Double-tap to open parcel details",
+                duration: 1500
+              });
+              return;
+            }
+          } else {
+            // First tap
+            lastTapTime.current = now;
+            lastTapPosition.current = currentPosition;
+            toast({
+              title: "Tap Again to Open",
+              description: "Double-tap to open parcel details",
+              duration: 1500
+            });
+            return;
+          }
         }
         
         // Double-check by querying rendered features at click point
