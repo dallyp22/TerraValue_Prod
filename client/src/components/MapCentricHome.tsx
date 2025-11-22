@@ -435,15 +435,6 @@ export default function MapCentricHome() {
                 />
                 <span>Owner Names</span>
               </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-                <input
-                  type="checkbox"
-                  checked={showAuctionLayer}
-                  onChange={(e) => setShowAuctionLayer(e.target.checked)}
-                  className="rounded"
-                />
-                <span>Land Auctions</span>
-              </label>
               
               <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
                 <Button 
