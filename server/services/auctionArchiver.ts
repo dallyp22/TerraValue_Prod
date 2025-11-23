@@ -7,7 +7,7 @@ export class AuctionArchiverService {
   private isRunning: boolean = false;
 
   /**
-   * Start the archiver service - runs immediately and then daily at midnight
+   * Start the archiver service - runs immediately and then daily at 4:30 AM CST
    */
   start() {
     console.log('🗄️  Starting Auction Archiver Service');
@@ -15,25 +15,39 @@ export class AuctionArchiverService {
     // Run immediately on start
     this.archivePastAuctions();
     
-    // Calculate time until next midnight
+    // Calculate time until next 4:30 AM CST
     const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    const msUntilMidnight = tomorrow.getTime() - now.getTime();
     
-    console.log(`   Next archive run at midnight (in ${Math.round(msUntilMidnight / 1000 / 60)} minutes)`);
+    // Get current time in CST (UTC-6)
+    const cstOffset = -6 * 60; // CST is UTC-6
+    const localOffset = now.getTimezoneOffset(); // Current timezone offset
+    const cstTime = new Date(now.getTime() + (cstOffset + localOffset) * 60 * 1000);
     
-    // Schedule first run at midnight
+    // Set target time to 4:30 AM CST
+    const nextRun = new Date(cstTime);
+    nextRun.setHours(4, 30, 0, 0);
+    
+    // If we've already passed 4:30 AM today, schedule for tomorrow
+    if (nextRun <= cstTime) {
+      nextRun.setDate(nextRun.getDate() + 1);
+    }
+    
+    // Convert back to local time
+    const nextRunLocal = new Date(nextRun.getTime() - (cstOffset + localOffset) * 60 * 1000);
+    const msUntilNextRun = nextRunLocal.getTime() - now.getTime();
+    
+    console.log(`   Next archive run at 4:30 AM CST (in ${Math.round(msUntilNextRun / 1000 / 60)} minutes)`);
+    
+    // Schedule first run at 4:30 AM CST
     setTimeout(() => {
       this.archivePastAuctions();
       
-      // Then run daily at midnight
+      // Then run daily at 4:30 AM CST
       this.intervalId = setInterval(() => {
         this.archivePastAuctions();
       }, 24 * 60 * 60 * 1000); // 24 hours
       
-    }, msUntilMidnight);
+    }, msUntilNextRun);
   }
 
   /**
@@ -49,7 +63,7 @@ export class AuctionArchiverService {
 
   /**
    * Archive auctions that are past their date OR marked as sold
-   * Enhanced with AI-detected sold status
+   * Enhanced with AI-detected sold status and non-farm filtering
    */
   async archivePastAuctions() {
     if (this.isRunning) {
@@ -61,18 +75,51 @@ export class AuctionArchiverService {
     const startTime = new Date();
     
     try {
-      console.log(`\n🗄️  [${startTime.toISOString()}] Running automated auction archiver (AI-enhanced)...`);
+      console.log(`\n🗄️  [${startTime.toISOString()}] Running automated auction archiver (AI-enhanced + non-farm filtering)...`);
       
       // Calculate cutoff date (end of yesterday)
       const cutoffDate = new Date();
       cutoffDate.setHours(0, 0, 0, 0);
       
-      // Find auctions to archive - THREE categories:
+      // Find auctions to archive - FOUR categories:
       // 1. Past auction dates (traditional)
       // 2. Status = 'sold' (from scraper detection)
       // 3. AI-enriched sold indicators
+      // 4. Non-farm properties (equipment, residential, commercial)
       
       const allAuctions = await db.query.auctions.findMany();
+      
+      // Non-farm keywords for filtering
+      const isNonFarm = (auction: any) => {
+        const landType = auction.landType?.toLowerCase() || '';
+        const title = auction.title?.toLowerCase() || '';
+        
+        // Check for equipment/personal property auctions in title
+        if (title.includes('equipment') && !title.includes('land')) return true;
+        if (title.includes('personal property')) return true;
+        if (title.includes('estate auction') && !title.includes('land') && !title.includes('farm') && !title.includes('acre')) return true;
+        if (title.includes('livestock') && !title.includes('land')) return true;
+        if (title.includes('church contents')) return true;
+        if (title.includes('sportsman')) return true;
+        if (title.includes('gun')) return true;
+        if (title.includes('collector')) return true;
+        
+        // Check land type
+        if (landType === 'residential') return true;
+        if (landType === 'commercial') return true;
+        if (landType === 'commercial building') return true;
+        if (landType === 'auto auction') return true;
+        if (landType === 'personal property auction') return true;
+        if (landType === 'farm equipment auction') return true;
+        if (landType === 'equipment auction') return true;
+        if (landType === 'estate auction') return true;
+        if (landType === 'workshop') return true;
+        if (landType === 'church contents') return true;
+        if (landType === 'livestock') return true;
+        if (landType === 'farm equipment') return true;
+        
+        return false;
+      };
       
       const toArchive = allAuctions.filter(auction => {
         // Category 1: Past auction date (traditional method)
@@ -94,7 +141,10 @@ export class AuctionArchiverService {
           (auction.possession?.toLowerCase().includes('immediate') && isPastDate)
         );
         
-        return (isPastDate || isMarkedSold || aiDetectedSold) && auction.status !== 'archived';
+        // Category 4: Non-farm properties
+        const isNonFarmProperty = isNonFarm(auction);
+        
+        return (isPastDate || isMarkedSold || aiDetectedSold || isNonFarmProperty) && auction.status !== 'archived';
       });
 
       if (toArchive.length === 0) {
@@ -110,13 +160,15 @@ export class AuctionArchiverService {
         aiDetected: toArchive.filter(a => 
           a.enrichedDescription?.toLowerCase().includes('sold') ||
           a.enrichedDescription?.toLowerCase().includes('closed')
-        ).length
+        ).length,
+        nonFarm: toArchive.filter(a => isNonFarm(a)).length
       };
 
       console.log(`   📦 Found ${toArchive.length} auctions to archive:`);
       console.log(`      - ${byReason.pastDate} past auction date`);
       console.log(`      - ${byReason.markedSold} marked as sold`);
       console.log(`      - ${byReason.aiDetected} AI-detected sold`);
+      console.log(`      - ${byReason.nonFarm} non-farm properties`);
 
       const pastAuctions = toArchive;
 
@@ -128,7 +180,9 @@ export class AuctionArchiverService {
         try {
           // Determine archive reason
           let archiveReason = 'past_auction_date';
-          if (auction.status === 'sold') {
+          if (isNonFarm(auction)) {
+            archiveReason = 'non_farm_property';
+          } else if (auction.status === 'sold') {
             archiveReason = 'marked_sold';
           } else if (auction.enrichedDescription?.toLowerCase().includes('sold')) {
             archiveReason = 'ai_detected_sold';
@@ -189,12 +243,16 @@ export class AuctionArchiverService {
       const duration = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
 
       console.log(`   ✅ Archive complete in ${duration}s`);
-      console.log(`      Archived: ${archived} auctions (${byReason.pastDate} past date, ${byReason.markedSold} marked sold, ${byReason.aiDetected} AI-detected)`);
+      console.log(`      Archived: ${archived} auctions`);
+      console.log(`         - ${byReason.pastDate} past date`);
+      console.log(`         - ${byReason.markedSold} marked sold`);
+      console.log(`         - ${byReason.aiDetected} AI-detected`);
+      console.log(`         - ${byReason.nonFarm} non-farm`);
       console.log(`      Deleted: ${deleted} from active table`);
       if (failed > 0) {
         console.log(`      Failed: ${failed} auctions`);
       }
-      console.log(`      Next run: Tomorrow at midnight\n`);
+      console.log(`      Next run: Tomorrow at 4:30 AM CST\n`);
 
     } catch (error) {
       console.error('   ❌ Error during archiving process:', error);
