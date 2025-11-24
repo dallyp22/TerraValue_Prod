@@ -462,23 +462,6 @@ export default function EnhancedMap({
       });
     }
   }, []);
-      north: 41.866
-    };
-    
-    const inHarrison = center.lng >= harrisonBounds.west && 
-           center.lng <= harrisonBounds.east && 
-           center.lat >= harrisonBounds.south && 
-           center.lat <= harrisonBounds.north;
-    
-    // Debug logging for Harrison County issue
-    console.log('🔍 Harrison Check:', {
-      center: { lat: center.lat.toFixed(4), lng: center.lng.toFixed(4) },
-      inHarrison,
-      zoom: map.current.getZoom()
-    });
-    
-    return inHarrison;
-  };
 
   // Function to load auctions within current map bounds
   // Memoized to ensure filters persist during zoom/pan
