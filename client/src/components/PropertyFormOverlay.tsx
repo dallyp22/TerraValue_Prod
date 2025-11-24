@@ -23,6 +23,9 @@ interface ParcelData {
   };
   allGeometries?: any[]; // All polygon sections for multi-section parcels
   
+  // Valuation land type (for auctions)
+  landType?: 'Irrigated' | 'Dryland' | 'Pasture' | 'CRP';
+  
   // Auction-specific fields
   sourceAuctionId?: number;
   sourceAuctionTitle?: string;
@@ -462,13 +465,14 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               csr2Count: drawnPolygonData.csr2?.count,
             } : parcelData ? {
               // Option 1: Parcel data
-              address: parcelData.owner_name || '',
+              address: parcelData.address || parcelData.owner_name || '',
               county: parcelData.county || '',
               state: 'Iowa',
+              landType: parcelData.landType, // Use the AI-determined land type from auction preparation
               acreage: parcelData.acres || 0,
-              csr2Mean: parcelCSR2Data?.csr2?.mean,
-              csr2Min: parcelCSR2Data?.csr2?.min,
-              csr2Max: parcelCSR2Data?.csr2?.max,
+              csr2Mean: parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean,
+              csr2Min: parcelCSR2Data?.csr2?.min || parcelData.csr2Min,
+              csr2Max: parcelCSR2Data?.csr2?.max || parcelData.csr2Max,
               csr2Count: parcelCSR2Data?.csr2?.count,
             } : undefined}
             hideLocationFields={!!drawnPolygonData || !!parcelData} // Hide location fields for both Option 1 and Option 2

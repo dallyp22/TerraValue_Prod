@@ -276,6 +276,9 @@ export default function MapCentricHome() {
           parcel_class: result.data.landType || 'Agricultural',
           county: result.data.county || auction.county || '',
           
+          // Store the valuation land type for the form
+          landType: result.data.landType, // This is the mapped valuation type (Irrigated, Dryland, Pasture, CRP)
+          
           // Auction-specific metadata
           sourceAuctionId: auction.id,
           sourceAuctionTitle: auction.title,
@@ -339,6 +342,7 @@ export default function MapCentricHome() {
         parcel_number: `AUCTION-${auction.id}`,
         parcel_class: 'Agricultural',
         county: auction.county || '',
+        landType: 'Dryland', // Default fallback
         sourceAuctionId: auction.id,
         sourceAuctionTitle: auction.title,
         csr2Mean: auction.csr2Mean,
