@@ -118,6 +118,11 @@ export default function EnhancedMap({
   const [selectedLake, setSelectedLake] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
+  
+  // Highlighted auction parcel state
+  const [highlightedParcelGeometry, setHighlightedParcelGeometry] = useState<any>(null);
+  const pulseAnimationRef = useRef<number | null>(null);
+  const pulsePhaseRef = useRef<number>(0);
 
   const { toast } = useToast();
   
@@ -302,6 +307,151 @@ export default function EnhancedMap({
       west: -96.137,
       east: -95.498,
       south: 41.506,
+
+  // Helper function to parse WKT and convert to GeoJSON
+  const parseWKTToGeoJSON = (wkt: string): any => {
+    try {
+      // Simple WKT parser for POLYGON and MULTIPOLYGON
+      if (wkt.startsWith('POLYGON')) {
+        const coords = wkt.match(/\(([^)]+)\)/g);
+        if (!coords) return null;
+        
+        const rings = coords.map(ring => {
+          const points = ring.replace(/[()]/g, '').split(',').map(point => {
+            const [lon, lat] = point.trim().split(' ').map(Number);
+            return [lon, lat];
+          });
+          return points;
+        });
+        
+        return {
+          type: 'Polygon',
+          coordinates: rings
+        };
+      } else if (wkt.startsWith('MULTIPOLYGON')) {
+        const polygons = wkt.match(/\(\(([^)]+)\)\)/g);
+        if (!polygons) return null;
+        
+        const coordinates = polygons.map(polygon => {
+          const rings = polygon.match(/\(([^)]+)\)/g);
+          return rings!.map(ring => {
+            const points = ring.replace(/[()]/g, '').split(',').map(point => {
+              const [lon, lat] = point.trim().split(' ').map(Number);
+              return [lon, lat];
+            });
+            return points;
+          });
+        });
+        
+        return {
+          type: 'MultiPolygon',
+          coordinates: coordinates
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error parsing WKT:', error);
+      return null;
+    }
+  };
+
+  // Function to highlight auction parcel on map
+  const highlightAuctionParcel = useCallback(async (auction: Auction) => {
+    if (!map.current) return;
+
+    try {
+      console.log(`🔍 Fetching parcel data for auction: ${auction.title}`);
+      
+      // Call prepare-valuation endpoint to get parcel geometry
+      const response = await fetch(
+        `${API_BASE_URL}/api/auctions/${auction.id}/prepare-valuation`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch parcel data');
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data.fieldWkt) {
+        console.log(`✅ Parcel matched! Highlighting on map`);
+        
+        // Parse WKT to GeoJSON
+        const geometry = parseWKTToGeoJSON(result.data.fieldWkt);
+        
+        if (geometry) {
+          // Update highlighted parcel geometry state
+          setHighlightedParcelGeometry(geometry);
+          
+          // Update map source
+          const source = map.current.getSource('highlighted-auction-parcel') as maplibregl.GeoJSONSource;
+          if (source) {
+            source.setData({
+              type: 'FeatureCollection',
+              features: [{
+                type: 'Feature',
+                geometry: geometry,
+                properties: {}
+              }]
+            });
+          }
+
+          // Zoom to parcel bounds
+          const turfGeometry = geometry.type === 'MultiPolygon' 
+            ? turf.multiPolygon(geometry.coordinates)
+            : turf.polygon(geometry.coordinates);
+          const bbox = turf.bbox(turfGeometry);
+          
+          map.current.fitBounds(
+            [bbox[0], bbox[1], bbox[2], bbox[3]] as [number, number, number, number],
+            {
+              padding: 100,
+              duration: 1000,
+              essential: true
+            }
+          );
+
+          toast({
+            title: "Parcel Matched",
+            description: `${result.data.acreage || auction.acreage} acre parcel highlighted on map`,
+          });
+        }
+      } else {
+        // No parcel match found
+        console.log(`⚠️  No parcel match found for auction`);
+        
+        toast({
+          title: "No Parcel Match",
+          description: "Using auction coordinates - parcel data unavailable",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Error highlighting auction parcel:', error);
+      
+      toast({
+        title: "Could Not Load Parcel",
+        description: "Continuing with auction data",
+        variant: "default",
+      });
+    }
+  }, [toast]);
+
+  // Function to clear highlighted parcel
+  const clearHighlightedParcel = useCallback(() => {
+    if (!map.current) return;
+    
+    setHighlightedParcelGeometry(null);
+    
+    const source = map.current.getSource('highlighted-auction-parcel') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData({
+        type: 'FeatureCollection',
+        features: []
+      });
+    }
+  }, []);
       north: 41.866
     };
     
@@ -1771,6 +1921,37 @@ export default function EnhancedMap({
         }
       });
 
+      // Add highlighted auction parcel source
+      map.current!.addSource('highlighted-auction-parcel', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: []
+        }
+      });
+
+      // Add highlighted auction parcel fill layer (with pulsing animation)
+      map.current!.addLayer({
+        id: 'highlighted-auction-parcel-fill',
+        type: 'fill',
+        source: 'highlighted-auction-parcel',
+        paint: {
+          'fill-color': '#fbbf24', // Amber/yellow
+          'fill-opacity': 0.4
+        }
+      });
+
+      // Add highlighted auction parcel outline layer
+      map.current!.addLayer({
+        id: 'highlighted-auction-parcel-outline',
+        type: 'line',
+        source: 'highlighted-auction-parcel',
+        paint: {
+          'line-color': '#f59e0b', // Orange
+          'line-width': 3
+        }
+      });
+
       // Add substations/infrastructure data source
       map.current!.addSource('substations', {
         type: 'geojson',
@@ -1911,6 +2092,10 @@ export default function EnhancedMap({
                 setSelectedDatacenter(null);
                 setSelectedLake(null);
                 setSelectedAuction(auction);
+                
+                // Highlight the matched parcel on the map
+                highlightAuctionParcel(auction);
+                
                 // Also call prop callback if provided
                 if (onAuctionClick) {
                   onAuctionClick(auction);
@@ -3181,6 +3366,39 @@ export default function EnhancedMap({
     });
   }, [showTransmissionLines, transmissionLineStates, transmissionLineVoltages]);
 
+  // Pulsing animation for highlighted parcel
+  useEffect(() => {
+    if (!map.current || !highlightedParcelGeometry) return;
+
+    const animate = () => {
+      pulsePhaseRef.current = (pulsePhaseRef.current + 0.02) % (Math.PI * 2);
+      const opacity = 0.3 + Math.sin(pulsePhaseRef.current) * 0.3; // Oscillate between 0.0 and 0.6
+      
+      const layer = map.current?.getLayer('highlighted-auction-parcel-fill');
+      if (layer) {
+        map.current?.setPaintProperty('highlighted-auction-parcel-fill', 'fill-opacity', opacity);
+      }
+      
+      pulseAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      if (pulseAnimationRef.current) {
+        cancelAnimationFrame(pulseAnimationRef.current);
+        pulseAnimationRef.current = null;
+      }
+    };
+  }, [highlightedParcelGeometry]);
+
+  // Clear highlighted parcel when auction panel is closed
+  useEffect(() => {
+    if (!selectedAuction) {
+      clearHighlightedParcel();
+    }
+  }, [selectedAuction, clearHighlightedParcel]);
+
   return (
     <>
       <div 
@@ -3191,7 +3409,10 @@ export default function EnhancedMap({
       {selectedAuction && (
         <AuctionDetailsPanel
           auction={selectedAuction}
-          onClose={() => setSelectedAuction(null)}
+          onClose={() => {
+            setSelectedAuction(null);
+            clearHighlightedParcel();
+          }}
           onStartValuation={onStartAuctionValuation ? () => onStartAuctionValuation(selectedAuction) : undefined}
         />
       )}
