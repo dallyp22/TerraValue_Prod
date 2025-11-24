@@ -9,6 +9,7 @@ import { automaticScraperService } from "./services/automaticScraper.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { parcelAggregationService } from "./services/parcelAggregation.js";
+import { auctionParcelExtractor } from "./services/auctionParcelExtractor.js";
 import { propertyFormSchema, auctions, parcels } from "@shared/schema";
 import { db } from "./db.js";
 import { and, gte, lte, eq, asc, desc, sql } from "drizzle-orm";
@@ -1426,9 +1427,6 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
           message: 'Auction not found' 
         });
       }
-
-      // Import AI extraction service
-      const { auctionParcelExtractor } = await import('./services/auctionParcelExtractor.js');
 
       // Extract parcel info using AI
       const extractedInfo = await auctionParcelExtractor.extractParcelInfo(auction);
