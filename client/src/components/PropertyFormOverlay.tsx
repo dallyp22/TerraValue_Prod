@@ -470,10 +470,13 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               state: 'Iowa',
               landType: parcelData.landType, // Use the AI-determined land type from auction preparation
               acreage: parcelData.acres || 0,
-              csr2Mean: parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean,
-              csr2Min: parcelCSR2Data?.csr2?.min || parcelData.csr2Min,
-              csr2Max: parcelCSR2Data?.csr2?.max || parcelData.csr2Max,
-              csr2Count: parcelCSR2Data?.csr2?.count,
+              // Only include CSR2 values if they exist and are not null
+              ...(parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean ? {
+                csr2Mean: parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean,
+                csr2Min: parcelCSR2Data?.csr2?.min || parcelData.csr2Min,
+                csr2Max: parcelCSR2Data?.csr2?.max || parcelData.csr2Max,
+                csr2Count: parcelCSR2Data?.csr2?.count,
+              } : {}),
             } : undefined}
             hideLocationFields={!!drawnPolygonData || !!parcelData} // Hide location fields for both Option 1 and Option 2
             isParcelBased={!!parcelData && !drawnPolygonData} // Flag for parcel-based valuation (only when no polygon is drawn)
