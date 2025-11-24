@@ -533,16 +533,6 @@ export default function LeftSidebar({
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
-                  checked={mapOverlays.showAggregatedParcels || false}
-                  onCheckedChange={(checked) =>
-                    onMapOverlaysChange({ ...mapOverlays, showAggregatedParcels: checked as boolean })
-                  }
-                />
-                <span className="text-sm text-slate-700">Aggregated Parcels</span>
-                <span className="text-xs text-slate-500 ml-1">(Self-Hosted)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
-                <Checkbox
                   checked={mapOverlays.showCityLabels}
                   onCheckedChange={(checked) =>
                     onMapOverlaysChange({ ...mapOverlays, showCityLabels: checked as boolean })

@@ -46,7 +46,7 @@ export default function MapCentricHome() {
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showAuctions: true,
-    showAggregatedParcels: true,
+    showAggregatedParcels: false,
     showSubstations: false,
     showDatacenters: false,
     datacenterStates: {
@@ -434,6 +434,15 @@ export default function MapCentricHome() {
                   className="rounded"
                 />
                 <span>Owner Names</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
+                <input
+                  type="checkbox"
+                  checked={mapOverlays.showAggregatedParcels}
+                  onChange={(e) => setMapOverlays({ ...mapOverlays, showAggregatedParcels: e.target.checked })}
+                  className="rounded"
+                />
+                <span>Aggregated Parcels</span>
               </label>
               
               <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
