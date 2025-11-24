@@ -307,6 +307,16 @@ export default function EnhancedMap({
       west: -96.137,
       east: -95.498,
       south: 41.506,
+      north: 42.081
+    };
+    
+    return (
+      center.lng >= harrisonBounds.west &&
+      center.lng <= harrisonBounds.east &&
+      center.lat >= harrisonBounds.south &&
+      center.lat <= harrisonBounds.north
+    );
+  };
 
   // Helper function to parse WKT and convert to GeoJSON
   const parseWKTToGeoJSON = (wkt: string): any => {
