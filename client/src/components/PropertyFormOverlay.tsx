@@ -22,6 +22,27 @@ interface ParcelData {
     coordinates: number[][][];
   };
   allGeometries?: any[]; // All polygon sections for multi-section parcels
+  
+  // Auction-specific fields
+  sourceAuctionId?: number;
+  sourceAuctionTitle?: string;
+  auctionDate?: Date | string | null;
+  auctioneer?: string;
+  extractedInfo?: {
+    legalDescription?: string;
+    actualLocation?: string;
+    tracts?: number;
+    confidence?: string;
+    reasoning?: string;
+  };
+  csr2Mean?: number;
+  csr2Min?: number;
+  csr2Max?: number;
+  mukey?: string;
+  soilData?: any;
+  hasParcelMatch?: boolean;
+  hasCSR2?: boolean;
+  hasSoilData?: boolean;
 }
 
 interface DrawnPolygonData {
@@ -63,6 +84,14 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         return;
       }
 
+      // If soil data is already provided (from auction preparation), use it
+      if (parcelData.mukey && parcelData.soilData) {
+        console.log('✅ Using pre-fetched soil data from auction preparation');
+        setMukey(parcelData.mukey);
+        setSoilData(parcelData.soilData);
+        return;
+      }
+
       const [lon, lat] = parcelData.coordinates;
       console.log(`🔍 Fetching mukey for parcel at: lon=${lon}, lat=${lat}`);
 
@@ -100,6 +129,18 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   // Fetch CSR2 data for parcel if needed
   useEffect(() => {
     if (parcelData && !parcelCSR2Data) {
+      // If CSR2 data is already provided (from auction preparation), use it
+      if (parcelData.csr2Mean !== undefined) {
+        console.log('✅ Using pre-fetched CSR2 data from auction preparation');
+        setParcelCSR2Data({
+          mean: parcelData.csr2Mean,
+          min: parcelData.csr2Min,
+          max: parcelData.csr2Max
+        });
+        return;
+      }
+      
+      // Otherwise fetch it
       fetchParcelCSR2Data();
     }
   }, [parcelData]);
@@ -351,9 +392,34 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
-          <h2 className="text-lg sm:text-xl font-semibold text-slate-800">
-            {parcelData ? "Parcel Valuation" : drawnPolygonData ? "Custom Area Valuation" : "Property Valuation Form"}
-          </h2>
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-800">
+              {parcelData ? "Parcel Valuation" : drawnPolygonData ? "Custom Area Valuation" : "Property Valuation Form"}
+            </h2>
+            {parcelData?.sourceAuctionId && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-md font-medium">
+                  From Auction
+                </span>
+                {parcelData.extractedInfo?.confidence && (
+                  <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                    parcelData.extractedInfo.confidence === 'high' 
+                      ? 'bg-green-100 text-green-700' 
+                      : parcelData.extractedInfo.confidence === 'medium'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {parcelData.extractedInfo.confidence} confidence
+                  </span>
+                )}
+                {parcelData.hasParcelMatch && (
+                  <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-md font-medium">
+                    Parcel Matched
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <Button 
             onClick={onClose} 
             variant="ghost" 

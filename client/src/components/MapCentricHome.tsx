@@ -238,13 +238,115 @@ export default function MapCentricHome() {
   };
 
   // Handle starting valuation from auction info panel
-  const handleStartAuctionValuation = (auction: Auction) => {
-    // Populate form with auction data
-    setParcelData({
-      ...auction,
-      coordinates: auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null
-    });
-    setShowForm(true);
+  const handleStartAuctionValuation = async (auction: Auction) => {
+    try {
+      console.log('🎯 Preparing valuation from auction:', auction.title);
+      
+      // Show loading toast
+      toast({
+        title: "Preparing Valuation",
+        description: "Extracting property details and matching with parcel data...",
+      });
+
+      // Call the prepare-valuation endpoint
+      const response = await fetch(
+        `https://web-production-51e54.up.railway.app/api/auctions/${auction.id}/prepare-valuation`,
+        {
+          method: 'POST',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to prepare valuation data');
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        console.log('✅ Valuation data prepared:', result.data);
+        
+        // Transform the prepared data to match ParcelData structure
+        const enrichedParcelData = {
+          // Basic info
+          owner_name: result.data.ownerName || 'Unknown Owner',
+          address: result.data.address || auction.address || '',
+          acres: result.data.acreage || auction.acreage || 0,
+          coordinates: result.data.coordinates || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
+          parcel_number: result.data.parcelNumber || `AUCTION-${auction.id}`,
+          parcel_class: result.data.landType || 'Agricultural',
+          county: result.data.county || auction.county || '',
+          
+          // Auction-specific metadata
+          sourceAuctionId: auction.id,
+          sourceAuctionTitle: auction.title,
+          auctionDate: auction.auctionDate,
+          auctioneer: auction.auctioneer,
+          
+          // CSR2 data
+          csr2Mean: result.data.csr2Mean,
+          csr2Min: result.data.csr2Min,
+          csr2Max: result.data.csr2Max,
+          
+          // Extracted info
+          extractedInfo: result.data.extractedInfo,
+          
+          // Geometry if matched
+          geometry: result.data.fieldWkt,
+          
+          // Soil data
+          mukey: result.data.mukey,
+          soilData: result.data.soilData,
+          
+          // Flags
+          hasParcelMatch: result.data.hasParcelMatch,
+          hasCSR2: result.data.hasCSR2,
+          hasSoilData: result.data.hasSoilData
+        };
+
+        setParcelData(enrichedParcelData);
+        setShowForm(true);
+
+        // Show success toast with details
+        const matchDetails = [];
+        if (result.data.hasParcelMatch) matchDetails.push('Parcel matched');
+        if (result.data.hasCSR2) matchDetails.push('CSR2 data available');
+        if (result.data.hasSoilData) matchDetails.push('Soil data available');
+        
+        toast({
+          title: "Valuation Ready",
+          description: matchDetails.length > 0 
+            ? `${matchDetails.join(' • ')} • ${result.data.extractedInfo.confidence} confidence`
+            : "Basic auction data prepared. You can refine the details in the form.",
+        });
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('❌ Failed to prepare auction valuation:', error);
+      
+      // Fallback to basic auction data
+      toast({
+        title: "Using Basic Data",
+        description: "Could not extract full details. Please review and adjust the form.",
+        variant: "default",
+      });
+      
+      setParcelData({
+        owner_name: 'Unknown Owner',
+        address: auction.address || '',
+        acres: auction.acreage || 0,
+        coordinates: auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null,
+        parcel_number: `AUCTION-${auction.id}`,
+        parcel_class: 'Agricultural',
+        county: auction.county || '',
+        sourceAuctionId: auction.id,
+        sourceAuctionTitle: auction.title,
+        csr2Mean: auction.csr2Mean,
+        csr2Min: auction.csr2Min,
+        csr2Max: auction.csr2Max
+      });
+      setShowForm(true);
+    }
   };
 
   // Handle valuation created

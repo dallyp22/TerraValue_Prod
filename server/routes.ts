@@ -1401,6 +1401,183 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Prepare valuation data from auction (AI-enhanced extraction + parcel matching)
+  app.post("/api/auctions/:id/prepare-valuation", valuationRateLimiter, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid auction ID' 
+        });
+      }
+
+      console.log(`🎯 Preparing valuation data for auction ${auctionId}`);
+
+      // Get auction data
+      const auction = await db.query.auctions.findFirst({
+        where: eq(auctions.id, auctionId)
+      });
+      
+      if (!auction) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Auction not found' 
+        });
+      }
+
+      // Import AI extraction service
+      const { auctionParcelExtractor } = await import('./services/auctionParcelExtractor.js');
+
+      // Extract parcel info using AI
+      const extractedInfo = await auctionParcelExtractor.extractParcelInfo(auction);
+      
+      // Determine valuation land type
+      const valuationLandType = auctionParcelExtractor.determineValuationLandType(auction, extractedInfo);
+
+      // Use extracted county or fall back to auction county
+      const targetCounty = extractedInfo.actualCounty || auction.county;
+      const targetAcreage = extractedInfo.actualAcreage || auction.acreage;
+      
+      // Try to match with parcel database
+      let matchedParcel = null;
+      let csr2Data = null;
+      let soilData = null;
+
+      if (auction.latitude && auction.longitude) {
+        console.log(`📍 Querying parcels near ${auction.latitude}, ${auction.longitude}`);
+        
+        try {
+          // Query parcels within 0.5 mile radius
+          const nearbyParcels = await findParcelsAtPoint(
+            auction.longitude,
+            auction.latitude,
+            800 // 0.5 miles in meters
+          );
+
+          if (nearbyParcels && nearbyParcels.length > 0) {
+            // Find best match by acreage if we have it
+            if (targetAcreage) {
+              matchedParcel = nearbyParcels.reduce((best: any, current: any) => {
+                const currentDiff = Math.abs((current.acres || 0) - targetAcreage);
+                const bestDiff = Math.abs((best.acres || 0) - targetAcreage);
+                return currentDiff < bestDiff ? current : best;
+              });
+            } else {
+              matchedParcel = nearbyParcels[0];
+            }
+
+            console.log(`✅ Matched parcel: ${matchedParcel.parcel_number} (${matchedParcel.acres} acres)`);
+
+            // Get CSR2 data for matched parcel
+            if (matchedParcel.geometry) {
+              try {
+                const csr2Result = await csr2Service.getCSR2ForGeometry(matchedParcel.geometry);
+                if (csr2Result) {
+                  csr2Data = csr2Result;
+                  console.log(`✅ CSR2 data: mean=${csr2Data.mean}, min=${csr2Data.min}, max=${csr2Data.max}`);
+                }
+              } catch (error) {
+                console.error('Failed to fetch CSR2:', error);
+              }
+            }
+
+            // Get soil data for matched parcel
+            if (matchedParcel.coordinates) {
+              try {
+                const [lon, lat] = matchedParcel.coordinates;
+                const mukeyResult = await mukeyLookupService.getMukeyAtPoint(lon, lat);
+                if (mukeyResult && mukeyResult.mukey) {
+                  const soilResult = await soilPropertiesService.getSoilByMukey(mukeyResult.mukey);
+                  if (soilResult) {
+                    soilData = soilResult;
+                    console.log(`✅ Soil data: mukey=${mukeyResult.mukey}`);
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to fetch soil data:', error);
+              }
+            }
+          } else {
+            console.log('⚠️  No nearby parcels found');
+          }
+        } catch (error) {
+          console.error('Error querying parcels:', error);
+        }
+      }
+
+      // Build response with merged data
+      const preparedData = {
+        // From auction
+        address: auction.address || extractedInfo.actualLocation || '',
+        county: targetCounty || '',
+        state: auction.state || 'Iowa',
+        acreage: targetAcreage || 0,
+        landType: valuationLandType,
+        
+        // From AI extraction
+        extractedInfo: {
+          legalDescription: extractedInfo.legalDescription,
+          actualLocation: extractedInfo.actualLocation,
+          tracts: extractedInfo.numberOfTracts || 1,
+          confidence: extractedInfo.confidence,
+          reasoning: extractedInfo.reasoning
+        },
+        
+        // From matched parcel (if found)
+        parcelNumber: matchedParcel?.parcel_number,
+        ownerName: matchedParcel?.owner_name,
+        fieldWkt: matchedParcel?.geometry,
+        coordinates: matchedParcel?.coordinates || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
+        
+        // From CSR2 query
+        csr2Mean: csr2Data?.mean || auction.csr2Mean,
+        csr2Min: csr2Data?.min || auction.csr2Min,
+        csr2Max: csr2Data?.max || auction.csr2Max,
+        csr2Count: csr2Data?.count,
+        
+        // From soil database
+        mukey: soilData?.mukey,
+        soilData: soilData ? {
+          series: soilData.soil_series,
+          slope: soilData.slope_avg,
+          drainage: soilData.drainage_class,
+          hydrologicGroup: soilData.hydrologic_group,
+          farmlandClass: soilData.farmland_class,
+          texture: soilData.texture,
+          components: soilData.components
+        } : null,
+
+        // Metadata
+        sourceAuctionId: auctionId,
+        sourceAuctionTitle: auction.title,
+        auctionDate: auction.auctionDate,
+        auctioneer: auction.auctioneer,
+        hasParcelMatch: !!matchedParcel,
+        hasCSR2: !!csr2Data || !!auction.csr2Mean,
+        hasSoilData: !!soilData
+      };
+
+      console.log(`✅ Valuation data prepared successfully`);
+      console.log(`   - Parcel match: ${preparedData.hasParcelMatch ? 'Yes' : 'No'}`);
+      console.log(`   - CSR2 data: ${preparedData.hasCSR2 ? 'Yes' : 'No'}`);
+      console.log(`   - Soil data: ${preparedData.hasSoilData ? 'Yes' : 'No'}`);
+
+      res.json({
+        success: true,
+        data: preparedData
+      });
+
+    } catch (error) {
+      console.error("Prepare valuation error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to prepare valuation data'
+      });
+    }
+  });
+
   // Scrape LandWatch specific pages
   app.post("/api/auctions/refresh/landwatch", valuationRateLimiter, async (req, res) => {
     try {
