@@ -1463,39 +1463,25 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
             console.log('   ✅ BLM geometry found, querying our parcel database...');
             
             // Query our parcel database using PostGIS spatial intersection
+            // Note: parcels table has: county_name, geom (MULTIPOLYGON), area_sqm
             const plssGeomJson = JSON.stringify(blmResult.geometry);
             const legalDescQuery = `
-              SELECT * FROM parcels 
-              WHERE county = $1
-                AND (
-                  legal_description ILIKE $2
-                  OR legal_description ILIKE $3
-                  OR ST_Intersects(
-                    geometry,
-                    ST_GeomFromGeoJSON($4)
-                  )
+              SELECT *, 
+                (area_sqm / 4046.86) as acres,
+                ST_AsGeoJSON(geom) as geometry_json
+              FROM parcels 
+              WHERE county_name = $1
+                AND ST_Intersects(
+                  geom,
+                  ST_GeomFromGeoJSON($2)
                 )
-              ORDER BY 
-                CASE 
-                  WHEN legal_description ILIKE $5 THEN 1
-                  WHEN legal_description ILIKE $2 THEN 2
-                  ELSE 3
-                END,
-                ST_Area(ST_Intersection(geometry, ST_GeomFromGeoJSON($4))) DESC
+              ORDER BY ST_Area(ST_Intersection(geom, ST_GeomFromGeoJSON($2))) DESC
               LIMIT 5
             `;
             
-            const section = parsedLegal.plss.section;
-            const township = parsedLegal.plss.township;
-            const range = parsedLegal.plss.range;
-            const quarter = parsedLegal.plss.quarter || '';
-            
             const result = await pool.query(legalDescQuery, [
               targetCounty,
-              `%Section ${section}%`,
-              `%T${township}${parsedLegal.plss.townshipDirection}%R${range}${parsedLegal.plss.rangeDirection}%`,
-              plssGeomJson,
-              `%${quarter}%`
+              plssGeomJson
             ]);
             
             if (result.rows.length > 0) {
@@ -1536,13 +1522,16 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
             console.log(`   Looking for owner: "${auctionOwner}"`);
             
             // Query parcels by county and acreage, then filter by owner similarity
+            // Note: parcels table has: deed_holder, county_name, area_sqm (not owner_name, county, acres)
+            // We'll calculate acres from area_sqm and use deed_holder_normalized for matching
             const ownerQuery = `
               SELECT *, 
-                similarity(owner_name, $1) as name_similarity
+                similarity(deed_holder_normalized, $1) as name_similarity,
+                (area_sqm / 4046.86) as acres
               FROM parcels 
-              WHERE county = $2
-                AND acres BETWEEN $3 AND $4
-              ORDER BY name_similarity DESC, ABS(acres - $5)
+              WHERE county_name = $2
+                AND (area_sqm / 4046.86) BETWEEN $3 AND $4
+              ORDER BY name_similarity DESC, ABS((area_sqm / 4046.86) - $5)
               LIMIT 5
             `;
             
@@ -1573,10 +1562,11 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
           console.log('🔍 Strategy 3: Trying acreage + county matching...');
           
           const acreageQuery = `
-            SELECT * FROM parcels
-            WHERE county = $1
-              AND acres BETWEEN $2 AND $3
-            ORDER BY ABS(acres - $4)
+            SELECT *, (area_sqm / 4046.86) as acres
+            FROM parcels
+            WHERE county_name = $1
+              AND (area_sqm / 4046.86) BETWEEN $2 AND $3
+            ORDER BY ABS((area_sqm / 4046.86) - $4)
             LIMIT 5
           `;
           
@@ -1681,10 +1671,26 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         },
         
         // From matched parcel (if found)
+        // Map database columns: parcel_number, deed_holder, geometry_json, acres (calculated from area_sqm)
         parcelNumber: matchedParcel?.parcel_number,
-        ownerName: matchedParcel?.owner_name,
-        fieldWkt: matchedParcel?.geometry,
-        coordinates: matchedParcel?.coordinates || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
+        ownerName: matchedParcel?.deed_holder,
+        fieldWkt: matchedParcel?.geometry_json ? JSON.parse(matchedParcel.geometry_json) : null,
+        coordinates: matchedParcel?.geometry_json ? (() => {
+          try {
+            const geom = JSON.parse(matchedParcel.geometry_json);
+            // Simple centroid calculation - get first coordinate of first polygon
+            if (geom.type === 'MultiPolygon' && geom.coordinates?.[0]?.[0]?.[0]) {
+              return [geom.coordinates[0][0][0][0], geom.coordinates[0][0][0][1]];
+            } else if (geom.type === 'Polygon' && geom.coordinates?.[0]?.[0]) {
+              return [geom.coordinates[0][0][0], geom.coordinates[0][0][1]];
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        })() : (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
+        confidence: Math.round(matchConfidence),
+        matchedBy: matchStrategy,
         
         // From CSR2 query
         csr2Mean: csr2Data?.mean || auction.csr2Mean,
