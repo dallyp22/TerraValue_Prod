@@ -350,15 +350,24 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       };
     } 
     // Merge parcel data if available (Option 1)
-    else if (parcelData && parcelCSR2Data) {
+    else if (parcelData) {
+      // Use CSR2 from parcelCSR2Data if available, otherwise use CSR2 from parcelData (auction)
+      const csr2Mean = parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean;
+      const csr2Min = parcelCSR2Data?.csr2?.min || parcelData.csr2Min;
+      const csr2Max = parcelCSR2Data?.csr2?.max || parcelData.csr2Max;
+      const csr2Count = parcelCSR2Data?.csr2?.count;
+      
       data = {
         ...data,
-        fieldWkt: parcelCSR2Data.wkt,
+        fieldWkt: parcelCSR2Data?.wkt,
         acreage: parcelData.acres, // Always use original parcel acres
-        csr2Mean: parcelCSR2Data.csr2?.mean,
-        csr2Min: parcelCSR2Data.csr2?.min,
-        csr2Max: parcelCSR2Data.csr2?.max,
-        csr2Count: parcelCSR2Data.csr2?.count,
+        // Include CSR2 data if available from either source
+        ...(csr2Mean ? {
+          csr2Mean: csr2Mean,
+          csr2Min: csr2Min,
+          csr2Max: csr2Max,
+          csr2Count: csr2Count,
+        } : {}),
         latitude: parcelData.coordinates[1],
         longitude: parcelData.coordinates[0],
         // Add owner & parcel info

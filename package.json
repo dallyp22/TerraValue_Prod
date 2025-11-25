@@ -32,7 +32,8 @@
     "auctions:enrich": "tsx scripts/reprocess-auctions.ts",
     "auctions:enrich:force": "tsx scripts/reprocess-auctions.ts --force",
     "auctions:enrich:status": "tsx scripts/check-enrichment-status.ts",
-    "auctions:recent": "tsx scripts/view-recent-auctions.ts"
+    "auctions:recent": "tsx scripts/view-recent-auctions.ts",
+    "auctions:backfill-csr2": "tsx scripts/backfill-auction-csr2.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
