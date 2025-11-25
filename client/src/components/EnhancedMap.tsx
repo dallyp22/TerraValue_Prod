@@ -3097,11 +3097,19 @@ export default function EnhancedMap({
       
       // Force vector tile source to reload when layers become visible
       if (layersChanged && useSelfHostedParcels && !harrison) {
-        const source = map.current?.getSource('parcels-vector') as maplibregl.VectorTileSource;
-        if (source) {
-          console.log('🔄 Triggering vector tile reload...');
-          // Trigger a style change to force tile reload
-          map.current?.triggerRepaint();
+        console.log('🔄 Triggering vector tile reload...');
+        // Force new tile requests by doing a minimal zoom change
+        // This is the most reliable way to force MapLibre to request tiles for newly visible layers
+        const currentZoom = map.current?.getZoom();
+        if (currentZoom !== undefined) {
+          // Zoom out by 0.001 (imperceptible) and immediately back
+          map.current?.setZoom(currentZoom - 0.001);
+          requestAnimationFrame(() => {
+            if (map.current && currentZoom !== undefined) {
+              map.current.setZoom(currentZoom);
+              console.log('✅ Forced tile reload with minimal zoom change');
+            }
+          });
         }
       }
       
