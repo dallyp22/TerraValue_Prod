@@ -1438,12 +1438,169 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       const targetCounty = extractedInfo.actualCounty || auction.county;
       const targetAcreage = extractedInfo.actualAcreage || auction.acreage;
       
-      // Try to match with parcel database
+      // Try to match with parcel database using multiple strategies
       let matchedParcel = null;
       let csr2Data = null;
       let soilData = null;
+      let matchStrategy = 'none';
+      let matchConfidence = 0;
 
-      if (auction.latitude && auction.longitude) {
+      // STRATEGY 1: Legal Description + BLM PLSS (Highest Accuracy)
+      try {
+        const { geminiParserService } = await import('./services/geminiParser.js');
+        const { blmPlssService } = await import('./services/blmPlss.js');
+        
+        console.log('🔍 Strategy 1: Trying Gemini + BLM PLSS legal description matching...');
+        const parsedLegal = await geminiParserService.parseLegalDescription(auction);
+        
+        if (parsedLegal.plss && parsedLegal.confidence > 50) {
+          console.log(`   Parsed PLSS: T${parsedLegal.plss.township}${parsedLegal.plss.townshipDirection} R${parsedLegal.plss.range}${parsedLegal.plss.rangeDirection} Sec ${parsedLegal.plss.section}`);
+          
+          // Query BLM for geometry
+          const blmResult = await blmPlssService.queryPLSS(parsedLegal.plss);
+          
+          if (blmResult && blmResult.geometry) {
+            console.log('   ✅ BLM geometry found, querying our parcel database...');
+            
+            // Query our parcel database using PostGIS spatial intersection
+            const plssGeomJson = JSON.stringify(blmResult.geometry);
+            const legalDescQuery = `
+              SELECT * FROM parcels 
+              WHERE county = $1
+                AND (
+                  legal_description ILIKE $2
+                  OR legal_description ILIKE $3
+                  OR ST_Intersects(
+                    geometry,
+                    ST_GeomFromGeoJSON($4)
+                  )
+                )
+              ORDER BY 
+                CASE 
+                  WHEN legal_description ILIKE $5 THEN 1
+                  WHEN legal_description ILIKE $2 THEN 2
+                  ELSE 3
+                END,
+                ST_Area(ST_Intersection(geometry, ST_GeomFromGeoJSON($4))) DESC
+              LIMIT 5
+            `;
+            
+            const section = parsedLegal.plss.section;
+            const township = parsedLegal.plss.township;
+            const range = parsedLegal.plss.range;
+            const quarter = parsedLegal.plss.quarter || '';
+            
+            const result = await pool.query(legalDescQuery, [
+              targetCounty,
+              `%Section ${section}%`,
+              `%T${township}${parsedLegal.plss.townshipDirection}%R${range}${parsedLegal.plss.rangeDirection}%`,
+              plssGeomJson,
+              `%${quarter}%`
+            ]);
+            
+            if (result.rows.length > 0) {
+              matchedParcel = result.rows[0];
+              matchStrategy = 'legal_description_plss';
+              matchConfidence = Math.min(parsedLegal.confidence, 95);
+              console.log(`   ✅ MATCHED via PLSS! Parcel: ${matchedParcel.parcel_number} (${matchedParcel.acres} acres)`);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('   ⚠️  Strategy 1 failed:', error instanceof Error ? error.message : error);
+      }
+
+      // STRATEGY 2: Owner Name Matching (if Strategy 1 failed)
+      if (!matchedParcel && targetCounty && targetAcreage) {
+        try {
+          console.log('🔍 Strategy 2: Trying owner name matching...');
+          
+          // Extract owner/seller name from auction
+          const ownerPatterns = [
+            /seller[:\s]+([^,.\n]+)/i,
+            /estate of ([^,.\n]+)/i,
+            /([A-Z][a-z]+ [A-Z][a-z]+) estate/i,
+            /owned by ([^,.\n]+)/i
+          ];
+          
+          let auctionOwner = '';
+          for (const pattern of ownerPatterns) {
+            const match = (auction.enrichedDescription || auction.description || '').match(pattern);
+            if (match) {
+              auctionOwner = match[1].trim();
+              break;
+            }
+          }
+          
+          if (auctionOwner) {
+            console.log(`   Looking for owner: "${auctionOwner}"`);
+            
+            // Query parcels by county and acreage, then filter by owner similarity
+            const ownerQuery = `
+              SELECT *, 
+                similarity(owner_name, $1) as name_similarity
+              FROM parcels 
+              WHERE county = $2
+                AND acres BETWEEN $3 AND $4
+              ORDER BY name_similarity DESC, ABS(acres - $5)
+              LIMIT 5
+            `;
+            
+            const acreageTolerance = targetAcreage * 0.1; // 10% tolerance
+            const result = await pool.query(ownerQuery, [
+              auctionOwner.toUpperCase(),
+              targetCounty,
+              targetAcreage - acreageTolerance,
+              targetAcreage + acreageTolerance,
+              targetAcreage
+            ]);
+            
+            if (result.rows.length > 0 && result.rows[0].name_similarity > 0.3) {
+              matchedParcel = result.rows[0];
+              matchStrategy = 'owner_name_fuzzy';
+              matchConfidence = Math.min(result.rows[0].name_similarity * 100, 85);
+              console.log(`   ✅ MATCHED via owner name! Parcel: ${matchedParcel.parcel_number} (similarity: ${(result.rows[0].name_similarity * 100).toFixed(0)}%)`);
+            }
+          }
+        } catch (error) {
+          console.log('   ⚠️  Strategy 2 failed:', error instanceof Error ? error.message : error);
+        }
+      }
+
+      // STRATEGY 3: Acreage + County Matching (if both above failed)
+      if (!matchedParcel && targetCounty && targetAcreage) {
+        try {
+          console.log('🔍 Strategy 3: Trying acreage + county matching...');
+          
+          const acreageQuery = `
+            SELECT * FROM parcels
+            WHERE county = $1
+              AND acres BETWEEN $2 AND $3
+            ORDER BY ABS(acres - $4)
+            LIMIT 5
+          `;
+          
+          const tolerance = targetAcreage * 0.08; // 8% tolerance
+          const result = await pool.query(acreageQuery, [
+            targetCounty,
+            targetAcreage - tolerance,
+            targetAcreage + tolerance,
+            targetAcreage
+          ]);
+          
+          if (result.rows.length > 0) {
+            matchedParcel = result.rows[0];
+            matchStrategy = 'acreage_county';
+            matchConfidence = 60 - (Math.abs(matchedParcel.acres - targetAcreage) / targetAcreage) * 20;
+            console.log(`   ✅ MATCHED via acreage! Parcel: ${matchedParcel.parcel_number} (${matchedParcel.acres} acres)`);
+          }
+        } catch (error) {
+          console.log('   ⚠️  Strategy 3 failed:', error instanceof Error ? error.message : error);
+        }
+      }
+
+      // STRATEGY 4: Radius Search (Original fallback)
+      if (!matchedParcel && auction.latitude && auction.longitude) {
         console.log(`📍 Querying parcels near ${auction.latitude}, ${auction.longitude}`);
         
         try {
@@ -1558,13 +1715,19 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       };
 
       console.log(`✅ Valuation data prepared successfully`);
+      console.log(`   - Match strategy: ${matchStrategy}`);
+      console.log(`   - Match confidence: ${matchConfidence.toFixed(0)}%`);
       console.log(`   - Parcel match: ${preparedData.hasParcelMatch ? 'Yes' : 'No'}`);
       console.log(`   - CSR2 data: ${preparedData.hasCSR2 ? 'Yes' : 'No'}`);
       console.log(`   - Soil data: ${preparedData.hasSoilData ? 'Yes' : 'No'}`);
 
       res.json({
         success: true,
-        data: preparedData
+        data: preparedData,
+        matchMetadata: {
+          strategy: matchStrategy,
+          confidence: Math.round(matchConfidence)
+        }
       });
 
     } catch (error) {
