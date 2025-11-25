@@ -35,6 +35,7 @@
     "auctions:recent": "tsx scripts/view-recent-auctions.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@mapbox/mapbox-gl-draw": "^1.5.0",
