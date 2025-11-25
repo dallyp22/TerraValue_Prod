@@ -12,6 +12,18 @@ import { LakeInfoPanel } from './LakeInfoPanel';
 import type { Auction } from '@shared/schema';
 import { API_BASE_URL } from '@/config';
 
+// Debounce helper to prevent excessive function calls during rapid zoom/pan
+const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): ((...args: Parameters<T>) => void) => {
+  let timeout: NodeJS.Timeout | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
 interface EnhancedMapProps {
   drawModeEnabled: boolean;
   onParcelClick: (parcel: any) => void;
@@ -2829,14 +2841,15 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
     
-    const moveHandler = () => {
+    // Debounce the handler to avoid excessive calls during rapid zoom/pan
+    const moveHandler = debounce(() => {
       loadParcels();
-      loadAggregatedParcels();
+      // Removed loadAggregatedParcels() - deprecated, vector tiles load automatically
       loadAuctions();
       updateLabelVisibility();
-    };
+    }, 250); // Wait 250ms after user stops moving
     
-    // Attach the new listener with current loadAuctions reference
+    // Attach the debounced listener with current loadAuctions reference
     map.current.on('moveend', moveHandler);
     
     // Cleanup: remove listener when effect re-runs or unmounts
@@ -3063,18 +3076,34 @@ export default function EnhancedMap({
       
       // Show/hide ownership layers (blue aggregated parcels)
       const ownershipFillOutline = ['ownership-fill', 'ownership-outline'];
+      let layersChanged = false;
       ownershipFillOutline.forEach(layerId => {
         const layer = map.current?.getLayer(layerId);
         if (layer) {
           // Show at ALL zoom levels when toggle ON (not just zoom <14)
           const shouldShow = useSelfHostedParcels && !harrison;
           const visibility = shouldShow ? 'visible' : 'none';
-          map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-          console.log(`   └─ ${layerId}: ${visibility} (shouldShow: ${shouldShow})`);
+          const currentVisibility = map.current?.getLayoutProperty(layerId, 'visibility');
+          
+          if (currentVisibility !== visibility) {
+            map.current?.setLayoutProperty(layerId, 'visibility', visibility);
+            layersChanged = true;
+            console.log(`   └─ ${layerId}: ${visibility} (shouldShow: ${shouldShow})`);
+          }
         } else {
           console.warn(`   ⚠️  Layer ${layerId} not found!`);
         }
       });
+      
+      // Force vector tile source to reload when layers become visible
+      if (layersChanged && useSelfHostedParcels && !harrison) {
+        const source = map.current?.getSource('parcels-vector') as maplibregl.VectorTileSource;
+        if (source) {
+          console.log('🔄 Triggering vector tile reload...');
+          // Trigger a style change to force tile reload
+          map.current?.triggerRepaint();
+        }
+      }
       
       // Handle ownership-labels separately (controlled by both toggles)
       const ownershipLabelsLayer = map.current?.getLayer('ownership-labels');

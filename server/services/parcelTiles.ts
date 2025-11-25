@@ -1,8 +1,12 @@
 import { Pool } from '@neondatabase/serverless';
 import NodeCache from 'node-cache';
 
-// Cache tiles for 1 hour
-const tileCache = new NodeCache({ stdTTL: 3600 });
+// Cache tiles for 2 hours with size limits for better performance
+const tileCache = new NodeCache({ 
+  stdTTL: 7200,  // 2 hours instead of 1
+  maxKeys: 10000,  // Limit number of cached tiles
+  checkperiod: 600  // Check for expired keys every 10 minutes
+});
 
 /**
  * Generate a Mapbox Vector Tile (MVT) for parcels
@@ -35,18 +39,20 @@ export async function generateParcelTile(
       // Uses parcel_aggregated table which only combines touching parcels
       // EXCLUDE Harrison County - it has its own Mapbox tileset
       sql = `
-        WITH mvtgeom AS (
+        WITH bbox AS (
+          SELECT ST_TileEnvelope($1, $2, $3) AS geom
+        ),
+        mvtgeom AS (
           SELECT 
             ST_AsMVTGeom(
-              ST_Simplify(
-                geom_3857,
-                CASE 
-                  WHEN $1 <= 10 THEN 100
-                  WHEN $1 <= 12 THEN 50
-                  ELSE 10
-                END
-              ),
-              ST_TileEnvelope($1, $2, $3),
+              -- Aggressive simplification at low zooms for faster rendering
+              CASE 
+                WHEN $1 <= 8 THEN ST_Simplify(geom_3857, 200)
+                WHEN $1 <= 10 THEN ST_Simplify(geom_3857, 100)
+                WHEN $1 <= 12 THEN ST_Simplify(geom_3857, 50)
+                ELSE ST_Simplify(geom_3857, 10)
+              END,
+              bbox.geom,
               4096,
               256,
               true
@@ -55,9 +61,14 @@ export async function generateParcelTile(
             parcel_count,
             ROUND(total_acres::numeric, 1) as acres,
             county
-          FROM parcel_aggregated
-          WHERE geom_3857 && ST_TileEnvelope($1, $2, $3)
+          FROM parcel_aggregated, bbox
+          WHERE geom_3857 && bbox.geom
             AND county != 'HARRISON'  -- Exclude Harrison County
+            -- Add visibility filter to skip tiny parcels at low zooms
+            AND (
+              $1 > 12 OR  -- Show all at high zoom
+              total_acres > 10  -- At low zoom, only show 10+ acre parcels
+            )
         )
         SELECT ST_AsMVT(mvtgeom.*, 'ownership', 4096, 'geom')
         FROM mvtgeom

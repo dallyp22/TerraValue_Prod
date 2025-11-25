@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Menu, Plus, Minus, Locate, Maximize2 } from 'lucide-react';
+import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
@@ -520,68 +521,57 @@ export default function MapCentricHome() {
         {/* Unified Top-Left Control Panel - Desktop Only */}
         {mapInfo.showScrapingModule && (
         <div className="hidden lg:block absolute top-4 left-4 z-50">
-          <div className="bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg flex gap-3">
-            {/* Left side - Scraping Controls */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-                <input
-                  type="checkbox"
-                  checked={drawModeEnabled}
-                  onChange={(e) => setDrawModeEnabled(e.target.checked)}
-                  className="rounded"
-                />
-                <span>Draw Polygon</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-                <input
-                  type="checkbox"
-                  checked={showOwnerLabels}
-                  onChange={(e) => setShowOwnerLabels(e.target.checked)}
-                  className="rounded"
-                />
-                <span>Owner Names</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer px-2">
-                <input
-                  type="checkbox"
-                  checked={mapOverlays.showAggregatedParcels}
-                  onChange={(e) => setMapOverlays({ ...mapOverlays, showAggregatedParcels: e.target.checked })}
-                  className="rounded"
-                />
-                <span>Aggregated Parcels</span>
-              </label>
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl flex gap-3" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+            {/* Left side - Map Layer Controls */}
+            <div className="p-5 space-y-4">
+              {/* Header */}
+              <h3 className="text-sm font-medium text-slate-600 mb-4">Map Layers</h3>
               
-              <div className="pt-2 border-t border-slate-200 space-y-2 px-2">
-                <Button 
-                  onClick={async () => {
-                    try {
-                      const response = await fetch('https://web-production-51e54.up.railway.app/api/auctions/refresh', { method: 'POST' });
-                      const data = await response.json();
-                      if (data.success) {
-                        toast({
-                          title: "Auction Scrape Started",
-                          description: "Scraping all 15 auction sites. This may take several minutes...",
-                        });
-                      }
-                    } catch (error) {
-                      toast({
-                        title: "Error",
-                        description: "Failed to scrape auctions",
-                        variant: "destructive"
-                      });
-                    }
+              {/* Draw Polygon Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Hexagon className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-700">Draw Polygon</span>
+                </div>
+                <Switch
+                  checked={drawModeEnabled}
+                  onCheckedChange={(checked) => {
+                    console.log('Draw polygon toggle:', checked);
+                    setDrawModeEnabled(checked);
                   }}
-                  size="sm"
-                  variant="outline"
-                  className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400 w-full text-xs"
-                >
-                  Scrape Auctions
-                </Button>
+                />
+              </div>
+              
+              {/* Owner Names Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-700">Owner Names</span>
+                </div>
+                <Switch
+                  checked={showOwnerLabels}
+                  onCheckedChange={(checked) => {
+                    console.log('Owner labels toggle:', checked);
+                    setShowOwnerLabels(checked);
+                  }}
+                />
+              </div>
+              
+              {/* Aggregated Parcels Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Layers className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-700">Aggregated Parcels</span>
+                </div>
+                <Switch
+                  checked={mapOverlays.showAggregatedParcels}
+                  onCheckedChange={(checked) => setMapOverlays({ ...mapOverlays, showAggregatedParcels: checked })}
+                />
               </div>
             </div>
 
             {/* Right side - Zoom Controls */}
-            <div className="flex flex-col gap-2 border-l border-slate-200 pl-3">
+            <div className="flex flex-col gap-2 border-l border-slate-200 pl-3 pr-3 py-3">
               <Button
                 onClick={handleZoomIn}
                 size="icon"

@@ -41,7 +41,7 @@ export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLoc
       address: "",
       county: "",
       state: "",
-      landType: "Irrigated" as const,
+      landType: "Dryland" as const,  // Default to Dryland for Iowa farmland
       acreage: 0,
       tillableAcres: undefined,
       additionalDetails: "",
@@ -346,7 +346,7 @@ export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLoc
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-sm font-medium text-slate-700">Land Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger className="h-11 text-sm bg-white border-slate-200 focus:border-slate-400 focus:ring-slate-400 rounded-lg">
                             <SelectValue placeholder="Select land type" />

@@ -469,6 +469,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               longitude: drawnPolygonData.coordinates[0],
               county: 'Harrison', // Default county for drawn polygons
               state: 'Iowa', // Default state for drawn polygons
+              landType: 'Dryland' as const, // Default to Dryland for drawn polygons
               csr2Mean: drawnPolygonData.csr2?.mean,
               csr2Min: drawnPolygonData.csr2?.min,
               csr2Max: drawnPolygonData.csr2?.max,
@@ -478,7 +479,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               address: parcelData.address || parcelData.owner_name || '',
               county: parcelData.county || '',
               state: 'Iowa',
-              landType: parcelData.landType, // Use the AI-determined land type from auction preparation
+              landType: parcelData.landType || 'Dryland' as const, // Use AI-determined land type or default to Dryland
               acreage: parcelData.acres || 0,
               // Only include CSR2 values if they exist and are not null
               ...(parcelCSR2Data?.csr2?.mean || parcelData.csr2Mean ? {
