@@ -372,9 +372,12 @@ export default function EnhancedMap({
     try {
       console.log(`🔍 Fetching parcel data for auction: ${auction.title}`);
       
+      // Use localhost in dev, production URL otherwise
+      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      
       // Call prepare-valuation endpoint to get parcel geometry
       const response = await fetch(
-        `${API_BASE_URL}/api/auctions/${auction.id}/prepare-valuation`,
+        `${apiUrl}/api/auctions/${auction.id}/prepare-valuation`,
         { method: 'POST' }
       );
 
