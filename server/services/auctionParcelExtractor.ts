@@ -23,6 +23,11 @@ export interface ExtractedParcelInfo {
     latitude?: number;
     longitude?: number;
   };
+  csr2Data?: {
+    mean?: number;
+    min?: number;
+    max?: number;
+  };
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
 }
@@ -47,10 +52,12 @@ Key tasks:
 4. Determine number of tracts if multiple parcels
 5. Identify land characteristics (irrigated, dryland, pasture, CRP, timber)
 6. Extract coordinates if mentioned
+7. Extract CSR2 soil productivity ratings (Iowa specific - range 5-100)
 
 IMPORTANT: 
 - Distinguish between auction location (city hall, auction house) vs actual property location
 - Legal descriptions are most reliable for location
+- CSR2 may be listed as "CSR2", "CSR rating", "Corn Suitability Rating", or "soil productivity index"
 - Be conservative - if unsure, indicate lower confidence`;
 
       const userPrompt = `Analyze this auction listing and extract parcel information:
@@ -92,6 +99,11 @@ Return a JSON object with this exact structure:
     "latitude": number or null,
     "longitude": number or null
   },
+  "csr2Data": {
+    "mean": number or null (5-100 range),
+    "min": number or null,
+    "max": number or null
+  },
   "confidence": "high" | "medium" | "low",
   "reasoning": "Brief explanation of extraction confidence and key findings"
 }`;
@@ -112,6 +124,9 @@ Return a JSON object with this exact structure:
       console.log(`   Location: ${result.actualLocation}, ${result.actualCounty}`);
       console.log(`   Acreage: ${result.actualAcreage || 'Unknown'}`);
       console.log(`   Tracts: ${result.numberOfTracts || 1}`);
+      if (result.csr2Data?.mean) {
+        console.log(`   CSR2: ${result.csr2Data.mean}`);
+      }
 
       return result as ExtractedParcelInfo;
 

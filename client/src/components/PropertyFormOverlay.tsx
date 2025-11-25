@@ -41,6 +41,7 @@ interface ParcelData {
   csr2Mean?: number;
   csr2Min?: number;
   csr2Max?: number;
+  csr2Source?: 'listing' | 'database';
   mukey?: string;
   soilData?: any;
   hasParcelMatch?: boolean;
@@ -476,6 +477,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
                 csr2Min: parcelCSR2Data?.csr2?.min || parcelData.csr2Min,
                 csr2Max: parcelCSR2Data?.csr2?.max || parcelData.csr2Max,
                 csr2Count: parcelCSR2Data?.csr2?.count,
+                csr2Source: parcelData.csr2Source || (parcelCSR2Data?.csr2?.mean ? 'database' : 'listing'),
               } : {}),
             } : undefined}
             hideLocationFields={!!drawnPolygonData || !!parcelData} // Hide location fields for both Option 1 and Option 2

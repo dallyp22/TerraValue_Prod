@@ -1431,6 +1431,24 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       // Extract parcel info using AI
       const extractedInfo = await auctionParcelExtractor.extractParcelInfo(auction);
       
+      // Update auction with extracted CSR2 if found
+      if (extractedInfo.csr2Data?.mean && !auction.csr2Mean) {
+        await db.update(auctions)
+          .set({
+            csr2Mean: extractedInfo.csr2Data.mean,
+            csr2Min: extractedInfo.csr2Data.min,
+            csr2Max: extractedInfo.csr2Data.max,
+          })
+          .where(eq(auctions.id, auctionId));
+        
+        console.log(`✅ Extracted CSR2 from listing: ${extractedInfo.csr2Data.mean}`);
+        
+        // Update local auction object
+        auction.csr2Mean = extractedInfo.csr2Data.mean;
+        auction.csr2Min = extractedInfo.csr2Data.min;
+        auction.csr2Max = extractedInfo.csr2Data.max;
+      }
+      
       // Determine valuation land type
       const valuationLandType = auctionParcelExtractor.determineValuationLandType(auction, extractedInfo);
 
@@ -1692,11 +1710,12 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         confidence: Math.round(matchConfidence),
         matchedBy: matchStrategy,
         
-        // From CSR2 query
-        csr2Mean: csr2Data?.mean || auction.csr2Mean,
-        csr2Min: csr2Data?.min || auction.csr2Min,
-        csr2Max: csr2Data?.max || auction.csr2Max,
+        // From CSR2 query - prioritize auction listing data
+        csr2Mean: auction.csr2Mean || csr2Data?.mean,
+        csr2Min: auction.csr2Min || csr2Data?.min,
+        csr2Max: auction.csr2Max || csr2Data?.max,
         csr2Count: csr2Data?.count,
+        csr2Source: auction.csr2Mean ? 'listing' : csr2Data?.mean ? 'database' : undefined,
         
         // From soil database
         mukey: soilData?.mukey,

@@ -38,7 +38,8 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
         label: "CSR2 Quantitative",
         icon: Activity,
         color: "green" as const,
-        description: "Based on soil productivity"
+        description: "Based on soil productivity",
+        source: (valuation as any).csr2Source // Track if from listing or database
       },
       income: {
         perAcre: breakdown.incomeCapValue || 0,
@@ -399,7 +400,14 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
                           ${Math.round(data.perAcre).toLocaleString()}
                           <span className="text-xs sm:text-sm font-medium text-muted-foreground ml-2 print:ml-1 print:text-xs">/acre</span>
                         </div>
-                        <div className="text-xs sm:text-sm text-muted-foreground">{data.description}</div>
+                        <div className="text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-2">
+                          <span>{data.description}</span>
+                          {method === 'csr2' && data.source === 'listing' && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-medium">
+                              From Listing
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </motion.div>
