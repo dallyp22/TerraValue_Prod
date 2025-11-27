@@ -133,6 +133,7 @@ export default function MapCentricHome() {
   const [showReport, setShowReport] = useState(false);
   const [currentValuationId, setCurrentValuationId] = useState<number | null>(null);
   const [parcelData, setParcelData] = useState<any>(null);
+  const hasAutoOpenedReport = useRef(false); // Track if we've auto-opened the report for this valuation
 
   const { toast } = useToast();
 
@@ -179,12 +180,13 @@ export default function MapCentricHome() {
 
   const valuation = currentValuation?.valuation;
 
-  // Auto-open Valuation Report when completed
+  // Auto-open Valuation Report when completed (only once per valuation)
   useEffect(() => {
-    if (valuation?.status === 'completed' && !showReport) {
+    if (valuation?.status === 'completed' && !showReport && !hasAutoOpenedReport.current) {
       console.log('✅ Valuation completed! Opening report...');
       setShowReport(true);
       setShowPipeline(false);
+      hasAutoOpenedReport.current = true; // Mark that we've auto-opened
     }
   }, [valuation?.status, showReport]);
 
@@ -360,6 +362,7 @@ export default function MapCentricHome() {
     setCurrentValuationId(valuationId);
     setShowForm(false);
     setShowPipeline(true);
+    hasAutoOpenedReport.current = false; // Reset auto-open flag for new valuation
   };
 
   // Handle new valuation
@@ -373,6 +376,7 @@ export default function MapCentricHome() {
     setParcelData(null);
     setDrawnPolygonData(null);
     setDrawModeEnabled(false);
+    hasAutoOpenedReport.current = false; // Reset auto-open flag
     
     toast({
       title: "Ready for New Valuation",
