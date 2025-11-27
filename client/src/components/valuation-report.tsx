@@ -528,6 +528,24 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
                 <div className="text-sm font-medium text-green-700"># OF COORDINATES</div>
               </div>
             </div>
+            
+            {/* County-Specific CSR2 Rate */}
+            {breakdown?.csr2DollarPerPoint && (
+              <div className="mt-4 bg-white rounded-xl p-4 ring-1 ring-green-200/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-slate-700">County Rate ({valuation.county})</span>
+                  </div>
+                  <div className="text-lg font-bold text-green-900">
+                    ${breakdown.csr2DollarPerPoint}<span className="text-sm font-medium text-green-700">/CSR2 point</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-slate-600">
+                  This is the market rate per CSR2 point for {valuation.county}, based on recent land sales in this region.
+                </div>
+              </div>
+            )}
             <div className="mt-4 p-4 bg-white rounded-xl ring-1 ring-green-200/50">
               <p className="text-sm text-slate-600">
                 <strong>CSR2 (Corn Suitability Rating 2)</strong> is Iowa State University's standardized index that assigns every mapped 
