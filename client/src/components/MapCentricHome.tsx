@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
