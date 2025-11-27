@@ -10,7 +10,18 @@ interface ValuationPipelineOverlayProps {
 
 export default function ValuationPipelineOverlay({ data, onClose }: ValuationPipelineOverlayProps) {
   const getCurrentStep = () => {
-    if (!data) return "input";
+    if (!data) {
+      console.log('🔍 Pipeline: No data');
+      return "input";
+    }
+    
+    console.log('🔍 Pipeline Status:', {
+      status: data.status,
+      baseValue: data.baseValue,
+      aiReasoning: !!data.aiReasoning,
+      marketInsight: !!data.marketInsight,
+      breakdown: !!data.breakdown
+    });
     
     switch (data.status) {
       case "processing":
@@ -19,19 +30,26 @@ export default function ValuationPipelineOverlay({ data, onClose }: ValuationPip
           (Date.now() - new Date(data.createdAt).getTime()) / 1000 : 0;
         
         if (processingTime < 2 && !data.baseValue) {
+          console.log('🔍 Pipeline: input (< 2s, no baseValue)');
           return "input";
         } else if (data.baseValue && data.aiReasoning && data.marketInsight) {
+          console.log('🔍 Pipeline: report (has all data)');
           return "report";
         } else if (data.baseValue && data.aiReasoning) {
+          console.log('🔍 Pipeline: research (has baseValue + aiReasoning)');
           return "research";
         } else if (data.baseValue) {
+          console.log('🔍 Pipeline: analysis (has baseValue only)');
           return "analysis";
         } else {
+          console.log('🔍 Pipeline: vector (no baseValue yet)');
           return "vector";
         }
       case "completed":
+        console.log('🔍 Pipeline: report (status=completed)');
         return "report";
       default:
+        console.log('🔍 Pipeline: input (default)');
         return "input";
     }
   };

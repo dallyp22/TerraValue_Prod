@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { valuationService } from "./services/valuation.js";
 import { csr2Service } from "./services/csr2.js";
+import { countyCsr2RateService } from "./services/countyCsr2Rates.js";
 import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
 import { automaticScraperService } from "./services/automaticScraper.js";
@@ -2485,6 +2486,145 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       res.status(500).json({ 
         success: false, 
         message: 'Failed to search parcels in bounds' 
+      });
+    }
+  });
+
+  // ============================================================================
+  // County CSR2 Rates API
+  // ============================================================================
+
+  // Get all county CSR2 rates
+  app.get("/api/admin/csr2-rates", async (req, res) => {
+    try {
+      const rates = await countyCsr2RateService.getAllRates();
+      res.json({ 
+        success: true, 
+        rates,
+        count: rates.length
+      });
+    } catch (error) {
+      console.error("Failed to fetch CSR2 rates:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch county CSR2 rates' 
+      });
+    }
+  });
+
+  // Get specific county CSR2 rate
+  app.get("/api/admin/csr2-rates/:county", async (req, res) => {
+    try {
+      const county = req.params.county;
+      const rate = await countyCsr2RateService.getCountyRate(county);
+      
+      res.json({ 
+        success: true, 
+        county,
+        rate
+      });
+    } catch (error) {
+      console.error(`Failed to fetch rate for ${req.params.county}:`, error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch county rate' 
+      });
+    }
+  });
+
+  // Update county CSR2 rate
+  app.put("/api/admin/csr2-rates/:county", async (req, res) => {
+    try {
+      const county = req.params.county;
+      const { csr2Price, notes } = req.body;
+      
+      if (!csr2Price || typeof csr2Price !== 'number' || csr2Price <= 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Valid CSR2 price is required' 
+        });
+      }
+      
+      const success = await countyCsr2RateService.updateCountyRate(county, csr2Price, notes);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: `Updated ${county} County rate to $${csr2Price}/point`
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to update county rate' 
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to update rate for ${req.params.county}:`, error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update county rate' 
+      });
+    }
+  });
+
+  // Bulk update county CSR2 rates
+  app.post("/api/admin/csr2-rates/bulk-update", async (req, res) => {
+    try {
+      const { updates } = req.body;
+      
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Updates array is required' 
+        });
+      }
+      
+      const result = await countyCsr2RateService.bulkUpdateRates(updates);
+      
+      res.json({ 
+        success: true, 
+        message: `Updated ${result.success} counties, ${result.failed} failed`,
+        ...result
+      });
+    } catch (error) {
+      console.error("Failed to bulk update rates:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to bulk update county rates' 
+      });
+    }
+  });
+
+  // Get cache statistics
+  app.get("/api/admin/csr2-rates/cache/stats", async (req, res) => {
+    try {
+      const stats = countyCsr2RateService.getCacheStats();
+      res.json({ 
+        success: true, 
+        cache: stats
+      });
+    } catch (error) {
+      console.error("Failed to get cache stats:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to get cache statistics' 
+      });
+    }
+  });
+
+  // Clear cache (useful for testing/admin)
+  app.post("/api/admin/csr2-rates/cache/clear", async (req, res) => {
+    try {
+      countyCsr2RateService.clearCache();
+      res.json({ 
+        success: true, 
+        message: 'Cache cleared successfully'
+      });
+    } catch (error) {
+      console.error("Failed to clear cache:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to clear cache' 
       });
     }
   });

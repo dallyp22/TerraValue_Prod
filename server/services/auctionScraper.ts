@@ -1,5 +1,6 @@
 import { firecrawlService } from './firecrawl.js';
 import { csr2Service } from './csr2.js';
+import { countyCsr2RateService } from './countyCsr2Rates.js';
 import { db } from '../db.js';
 import { auctions } from '@shared/schema';
 import { eq } from 'drizzle-orm';
@@ -739,8 +740,11 @@ export class AuctionScraperService {
       throw new Error('Unable to determine CSR2 for this location');
     }
     
-    // Calculate estimated value using standardized $174/CSR2 point
-    const estimatedValue = csr2Stats.mean * 174;
+    // Get county-specific CSR2 rate
+    const csr2RatePerPoint = await countyCsr2RateService.getCountyRate(auction.county || '');
+    const estimatedValue = csr2Stats.mean * csr2RatePerPoint;
+    
+    console.log(`CSR2 Valuation for ${auction.title}: ${csr2Stats.mean} × $${csr2RatePerPoint}/point (${auction.county || 'Unknown'} County) = $${Math.round(estimatedValue)}/acre`);
     
     // Update auction with CSR2 data
     await db.update(auctions)

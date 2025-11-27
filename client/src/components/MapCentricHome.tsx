@@ -182,10 +182,11 @@ export default function MapCentricHome() {
   // Auto-open Valuation Report when completed
   useEffect(() => {
     if (valuation?.status === 'completed' && !showReport) {
+      console.log('✅ Valuation completed! Opening report...');
       setShowReport(true);
       setShowPipeline(false);
     }
-  }, [valuation?.status]);
+  }, [valuation?.status, showReport]);
 
   // Handle polygon drawn
   const handlePolygonDrawn = async (polygon: any) => {
@@ -251,7 +252,7 @@ export default function MapCentricHome() {
 
       // Call the prepare-valuation endpoint
       const response = await fetch(
-        `https://web-production-51e54.up.railway.app/api/auctions/${auction.id}/prepare-valuation`,
+        `/api/auctions/${auction.id}/prepare-valuation`,
         {
           method: 'POST',
         }

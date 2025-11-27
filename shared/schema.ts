@@ -249,6 +249,20 @@ export const parcelAggregated = pgTable("parcel_aggregated", {
   // Spatial index: CREATE INDEX parcel_aggregated_geom_idx ON parcel_aggregated USING GIST(geom)
 }));
 
+// County CSR2 Rates - Price per CSR2 point by Iowa county
+export const countyCsr2Rates = pgTable("county_csr2_rates", {
+  id: serial("id").primaryKey(),
+  county: text("county").notNull().unique(),
+  region: text("region").notNull(), // Northwest, Northeast, West Central, etc.
+  csr2Price: integer("csr2_price").notNull(), // Dollar amount per CSR2 point
+  effectiveDate: timestamp("effective_date").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  notes: text("notes"), // Admin notes about rate changes
+}, (table) => ({
+  countyIdx: index("county_csr2_rates_county_idx").on(table.county),
+  regionIdx: index("county_csr2_rates_region_idx").on(table.region),
+}));
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -345,6 +359,8 @@ export type ParcelOwnershipGroup = typeof parcelOwnershipGroups.$inferSelect;
 export type InsertParcelOwnershipGroup = typeof parcelOwnershipGroups.$inferInsert;
 export type ParcelAggregated = typeof parcelAggregated.$inferSelect;
 export type InsertParcelAggregated = typeof parcelAggregated.$inferInsert;
+export type CountyCsr2Rate = typeof countyCsr2Rates.$inferSelect;
+export type InsertCountyCsr2Rate = typeof countyCsr2Rates.$inferInsert;
 
 export interface ValuationBreakdown {
   baseValue: number;

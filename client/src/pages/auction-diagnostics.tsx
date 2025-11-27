@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle, Clock, DollarSign, Edit2, Save, X } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -65,6 +65,15 @@ export default function AuctionDiagnostics() {
   const [enrichmentStats, setEnrichmentStats] = useState<any>(null);
   const [enrichmentErrors, setEnrichmentErrors] = useState<any[]>([]);
   const [enriching, setEnriching] = useState(false);
+  
+  // County CSR2 Rates tracking
+  const [csr2Rates, setCsr2Rates] = useState<any[]>([]);
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [editingRate, setEditingRate] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [searchFilter, setSearchFilter] = useState<string>('');
+  const [regionFilter, setRegionFilter] = useState<string>('all');
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -496,6 +505,81 @@ export default function AuctionDiagnostics() {
       calculateStatsFromAuctionData();
     }
   }, [auctionData]);
+
+  // Load county CSR2 rates
+  const loadCountyCsr2Rates = async () => {
+    setLoadingRates(true);
+    try {
+      const response = await fetch('/api/admin/csr2-rates');
+      const data = await response.json();
+      if (data.success) {
+        setCsr2Rates(data.rates);
+      }
+    } catch (error) {
+      console.error('Failed to load CSR2 rates:', error);
+    }
+    setLoadingRates(false);
+  };
+
+  // Update CSR2 rate
+  const updateCsr2Rate = async (county: string) => {
+    try {
+      const response = await fetch(`/api/admin/csr2-rates/${county}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          csr2Price: editValue,
+          notes: editNotes || undefined 
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Reload rates
+        await loadCountyCsr2Rates();
+        setEditingRate(null);
+        setEditValue(0);
+        setEditNotes('');
+      }
+    } catch (error) {
+      console.error('Failed to update rate:', error);
+    }
+  };
+
+  // Start editing a rate
+  const startEditingRate = (county: string, currentRate: number, currentNotes: string | null) => {
+    setEditingRate(county);
+    setEditValue(currentRate);
+    setEditNotes(currentNotes || '');
+  };
+
+  // Cancel editing
+  const cancelEditingRate = () => {
+    setEditingRate(null);
+    setEditValue(0);
+    setEditNotes('');
+  };
+
+  // Filter rates by search and region
+  const filteredRates = useMemo(() => {
+    return csr2Rates.filter(rate => {
+      const matchesSearch = !searchFilter || 
+        rate.county.toLowerCase().includes(searchFilter.toLowerCase());
+      const matchesRegion = regionFilter === 'all' || rate.region === regionFilter;
+      return matchesSearch && matchesRegion;
+    });
+  }, [csr2Rates, searchFilter, regionFilter]);
+
+  // Get unique regions
+  const uniqueRegions = useMemo(() => {
+    return Array.from(new Set(csr2Rates.map(r => r.region))).sort();
+  }, [csr2Rates]);
+
+  // Get rate color based on value
+  const getRateColor = (rate: number) => {
+    if (rate >= 171) return 'from-green-50 to-emerald-100/50 border-green-200';
+    if (rate >= 151) return 'from-blue-50 to-blue-100/50 border-blue-200';
+    return 'from-amber-50 to-amber-100/50 border-amber-200';
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -1988,6 +2072,198 @@ export default function AuctionDiagnostics() {
           </CardContent>
         </Card>
       )}
+
+      {/* County CSR2 Rates Management */}
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+        <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">County CSR2 Rates</CardTitle>
+                <CardDescription>Manage county-specific $/CSR2 point rates</CardDescription>
+              </div>
+            </div>
+            <Button
+              onClick={loadCountyCsr2Rates}
+              disabled={loadingRates}
+              variant="outline"
+              size="sm"
+              className="hover:bg-purple-100"
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${loadingRates ? 'animate-spin' : ''}`} />
+              {loadingRates ? 'Loading...' : 'Reload Rates'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {csr2Rates.length === 0 ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No rates loaded. Click "Reload Rates" to fetch county CSR2 pricing data.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              {/* Filters */}
+              <div className="flex flex-col md:flex-row gap-4 mb-6">
+                <div className="flex-1">
+                  <Label htmlFor="search" className="text-xs mb-1">Search County</Label>
+                  <Input
+                    id="search"
+                    placeholder="Search by county name..."
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
+                <div className="w-full md:w-48">
+                  <Label htmlFor="region" className="text-xs mb-1">Filter by Region</Label>
+                  <Select value={regionFilter} onValueChange={setRegionFilter}>
+                    <SelectTrigger id="region" className="bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Regions</SelectItem>
+                      {uniqueRegions.map(region => (
+                        <SelectItem key={region} value={region}>{region}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {filteredRates.length}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Counties</div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                  <div className="text-2xl font-bold text-green-600">
+                    ${filteredRates.length > 0 ? Math.max(...filteredRates.map(r => r.csr2Price)) : 0}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Highest Rate</div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+                  <div className="text-2xl font-bold text-amber-600">
+                    ${filteredRates.length > 0 ? Math.min(...filteredRates.map(r => r.csr2Price)) : 0}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Lowest Rate</div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+                  <div className="text-2xl font-bold text-purple-600">
+                    ${filteredRates.length > 0 ? Math.round(filteredRates.reduce((sum, r) => sum + r.csr2Price, 0) / filteredRates.length) : 0}
+                  </div>
+                  <div className="text-xs text-gray-600 font-medium">Average Rate</div>
+                </div>
+              </div>
+
+              {/* Rates Table */}
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold">County</th>
+                      <th className="text-left p-3 font-semibold">Region</th>
+                      <th className="text-center p-3 font-semibold">$/CSR2 Point</th>
+                      <th className="text-left p-3 font-semibold">Last Updated</th>
+                      <th className="text-center p-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRates.map((rate) => (
+                      <tr key={rate.id} className="border-b hover:bg-gray-50">
+                        {editingRate === rate.county ? (
+                          <>
+                            <td className="p-3 font-semibold">{rate.county}</td>
+                            <td className="p-3 text-gray-600">{rate.region}</td>
+                            <td className="p-3">
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(Number(e.target.value))}
+                                className="w-24 text-center"
+                                min={50}
+                                max={300}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                placeholder="Notes (optional)"
+                                value={editNotes}
+                                onChange={(e) => setEditNotes(e.target.value)}
+                                className="text-xs"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 hover:bg-green-100"
+                                  onClick={() => updateCsr2Rate(rate.county)}
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 hover:bg-red-100"
+                                  onClick={cancelEditingRate}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-3 font-semibold">{rate.county}</td>
+                            <td className="p-3 text-gray-600 text-xs">{rate.region}</td>
+                            <td className="p-3">
+                              <div className={`inline-flex items-center justify-center px-3 py-1 rounded-lg bg-gradient-to-br ${getRateColor(rate.csr2Price)}`}>
+                                <span className="font-bold text-gray-900">${rate.csr2Price}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-gray-500 text-xs">
+                              {rate.updatedAt ? new Date(rate.updatedAt).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="p-3 text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 hover:bg-blue-100"
+                                onClick={() => startEditingRate(rate.county, rate.csr2Price, rate.notes)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredRates.length === 0 && (
+                <Alert className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No counties match your filters. Try adjusting your search or region filter.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Footer Spacer */}
       <div className="h-8"></div>

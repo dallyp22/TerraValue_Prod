@@ -633,7 +633,8 @@ export function calculateBlendedLandValue(
   propertyCSR2: number,
   countyBaseValue: number,
   countyAverageCSR2: number = 65,
-  nonTillableType?: "CRP" | "Timber" | "Other"
+  nonTillableType?: "CRP" | "Timber" | "Other",
+  csr2RatePerPoint: number = 174 // County-specific rate, defaults to $174
 ): {
   tillableValue: number;
   nonTillableValue: number;
@@ -643,8 +644,8 @@ export function calculateBlendedLandValue(
 } {
   const nonTillableAcres = totalAcres - tillableAcres;
   
-  // Calculate CSR2 value for tillable acres using standardized rate
-  const tillableValuePerAcre = propertyCSR2 * 174; // Use standardized $174/point rate for consistency
+  // Calculate CSR2 value for tillable acres using county-specific rate
+  const tillableValuePerAcre = propertyCSR2 * csr2RatePerPoint;
   
   // Calculate non-tillable value based on land type
   const nonTillableMultiplier = getNonTillableMultiplier(nonTillableType);

@@ -1,6 +1,7 @@
 import { openaiService } from "./openai.js";
 import { csr2Service } from "./csr2.js";
 import { cornPriceService } from "./cornPrice.js";
+import { countyCsr2RateService } from "./countyCsr2Rates.js";
 import { storage } from "../storage.js";
 import type { PropertyForm, ValuationBreakdown } from "@shared/schema";
 
@@ -129,12 +130,11 @@ export class ValuationService {
       let csr2Value = 0;
       let csr2DollarPerPoint = 0;
       let tillableBlendedValue = null;
-      const standardCSR2DollarPerPoint = 174; // Standardized rate across all properties
       
       if (propertyData.csr2Mean && propertyData.csr2Mean > 0) {
-        // Use standardized $174/point for CSR2 calculation
-        csr2Value = propertyData.csr2Mean * standardCSR2DollarPerPoint;
-        csr2DollarPerPoint = standardCSR2DollarPerPoint;
+        // Get county-specific CSR2 rate
+        csr2DollarPerPoint = await countyCsr2RateService.getCountyRate(propertyData.county);
+        csr2Value = propertyData.csr2Mean * csr2DollarPerPoint;
         
         // Calculate blended value if tillable acres specified
         if (propertyData.tillableAcres && propertyData.tillableAcres > 0) {
@@ -144,18 +144,20 @@ export class ValuationService {
             propertyData.csr2Mean,
             vectorResult.baseValue,
             65, // Iowa average CSR2
-            propertyData.nonTillableType
+            propertyData.nonTillableType,
+            csr2DollarPerPoint // Pass county-specific rate
           );
           
           console.log(`Blended Land Value Calculation:
 - Total Acres: ${propertyData.acreage}
 - Tillable Acres: ${propertyData.tillableAcres}
 - Non-Tillable Type: ${propertyData.nonTillableType || 'Standard'} (${Math.round(tillableBlendedValue.nonTillableMultiplier * 100)}% of base value)
+- CSR2 Rate: $${csr2DollarPerPoint}/point (${propertyData.county} County)
 - CSR2 Value for Tillable: $${tillableBlendedValue.tillableValue}/acre
 - Adjusted Value for Non-Tillable: $${tillableBlendedValue.nonTillableValue}/acre
 - Blended Per-Acre Value: $${tillableBlendedValue.blendedValue}/acre`);
         } else {
-          console.log(`CSR2 Quantitative Valuation: Property CSR2 ${propertyData.csr2Mean} × $${csr2DollarPerPoint.toFixed(0)}/point = $${csr2Value}/acre`);
+          console.log(`CSR2 Quantitative Valuation: Property CSR2 ${propertyData.csr2Mean} × $${csr2DollarPerPoint}/point (${propertyData.county} County) = $${Math.round(csr2Value)}/acre`);
         }
       }
 
