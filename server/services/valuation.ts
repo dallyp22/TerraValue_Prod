@@ -323,7 +323,7 @@ export class ValuationService {
         capRate: capRate,
         csr2Value: csr2Value > 0 ? csr2Value : undefined,
         csr2DollarPerPoint: csr2DollarPerPoint > 0 ? csr2DollarPerPoint : undefined,
-        countyAverageCSR2: propertyData.csr2Mean ? standardCSR2DollarPerPoint : undefined,
+        countyAverageCSR2: propertyData.csr2Mean ? csr2DollarPerPoint : undefined,
         csr2Mean: propertyData.csr2Mean,
         csr2Min: propertyData.csr2Min,
         csr2Max: propertyData.csr2Max,
