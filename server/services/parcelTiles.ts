@@ -64,10 +64,11 @@ export async function generateParcelTile(
           FROM parcel_aggregated, bbox
           WHERE geom_3857 && bbox.geom
             AND county != 'HARRISON'  -- Exclude Harrison County
-            -- Add visibility filter to skip tiny parcels at low zooms
+            -- Progressive visibility filter based on zoom level
             AND (
-              $1 > 12 OR  -- Show all at high zoom
-              total_acres > 10  -- At low zoom, only show 10+ acre parcels
+              $1 > 10 OR  -- Show all parcels at zoom 11+
+              ($1 > 8 AND total_acres > 5) OR  -- At zoom 9-10, show 5+ acre parcels
+              total_acres > 20  -- At zoom 0-8, only show 20+ acre parcels
             )
         )
         SELECT ST_AsMVT(mvtgeom.*, 'ownership', 4096, 'geom')
