@@ -78,6 +78,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   const [parcelCSR2Data, setParcelCSR2Data] = useState<any>(null);
   const [mukey, setMukey] = useState<string | null>(null);
   const [soilData, setSoilData] = useState<any>(null);
+  const [cornPrice, setCornPrice] = useState<number | null>(null);
+  const [calculatedCashRent, setCalculatedCashRent] = useState<number | null>(null);
 
   // Fetch mukey and soil data when parcel is selected
   useEffect(() => {
@@ -148,6 +150,34 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       fetchParcelCSR2Data();
     }
   }, [parcelData]);
+
+  // Fetch corn price for cash rent calculation
+  useEffect(() => {
+    const fetchCornPrice = async () => {
+      try {
+        const response = await fetch('/api/corn-price');
+        const data = await response.json();
+        if (data.success && data.price) {
+          setCornPrice(data.price);
+          console.log(`🌽 Corn futures price: $${data.price}/bushel`);
+        }
+      } catch (error) {
+        console.error('Failed to fetch corn price:', error);
+      }
+    };
+    fetchCornPrice();
+  }, []);
+
+  // Calculate cash rent when we have both CSR2 and corn price
+  useEffect(() => {
+    const csr2Mean = parcelCSR2Data?.csr2?.mean || parcelCSR2Data?.mean || parcelData?.csr2Mean || drawnPolygonData?.csr2?.mean;
+    
+    if (csr2Mean && cornPrice) {
+      const cashRent = Math.round(csr2Mean * cornPrice * 100) / 100;
+      setCalculatedCashRent(cashRent);
+      console.log(`💰 Calculated cash rent: $${cornPrice}/bu × ${csr2Mean} CSR2 = $${cashRent}/acre`);
+    }
+  }, [parcelCSR2Data, parcelData?.csr2Mean, drawnPolygonData?.csr2?.mean, cornPrice]);
 
   const fetchParcelCSR2Data = async () => {
     if (!parcelData) return;
@@ -474,6 +504,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
               csr2Min: drawnPolygonData.csr2?.min,
               csr2Max: drawnPolygonData.csr2?.max,
               csr2Count: drawnPolygonData.csr2?.count,
+              // Prefill cash rent with CSR2 × corn price
+              ...(calculatedCashRent ? { cashRentPerAcre: calculatedCashRent } : {}),
             } : parcelData ? {
               // Option 1: Parcel data
               address: parcelData.address || parcelData.owner_name || '',
@@ -489,6 +521,8 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
                 csr2Count: parcelCSR2Data?.csr2?.count,
                 csr2Source: parcelData.csr2Source || (parcelCSR2Data?.csr2?.mean ? 'database' : 'listing'),
               } : {}),
+              // Prefill cash rent with CSR2 × corn price
+              ...(calculatedCashRent ? { cashRentPerAcre: calculatedCashRent } : {}),
             } : undefined}
             hideLocationFields={!!drawnPolygonData || !!parcelData} // Hide location fields for both Option 1 and Option 2
             isParcelBased={!!parcelData && !drawnPolygonData} // Flag for parcel-based valuation (only when no polygon is drawn)

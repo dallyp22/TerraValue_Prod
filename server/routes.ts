@@ -8,6 +8,7 @@ import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
 import { automaticScraperService } from "./services/automaticScraper.js";
 import { AuctionArchiverService } from "./services/auctionArchiver.js";
+import { cornPriceService } from "./services/cornPrice.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { parcelAggregationService } from "./services/parcelAggregation.js";
@@ -87,6 +88,32 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
           api: "degraded"
         },
         error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get corn futures price for cash rent calculation
+  app.get("/api/corn-price", async (req, res) => {
+    try {
+      const price = await cornPriceService.getCornFuturesPrice();
+      
+      if (price !== null) {
+        res.json({
+          success: true,
+          price,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Unable to fetch corn futures price"
+        });
+      }
+    } catch (error) {
+      console.error("Corn price fetch error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch corn futures price"
       });
     }
   });
