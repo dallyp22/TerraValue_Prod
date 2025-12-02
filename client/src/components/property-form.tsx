@@ -496,9 +496,9 @@ export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLoc
                       <FormControl>
                         <Input
                           type="number"
-                          step="1"
+                          step="0.01"
                           min="0"
-                          max="1000"
+                          max="2000"
                           placeholder=""
                           className="h-11 text-sm bg-white border-slate-200 focus:border-slate-400 focus:ring-slate-400 rounded-lg"
                           value={field.value ?? ""}
