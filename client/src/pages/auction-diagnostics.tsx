@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle, Clock, DollarSign, Edit2, Save, X } from 'lucide-react';
+import { Calendar, MapPin, Ruler, ExternalLink, Plus, ChevronLeft, ChevronRight, ArrowLeft, Map, TrendingUp, Database, RefreshCw, Activity, AlertCircle, CheckCircle, Clock, DollarSign, Edit2, Save, X, Archive } from 'lucide-react';
 
 export default function AuctionDiagnostics() {
   const [loading, setLoading] = useState(false);
@@ -65,6 +65,10 @@ export default function AuctionDiagnostics() {
   const [enrichmentStats, setEnrichmentStats] = useState<any>(null);
   const [enrichmentErrors, setEnrichmentErrors] = useState<any[]>([]);
   const [enriching, setEnriching] = useState(false);
+  
+  // Archive tracking
+  const [archiving, setArchiving] = useState(false);
+  const [archiveResults, setArchiveResults] = useState<any>(null);
   
   // County CSR2 Rates tracking
   const [csr2Rates, setCsr2Rates] = useState<any[]>([]);
@@ -432,6 +436,38 @@ export default function AuctionDiagnostics() {
     }
   };
 
+  // Archive non-farm auctions
+  const handleArchiveNonFarm = async () => {
+    if (!confirm('This will archive all non-farm auctions (residential, commercial, equipment, etc). Continue?')) {
+      return;
+    }
+    
+    setArchiving(true);
+    setArchiveResults(null);
+    
+    try {
+      const response = await fetch('/api/auctions/archive-non-farm', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setArchiveResults(data);
+        alert(`Successfully archived ${data.archived} non-farm auctions!`);
+        // Reload data to show updated counts
+        checkAuctions();
+        loadDiagnostics();
+      } else {
+        alert(`Failed to archive auctions: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to archive auctions:', error);
+      alert('Failed to archive non-farm auctions');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   // Format relative time
   const getRelativeTime = (timestamp: string) => {
     const now = new Date();
@@ -697,6 +733,34 @@ export default function AuctionDiagnostics() {
                     </span>
                   )}
                 </Button>
+                
+                {/* Archive Button */}
+                <Button 
+                  onClick={handleArchiveNonFarm} 
+                  disabled={archiving}
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-3 border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-700 font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  {archiving ? (
+                    <span className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-700"></div>
+                      Archiving...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Archive className="h-4 w-4" />
+                      Archive Non-Farm Auctions
+                    </span>
+                  )}
+                </Button>
+                {archiveResults && (
+                  <div className="mt-2 p-2 rounded-lg bg-green-50 border border-green-200">
+                    <p className="text-xs text-green-800">
+                      ✅ Archived {archiveResults.archived} auctions, {archiveResults.remaining} remaining
+                    </p>
+                  </div>
+                )}
                 
                 {/* Automatic Scraping Schedule */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
