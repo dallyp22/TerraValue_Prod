@@ -527,6 +527,7 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
             hideLocationFields={!!drawnPolygonData || !!parcelData} // Hide location fields for both Option 1 and Option 2
             isParcelBased={!!parcelData && !drawnPolygonData} // Flag for parcel-based valuation (only when no polygon is drawn)
             csr2LoadingMessage={isLoadingCSR2 ? "Analyzing soil productivity data..." : undefined}
+            calculatedCashRent={calculatedCashRent || undefined}
           />
         </div>
       </div>

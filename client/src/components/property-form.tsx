@@ -20,6 +20,7 @@ interface PropertyFormProps {
   hideLocationFields?: boolean;
   isParcelBased?: boolean;
   csr2LoadingMessage?: string;
+  calculatedCashRent?: number;
 }
 
 const US_STATES = [
@@ -32,7 +33,7 @@ const US_STATES = [
   "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
 ];
 
-export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLocationFields = false, isParcelBased = false, csr2LoadingMessage }: PropertyFormProps) {
+export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLocationFields = false, isParcelBased = false, csr2LoadingMessage, calculatedCashRent }: PropertyFormProps) {
   const [csr2Data, setCsr2Data] = useState<{ mean: number; min: number; max: number; count?: number; acres?: number } | null>(null);
 
   const form = useForm<PropertyForm>({
@@ -85,6 +86,18 @@ export function PropertyForm({ onSubmit, isLoading = false, initialData, hideLoc
       }
     }
   }, [initialData, form]);
+
+  // Update cash rent when calculatedCashRent prop becomes available
+  useEffect(() => {
+    if (calculatedCashRent && calculatedCashRent > 0) {
+      // Only set if not already filled by user
+      const currentValue = form.getValues('cashRentPerAcre');
+      if (!currentValue || currentValue === 0) {
+        form.setValue('cashRentPerAcre', calculatedCashRent);
+        console.log(`💰 Prefilled cash rent: $${calculatedCashRent}/acre`);
+      }
+    }
+  }, [calculatedCashRent, form]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,

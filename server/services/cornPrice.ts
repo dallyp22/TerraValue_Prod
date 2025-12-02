@@ -10,15 +10,26 @@ export async function getCornFuturesPrice(): Promise<number | null> {
     const quote = await yahooFinance.quote('ZC=F');
     
     if (quote && quote.regularMarketPrice) {
-      // Price is in cents per bushel, convert to dollars
-      const priceInDollars = quote.regularMarketPrice / 100;
+      let priceInDollars = quote.regularMarketPrice;
+      
+      // Yahoo Finance returns corn futures in cents per bushel
+      // Prices > 100 are clearly in cents (corn is typically $3-8/bushel = 300-800 cents)
+      if (priceInDollars > 100) {
+        priceInDollars = priceInDollars / 100;
+      }
+      
+      console.log(`🌽 Corn futures price: $${priceInDollars.toFixed(2)}/bushel (raw: ${quote.regularMarketPrice})`);
       return Number(priceInDollars.toFixed(2));
     }
     
-    return null;
+    // Fallback to a reasonable default if API fails
+    console.log('⚠️ Corn price unavailable, using fallback $4.50/bushel');
+    return 4.50;
   } catch (error) {
     console.error('Failed to fetch corn futures price:', error);
-    return null;
+    // Return fallback price instead of null to ensure rent calculation works
+    console.log('⚠️ Corn price error, using fallback $4.50/bushel');
+    return 4.50;
   }
 }
 
