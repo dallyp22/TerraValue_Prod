@@ -103,10 +103,10 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
     blendedPerAcreDollar = Math.round(totalLandValue / (valuation?.acreage || 1));
   }
   
-  // Precise calculations: rounded $/acre × acres
-  const tillableLandValue = tillablePerAcreDollar * tillableAcres;
-  const nonTillableLandValue = nonTillablePerAcreDollar * nonTillableAcres;
-  const totalPropertyValue = tillableLandValue + nonTillableLandValue + improvements;
+  // Precise calculations: rounded $/acre × acres, then round final values to nearest dollar
+  const tillableLandValue = Math.round(tillablePerAcreDollar * tillableAcres);
+  const nonTillableLandValue = Math.round(nonTillablePerAcreDollar * nonTillableAcres);
+  const totalPropertyValue = Math.round(tillableLandValue + nonTillableLandValue + improvements);
   
   // PDF Export Function
   const exportToPDF = async () => {
