@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/hooks/use-toast';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
 import LeftSidebar, { type AuctionFilters, type MapOverlays, type MapInfo } from './LeftSidebar';
@@ -135,8 +134,6 @@ export default function MapCentricHome() {
   const [parcelData, setParcelData] = useState<any>(null);
   const hasAutoOpenedReport = useRef(false); // Track if we've auto-opened the report for this valuation
 
-  const { toast } = useToast();
-
   // Zoom control handlers
   const handleZoomIn = () => {
     if (mapRef) {
@@ -245,12 +242,6 @@ export default function MapCentricHome() {
   const handleStartAuctionValuation = async (auction: Auction) => {
     try {
       console.log('🎯 Preparing valuation from auction:', auction.title);
-      
-      // Show loading toast
-      toast({
-        title: "Preparing Valuation",
-        description: "Extracting property details and matching with parcel data...",
-      });
 
       // Call the prepare-valuation endpoint
       const response = await fetch(
@@ -312,19 +303,6 @@ export default function MapCentricHome() {
 
         setParcelData(enrichedParcelData);
         setShowForm(true);
-
-        // Show success toast with details
-        const matchDetails = [];
-        if (result.data.hasParcelMatch) matchDetails.push('Parcel matched');
-        if (result.data.hasCSR2) matchDetails.push('CSR2 data available');
-        if (result.data.hasSoilData) matchDetails.push('Soil data available');
-        
-        toast({
-          title: "Valuation Ready",
-          description: matchDetails.length > 0 
-            ? `${matchDetails.join(' • ')} • ${result.data.extractedInfo.confidence} confidence`
-            : "Basic auction data prepared. You can refine the details in the form.",
-        });
       } else {
         throw new Error('Invalid response from server');
       }
@@ -332,12 +310,6 @@ export default function MapCentricHome() {
       console.error('❌ Failed to prepare auction valuation:', error);
       
       // Fallback to basic auction data
-      toast({
-        title: "Using Basic Data",
-        description: "Could not extract full details. Please review and adjust the form.",
-        variant: "default",
-      });
-      
       setParcelData({
         owner_name: 'Unknown Owner',
         address: auction.address || '',
@@ -377,11 +349,6 @@ export default function MapCentricHome() {
     setDrawnPolygonData(null);
     setDrawModeEnabled(false);
     hasAutoOpenedReport.current = false; // Reset auto-open flag
-    
-    toast({
-      title: "Ready for New Valuation",
-      description: "Click on a parcel or draw a polygon to start"
-    });
   };
 
   // Handle location search
@@ -396,19 +363,9 @@ export default function MapCentricHome() {
           zoom: 15,
           duration: 2000
         });
-
-        toast({
-          title: "Location Found",
-          description: "Map centered on location"
-        });
       }
     } catch (error) {
       console.error('Geocoding error:', error);
-      toast({
-        title: "Location Not Found",
-        description: "Please check the location and try again",
-        variant: "destructive"
-      });
     }
   };
 
