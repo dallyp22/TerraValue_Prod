@@ -808,12 +808,7 @@ export default function AuctionDiagnostics() {
                       className="h-8 text-xs col-span-2"
                     />
                   </div>
-                  {scheduleSettings.enabled && scheduleSettings.nextRun && (
-                    <div className="text-xs text-gray-600 mt-2 flex items-center gap-1">
-                      <span className="font-medium">Next scrape:</span>
-                      <span>{new Date(scheduleSettings.nextRun).toLocaleString()}</span>
-                    </div>
-                  )}
+                  {/* Next scrape time hidden - timezone display issue */}
                   {scheduleSettings.enabled && scheduleSettings.lastRun && (
                     <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                       <span>Last run:</span>

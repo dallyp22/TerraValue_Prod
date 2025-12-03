@@ -567,6 +567,27 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
+  // Recalculate next scrape run (fixes timezone or schedule issues)
+  app.post("/api/auctions/schedule/recalculate", async (req, res) => {
+    try {
+      const nextRun = await automaticScraperService.recalculateNextRun();
+      const settings = await automaticScraperService.getSettings();
+      
+      res.json({ 
+        success: true, 
+        message: 'Next run recalculated',
+        nextRun,
+        settings
+      });
+    } catch (error) {
+      console.error("Failed to recalculate schedule:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to recalculate schedule' 
+      });
+    }
+  });
+
   // ===============================
   // Parcel Aggregation API
   // ===============================

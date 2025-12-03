@@ -124,6 +124,19 @@ export class AutomaticScraperService {
     
     return next;
   }
+
+  /**
+   * Recalculate and update nextRun based on current settings
+   * Used to fix timezone issues or refresh schedule
+   */
+  async recalculateNextRun() {
+    const settings = await this.getSettings();
+    const now = new Date();
+    const nextRun = this.calculateNextRun(now, settings.cadence, settings.scheduleTime);
+    await this.updateSettings({ nextRun });
+    console.log(`🔄 Recalculated next scrape run: ${nextRun.toLocaleString()}`);
+    return nextRun;
+  }
   
   /**
    * Get current schedule settings (creates default if doesn't exist)
