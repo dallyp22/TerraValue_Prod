@@ -750,7 +750,7 @@ export default function AuctionDiagnostics() {
                   ) : (
                     <span className="flex items-center gap-2">
                       <Archive className="h-4 w-4" />
-                      Archive Non-Farm Auctions
+                      Archive Old & Non-Farm Auctions
                     </span>
                   )}
                 </Button>

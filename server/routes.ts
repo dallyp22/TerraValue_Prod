@@ -1231,144 +1231,45 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
 
-  // Archive non-farm auctions
+  // Archive non-farm auctions AND past auctions
   app.post("/api/auctions/archive-non-farm", valuationRateLimiter, async (req, res) => {
     try {
-      console.log('🗄️ Manual archive trigger from Diagnostics UI');
+      console.log('🗄️ Manual archive trigger from Diagnostics UI - running full archiver');
       
-      // Get all active auctions
-      const allAuctions = await db.query.auctions.findMany({
-        where: (auctions, { eq, or }) => or(
-          eq(auctions.status, 'active'),
-          eq(auctions.status, 'sold')
-        )
-      });
-
-      // Define non-farm keywords
-      const nonFarmKeywords = [
-        'residential', 'commercial', 'house', 'building', 'sportsman', 
-        'gun', 'collector', 'equipment', 'machinery', 'personal property',
-        'estate auction', 'auto auction', 'vehicle', 'church contents',
-        'workshop contents', 'livestock auction', 'cattle auction'
-      ];
+      // Use the AuctionArchiverService which handles:
+      // 1. Past auction dates
+      // 2. Sold auctions
+      // 3. AI-detected sold
+      // 4. Non-farm properties
+      const archiverService = new AuctionArchiverService();
       
-      // Filter non-farm auctions
-      const nonFarmAuctions = allAuctions.filter(auction => {
-        const landType = auction.landType?.toLowerCase() || '';
-        const title = auction.title?.toLowerCase() || '';
-        
-        // Check for equipment/personal property auctions in title
-        if (title.includes('equipment') && !title.includes('land')) return true;
-        if (title.includes('personal property')) return true;
-        if (title.includes('estate auction') && !title.includes('land') && !title.includes('farm') && !title.includes('acre')) return true;
-        if (title.includes('livestock') && !title.includes('land')) return true;
-        if (title.includes('church contents')) return true;
-        if (title.includes('sportsman')) return true;
-        if (title.includes('gun')) return true;
-        if (title.includes('collector')) return true;
-        
-        // Check land type
-        if (landType === 'residential') return true;
-        if (landType === 'commercial') return true;
-        if (landType === 'commercial building') return true;
-        if (landType === 'auto auction') return true;
-        if (landType === 'personal property auction') return true;
-        if (landType === 'farm equipment auction') return true;
-        if (landType === 'equipment auction') return true;
-        if (landType === 'estate auction') return true;
-        if (landType === 'workshop') return true;
-        if (landType === 'church contents') return true;
-        if (landType === 'livestock') return true;
-        
-        return false;
-      });
-
-      console.log(`📊 Found ${allAuctions.length} active auctions`);
-      console.log(`🚫 Found ${nonFarmAuctions.length} non-farm auctions to archive`);
-
-      if (nonFarmAuctions.length === 0) {
-        return res.json({
-          success: true,
-          message: 'No non-farm auctions to archive. Database is clean!',
-          archived: 0,
-          deleted: 0,
-          total: allAuctions.length
-        });
-      }
-
-      // Archive the auctions
-      let archived = 0;
-      const { archivedAuctions } = await import("@shared/schema");
+      // Get counts before archiving
+      const beforeCount = await db.query.auctions.findMany();
+      const totalBefore = beforeCount.length;
       
-      for (const auction of nonFarmAuctions) {
-        try {
-          // Copy to archived_auctions table
-          await db.insert(archivedAuctions).values({
-            title: auction.title,
-            description: auction.description,
-            url: auction.url,
-            sourceWebsite: auction.sourceWebsite,
-            auctionDate: auction.auctionDate,
-            auctionType: auction.auctionType,
-            auctioneer: auction.auctioneer,
-            address: auction.address,
-            county: auction.county,
-            state: auction.state,
-            acreage: auction.acreage,
-            landType: auction.landType,
-            latitude: auction.latitude,
-            longitude: auction.longitude,
-            csr2Mean: auction.csr2Mean,
-            csr2Min: auction.csr2Min,
-            csr2Max: auction.csr2Max,
-            estimatedValue: auction.estimatedValue,
-            rawData: auction.rawData,
-            scrapedAt: auction.scrapedAt,
-            updatedAt: auction.updatedAt,
-            status: auction.status,
-            archivedReason: 'non_farm_property',
-            originalId: auction.id
-          });
-          archived++;
-        } catch (error) {
-          console.error(`❌ Failed to archive auction ${auction.id}: ${auction.title}`);
-          console.error(`   Error: ${error}`);
-        }
-      }
-
-      console.log(`✅ Archived ${archived} non-farm auctions to archived_auctions table`);
-
-      // Delete from auctions table
-      const { inArray } = await import("drizzle-orm");
-      const auctionIds = nonFarmAuctions.map(a => a.id);
+      // Run the full archiving process
+      await archiverService.archivePastAuctions();
       
-      // Delete in batches to avoid potential issues with large datasets
-      const batchSize = 100;
-      let deleted = 0;
+      // Get counts after archiving
+      const afterCount = await db.query.auctions.findMany();
+      const totalAfter = afterCount.length;
+      const archived = totalBefore - totalAfter;
       
-      for (let i = 0; i < auctionIds.length; i += batchSize) {
-        const batch = auctionIds.slice(i, i + batchSize);
-        await db.delete(auctions).where(
-          inArray(auctions.id, batch)
-        );
-        deleted += batch.length;
-      }
-
-      console.log(`✅ Archive complete: ${archived} archived, ${deleted} deleted`);
+      console.log(`✅ Archive complete: ${archived} auctions archived, ${totalAfter} remaining`);
 
       res.json({
         success: true,
-        message: `Successfully archived ${archived} non-farm auctions`,
+        message: `Successfully archived ${archived} auctions (past dates, sold, and non-farm properties)`,
         archived,
-        deleted,
-        total: allAuctions.length,
-        remaining: allAuctions.length - deleted
+        totalBefore,
+        totalAfter,
+        remaining: totalAfter
       });
     } catch (error) {
       console.error("Archive error:", error);
       res.status(500).json({ 
         success: false, 
-        message: 'Failed to archive non-farm auctions',
+        message: 'Failed to archive auctions',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

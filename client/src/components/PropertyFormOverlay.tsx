@@ -262,12 +262,6 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       const csr2Values: number[] = [];
       
       if (samplePoints.length > 0) {
-        toast({
-          title: "Analyzing Soil Quality",
-          description: `Querying ${samplePoints.length} points across parcel (parallelized for speed)...`,
-          variant: "default",
-        });
-        
         // Query ALL points in parallel (not one-by-one!)
         const promises = samplePoints.map(async point => {
           try {
@@ -316,22 +310,11 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         }
         
         setParcelCSR2Data(resultData);
-        
-        toast({
-          title: "CSR2 Analysis Complete",
-          description: `Average CSR2: ${csr2Data.mean.toFixed(1)} (Range: ${csr2Data.min}-${csr2Data.max})`,
-          variant: "default",
-        });
       } else {
         throw new Error('Unable to calculate CSR2 values');
       }
     } catch (error) {
       console.error('CSR2 fetch error:', error);
-      toast({
-        title: "Warning",
-        description: "Could not fetch CSR2 data for this parcel. You can still proceed with manual entry.",
-        variant: "destructive",
-      });
     } finally {
       setIsLoadingCSR2(false);
     }
