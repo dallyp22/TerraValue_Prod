@@ -41,11 +41,16 @@ export class AutomaticScraperService {
         return; // Automatic scraping disabled
       }
       
+      // Get current time in CST (UTC-6)
       const now = new Date();
-      const [hours, minutes] = settings.scheduleTime.split(':').map(Number);
+      const cstOffset = -6 * 60; // CST is UTC-6 hours
+      const localOffset = now.getTimezoneOffset(); // Current timezone offset in minutes
+      const cstTime = new Date(now.getTime() + (cstOffset + localOffset) * 60 * 1000);
       
-      // Check if it's the scheduled time (within current minute)
-      if (now.getHours() === hours && now.getMinutes() === minutes) {
+      const [scheduleHours, scheduleMinutes] = settings.scheduleTime.split(':').map(Number);
+      
+      // Check if it's the scheduled time in CST (within current minute)
+      if (cstTime.getHours() === scheduleHours && cstTime.getMinutes() === scheduleMinutes) {
         // Check if we already ran in the last 2 hours (prevent duplicate runs)
         if (settings.lastRun) {
           const hoursSinceLastRun = (now.getTime() - new Date(settings.lastRun).getTime()) / (1000 * 60 * 60);
@@ -54,7 +59,7 @@ export class AutomaticScraperService {
           }
         }
         
-        console.log(`\n🚀 Scheduled scrape triggered (${settings.cadence} at ${settings.scheduleTime})`);
+        console.log(`\n🚀 Scheduled scrape triggered (${settings.cadence} at ${settings.scheduleTime} CST)`);
         await this.runScraper();
       }
     } catch (error) {

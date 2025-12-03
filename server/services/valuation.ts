@@ -249,7 +249,25 @@ export class ValuationService {
       let finalAdjustedValue = vectorResult.baseValue; // Default fallback
       let finalAiReasoning = "";
       
-      if (marketCompsUsed.length > 0) {
+      // 🔄 Check for cached AI-adjusted value from recent valuation of THE EXACT SAME PARCEL
+      console.log(`🔍 Cache lookup params: parcelNumber="${propertyData.parcelNumber}", lat=${propertyData.latitude}, lng=${propertyData.longitude}`);
+      
+      const cachedValuation = await storage.findSimilarRecentValuation(
+        propertyData.county,
+        propertyData.state,
+        propertyData.landType,
+        propertyData.csr2Mean,
+        240, // Look for valuations within last 240 hours (10 days)
+        propertyData.parcelNumber, // Match exact parcel number
+        propertyData.latitude, // Or exact coordinates
+        propertyData.longitude
+      );
+
+      if (cachedValuation && cachedValuation.adjustedValue && cachedValuation.marketInsight) {
+        console.log(`♻️ Using cached AI-adjusted value: $${cachedValuation.adjustedValue}/acre (from valuation #${cachedValuation.id})`);
+        finalAdjustedValue = cachedValuation.adjustedValue;
+        finalAiReasoning = cachedValuation.marketInsight;
+      } else if (marketCompsUsed.length > 0) {
         console.log(`Performing AI reasoning with ${marketCompsUsed.length} filtered Iowa market comps...`);
         const avgCompPrice = marketCompsAverage!;
         const marketCompsContext = `\n\nIOWA MARKET ANALYSIS WITH SALES COMPS:

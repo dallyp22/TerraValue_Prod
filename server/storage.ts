@@ -1,12 +1,22 @@
 import { valuations, type Valuation, type InsertValuation } from "@shared/schema";
 import { db, pool } from "./db.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   createValuation(valuation: Omit<InsertValuation, "status">): Promise<Valuation>;
   getValuation(id: number): Promise<Valuation | undefined>;
   updateValuation(id: number, updates: Partial<Valuation>): Promise<Valuation | undefined>;
   listValuations(): Promise<Valuation[]>;
+  findSimilarRecentValuation(
+    county: string,
+    state: string,
+    landType: string,
+    csr2Mean: number | null | undefined,
+    hoursAgo?: number,
+    parcelNumber?: string | null,
+    latitude?: number | null,
+    longitude?: number | null
+  ): Promise<Valuation | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -90,6 +100,34 @@ export class MemStorage implements IStorage {
     return Array.from(this.valuations.values()).sort((a, b) => 
       new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
     );
+  }
+
+  async findSimilarRecentValuation(
+    county: string,
+    state: string,
+    landType: string,
+    csr2Mean: number | null | undefined,
+    hoursAgo: number = 24,
+    parcelNumber?: string | null,
+    latitude?: number | null,
+    longitude?: number | null
+  ): Promise<Valuation | undefined> {
+    const cutoffTime = Date.now() - hoursAgo * 60 * 60 * 1000;
+    const allValuations = Array.from(this.valuations.values());
+    
+    return allValuations.find(v => {
+      if (v.status !== "completed") return false;
+      if (v.createdAt && new Date(v.createdAt).getTime() < cutoffTime) return false;
+      
+      // Must match exact parcel
+      if (parcelNumber) {
+        return v.parcelNumber === parcelNumber;
+      } else if (latitude !== null && latitude !== undefined && longitude !== null && longitude !== undefined) {
+        return v.latitude === latitude && v.longitude === longitude;
+      }
+      
+      return false;
+    });
   }
 }
 
@@ -180,6 +218,65 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error("Failed to list valuations:", error);
       throw new Error("Failed to retrieve valuations from database");
+    }
+  }
+
+  async findSimilarRecentValuation(
+    county: string,
+    state: string,
+    landType: string,
+    csr2Mean: number | null | undefined,
+    hoursAgo: number = 24,
+    parcelNumber?: string | null,
+    latitude?: number | null,
+    longitude?: number | null
+  ): Promise<Valuation | undefined> {
+    try {
+      // Find valuations from the last X hours with matching criteria
+      const cutoffTime = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+      
+      // Build query conditions - must match exact parcel
+      const conditions = [
+        eq(valuations.status, "completed"),
+        sql`${valuations.createdAt} >= ${cutoffTime}`
+      ];
+
+      // Priority 1: Match by parcel number (most reliable)
+      if (parcelNumber) {
+        conditions.push(eq(valuations.parcelNumber, parcelNumber));
+        console.log(`🔍 Looking for cached valuation with parcel number: ${parcelNumber}`);
+      }
+      // Priority 2: Match by exact coordinates (for polygon-drawn parcels)
+      else if (latitude !== null && latitude !== undefined && longitude !== null && longitude !== undefined) {
+        conditions.push(
+          sql`${valuations.latitude} = ${latitude} AND ${valuations.longitude} = ${longitude}`
+        );
+        console.log(`🔍 Looking for cached valuation at coordinates: ${latitude}, ${longitude}`);
+      }
+      // No parcel identifier available - skip caching
+      else {
+        console.log(`⚠️ No parcel identifier (parcel number or coordinates) - skipping cache`);
+        return undefined;
+      }
+
+      const [result] = await db
+        .select()
+        .from(valuations)
+        .where(and(...conditions))
+        .orderBy(desc(valuations.createdAt))
+        .limit(1);
+
+      if (result) {
+        console.log(`✅ Found cached AI value for exact same parcel (Valuation ID: ${result.id}, created: ${result.createdAt})`);
+      } else {
+        console.log(`❌ No cached valuation found for this parcel - will perform fresh AI analysis`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Failed to find similar valuation:", error);
+      // Don't throw - just return undefined to fall back to normal flow
+      return undefined;
     }
   }
 }

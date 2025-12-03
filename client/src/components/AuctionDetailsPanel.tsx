@@ -12,9 +12,10 @@ interface AuctionDetailsPanelProps {
   auction: Auction;
   onClose: () => void;
   onStartValuation?: () => void;
+  isPreparingValuation?: boolean;
 }
 
-export function AuctionDetailsPanel({ auction, onClose, onStartValuation }: AuctionDetailsPanelProps) {
+export function AuctionDetailsPanel({ auction, onClose, onStartValuation, isPreparingValuation = false }: AuctionDetailsPanelProps) {
   const [calculating, setCalculating] = useState(false);
   const [valuation, setValuation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -359,10 +360,20 @@ export function AuctionDetailsPanel({ auction, onClose, onStartValuation }: Auct
           {onStartValuation && (
             <Button
               onClick={onStartValuation}
-              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white"
+              disabled={isPreparingValuation}
+              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white disabled:opacity-70"
             >
-              <FileText className="mr-2 h-4 w-4" />
-              Start Property Valuation
+              {isPreparingValuation ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Preparing Valuation...
+                </>
+              ) : (
+                <>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Start Property Valuation
+                </>
+              )}
             </Button>
           )}
         </div>

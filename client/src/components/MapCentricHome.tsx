@@ -132,6 +132,7 @@ export default function MapCentricHome() {
   const [showReport, setShowReport] = useState(false);
   const [currentValuationId, setCurrentValuationId] = useState<number | null>(null);
   const [parcelData, setParcelData] = useState<any>(null);
+  const [isPreparingAuctionValuation, setIsPreparingAuctionValuation] = useState(false);
   const hasAutoOpenedReport = useRef(false); // Track if we've auto-opened the report for this valuation
 
   // Zoom control handlers
@@ -240,6 +241,7 @@ export default function MapCentricHome() {
 
   // Handle starting valuation from auction info panel
   const handleStartAuctionValuation = async (auction: Auction) => {
+    setIsPreparingAuctionValuation(true);
     try {
       console.log('🎯 Preparing valuation from auction:', auction.title);
 
@@ -326,6 +328,8 @@ export default function MapCentricHome() {
         csr2Max: auction.csr2Max
       });
       setShowForm(true);
+    } finally {
+      setIsPreparingAuctionValuation(false);
     }
   };
 
@@ -424,6 +428,7 @@ export default function MapCentricHome() {
           onParcelClick={handleParcelClick}
           onAuctionClick={handleAuctionClick}
           onStartAuctionValuation={handleStartAuctionValuation}
+          isPreparingAuctionValuation={isPreparingAuctionValuation}
           onPolygonDrawn={handlePolygonDrawn}
           drawnPolygonData={drawnPolygonData}
           onMapReady={(map) => setMapRef(map)}

@@ -7,7 +7,7 @@ export class AuctionArchiverService {
   private isRunning: boolean = false;
 
   /**
-   * Start the archiver service - runs immediately and then daily at 4:30 AM CST
+   * Start the archiver service - runs immediately and then daily at 3:00 AM CST
    */
   start() {
     console.log('🗄️  Starting Auction Archiver Service');
@@ -15,7 +15,7 @@ export class AuctionArchiverService {
     // Run immediately on start
     this.archivePastAuctions();
     
-    // Calculate time until next 4:30 AM CST
+    // Calculate time until next 3:00 AM CST
     const now = new Date();
     
     // Get current time in CST (UTC-6)
@@ -23,11 +23,11 @@ export class AuctionArchiverService {
     const localOffset = now.getTimezoneOffset(); // Current timezone offset
     const cstTime = new Date(now.getTime() + (cstOffset + localOffset) * 60 * 1000);
     
-    // Set target time to 4:30 AM CST
+    // Set target time to 3:00 AM CST
     const nextRun = new Date(cstTime);
-    nextRun.setHours(4, 30, 0, 0);
+    nextRun.setHours(3, 0, 0, 0);
     
-    // If we've already passed 4:30 AM today, schedule for tomorrow
+    // If we've already passed 3:00 AM today, schedule for tomorrow
     if (nextRun <= cstTime) {
       nextRun.setDate(nextRun.getDate() + 1);
     }
@@ -36,13 +36,13 @@ export class AuctionArchiverService {
     const nextRunLocal = new Date(nextRun.getTime() - (cstOffset + localOffset) * 60 * 1000);
     const msUntilNextRun = nextRunLocal.getTime() - now.getTime();
     
-    console.log(`   Next archive run at 4:30 AM CST (in ${Math.round(msUntilNextRun / 1000 / 60)} minutes)`);
+    console.log(`   Next archive run at 3:00 AM CST (in ${Math.round(msUntilNextRun / 1000 / 60)} minutes)`);
     
-    // Schedule first run at 4:30 AM CST
+    // Schedule first run at 3:00 AM CST
     setTimeout(() => {
       this.archivePastAuctions();
       
-      // Then run daily at 4:30 AM CST
+      // Then run daily at 3:00 AM CST
       this.intervalId = setInterval(() => {
         this.archivePastAuctions();
       }, 24 * 60 * 60 * 1000); // 24 hours

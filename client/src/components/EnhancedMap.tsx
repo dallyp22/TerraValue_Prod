@@ -30,6 +30,7 @@ interface EnhancedMapProps {
   onPolygonDrawn: (polygon: any) => void;
   onAuctionClick?: (auction: Auction) => void;
   onStartAuctionValuation?: (auction: Auction) => void;
+  isPreparingAuctionValuation?: boolean;
   drawnPolygonData?: any;
   onMapReady?: (map: maplibregl.Map) => void;
   showOwnerLabels?: boolean;
@@ -89,6 +90,7 @@ export default function EnhancedMap({
   useSelfHostedParcels = false,
   onAuctionClick,
   onStartAuctionValuation,
+  isPreparingAuctionValuation = false,
   drawnPolygonData,
   onMapReady,
   showOwnerLabels = false,
@@ -3388,6 +3390,7 @@ export default function EnhancedMap({
             clearHighlightedParcel();
           }}
           onStartValuation={onStartAuctionValuation ? () => onStartAuctionValuation(selectedAuction) : undefined}
+          isPreparingValuation={isPreparingAuctionValuation}
         />
       )}
       {selectedSubstation && (

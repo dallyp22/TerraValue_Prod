@@ -81,18 +81,21 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
       case "Other":
         return 0.20; // 20% of base value
       default:
-        return 1.0; // Default to full base value if no type specified
+        return 0.50; // Default to 50% of tillable value if no type specified
     }
   };
   
   if (selectedMethod === "csr2") {
     // CSR2 method: Use tillable/non-tillable breakdown from backend
     tillablePerAcreDollar = Math.round(breakdown?.tillableValuePerAcre || rawPerAcreValue);
-    nonTillablePerAcreDollar = Math.round(breakdown?.nonTillableValuePerAcre || rawPerAcreValue);
+    // Use multiplier based on non-tillable type (defaults to 50%)
+    const nonTillableMultiplier = getNonTillableMultiplier(breakdown?.nonTillableType);
+    nonTillablePerAcreDollar = Math.round((breakdown?.tillableValuePerAcre || rawPerAcreValue) * nonTillableMultiplier);
     blendedPerAcreDollar = Math.round(breakdown?.blendedValuePerAcre || rawPerAcreValue);
   } else {
     // Income or AI Market methods: Apply non-tillable discount
     tillablePerAcreDollar = Math.round(rawPerAcreValue);
+    // Use multiplier based on non-tillable type (defaults to 50%)
     const nonTillableMultiplier = getNonTillableMultiplier(breakdown?.nonTillableType);
     nonTillablePerAcreDollar = Math.round(rawPerAcreValue * nonTillableMultiplier);
     
