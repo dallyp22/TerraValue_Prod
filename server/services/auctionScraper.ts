@@ -61,7 +61,7 @@ export class AuctionScraperService {
     isActive: false,
     currentSource: '',
     completedSources: 0,
-    totalSources: 50,
+    totalSources: 51,
     currentSourceProgress: 0
   };
 
@@ -129,7 +129,10 @@ export class AuctionScraperService {
     { name: 'United Country Loess Hills', url: 'https://www.ucloesshills.com', searchPath: '/auctions' },
     { name: 'Vander Werff & Associates', url: 'https://vw72.com', searchPath: '/farmland-equipment-or-real-estate-auctioneers-proven-results/' },
     { name: 'Wayne Hansen Auctions', url: 'https://www.waynehansen.com', searchPath: '/auctions' },
-    { name: 'Whitaker Marketing Group', url: 'https://www.wmgauction.com', searchPath: '/auctions/' }
+    { name: 'Whitaker Marketing Group', url: 'https://www.wmgauction.com', searchPath: '/auctions/' },
+    
+    // New source - Dec 3, 2025
+    { name: 'Menke Auction', url: 'https://www.menke-auction.com', searchPath: '/liveauctions.htm' }
   ];
 
   // Get stats from last scrape

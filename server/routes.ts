@@ -15,7 +15,7 @@ import { parcelAggregationService } from "./services/parcelAggregation.js";
 import { auctionParcelExtractor } from "./services/auctionParcelExtractor.js";
 import { propertyFormSchema, auctions, parcels } from "@shared/schema";
 import { db } from "./db.js";
-import { and, gte, lte, eq, asc, desc, sql } from "drizzle-orm";
+import { and, gte, lte, eq, asc, desc, sql, or, isNull } from "drizzle-orm";
 import { getCountyCentroid } from "./services/iowaCountyCentroids.js";
 import { generateParcelTile, generateHybridTile, getTileCacheStats, clearTileCache } from "./services/parcelTiles.js";
 import { 
@@ -1036,7 +1036,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
 
       // Note: CSR2 and value filters are applied client-side to include auctions without these values yet
 
-      // Add date range filter
+      // Add date range filter (only show auctions WITH dates)
       if (auctionDateRange && auctionDateRange !== 'all') {
         const now = new Date();
         const daysAhead = parseInt(auctionDateRange as string);
@@ -1159,7 +1159,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         conditions.push(lte(auctions.estimatedValue, parseFloat(maxValue as string)));
       }
 
-      // Add date range filter
+      // Add date range filter (only show auctions WITH dates)
       if (auctionDateRange && auctionDateRange !== 'all') {
         const now = new Date();
         const daysAhead = parseInt(auctionDateRange as string);
@@ -1710,7 +1710,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
           const nearbyParcels = await findParcelsAtPoint(
             auction.longitude,
             auction.latitude,
-            800 // 0.5 miles in meters
+            pool
           );
 
           if (nearbyParcels && nearbyParcels.length > 0) {
