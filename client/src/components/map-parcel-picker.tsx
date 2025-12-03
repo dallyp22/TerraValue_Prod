@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { MapPin, Target, Loader2, Search, Map, Satellite, X, Maximize2, Minimize2, Pentagon, Tag, Edit3 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface CSR2Data {
   mean: number;
@@ -61,8 +60,6 @@ export function MapParcelPicker({
   const [isPolygonDrawMode, setIsPolygonDrawMode] = useState(false);
   const draw = useRef<MapboxDraw | null>(null);
   const [liveTooltip, setLiveTooltip] = useState<maplibregl.Popup | null>(null);
-  const { toast } = useToast();
-
   // Custom MapboxDraw styles compatible with MapLibre GL
   const customDrawStyles = [
     {
@@ -240,10 +237,6 @@ export function MapParcelPicker({
         if (source) {
           source.setData(data);
           console.log(`Loaded ${data.features.length} parcels`);
-          toast({
-            title: "Parcel Data Loaded",
-            description: `${data.features.length} property parcels displayed on map`
-          });
         }
       } else if (data.properties?.exceededTransferLimit) {
         // Too many features - zoom in more
@@ -252,11 +245,7 @@ export function MapParcelPicker({
         if (source) {
           source.setData({ type: 'FeatureCollection', features: [] });
         }
-        toast({
-          title: "Too Many Parcels",
-          description: "Zoom in further to view property boundaries",
-          variant: "default"
-        });
+        
       } else {
         // Handle too many features or empty (e.g., alert user to zoom in)
         console.warn('Too many or no parcels in view; zoom in for details.');
@@ -336,10 +325,6 @@ export function MapParcelPicker({
       }
     }
 
-    toast({
-      title: "Point Added",
-      description: `${newPoints.length} point${newPoints.length > 1 ? 's' : ''} selected. ${newPoints.length >= 3 ? 'Ready to finish drawing.' : `Need ${3 - newPoints.length} more points.`}`
-    });
   }, [drawingPoints, toast]);
 
   // Setup polygon drawing events for MapboxDraw
@@ -412,10 +397,6 @@ export function MapParcelPicker({
             setSelectedArea(parcelData);
             onParcelSelected?.(parcelData);
             
-            toast({
-              title: "Polygon Completed",
-              description: `${acres} acres drawn with CSR2: ${avgCSR2.toFixed(1)}`
-            });
             
             // Add enhanced styled polygon
             addEnhancedPolygonVisualization(feature, mapInstance);
@@ -425,11 +406,7 @@ export function MapParcelPicker({
           }
         } catch (error) {
           console.error('Error processing polygon:', error);
-          toast({
-            title: "Analysis Error",
-            description: "Could not analyze soil data for drawn polygon",
-            variant: "destructive"
-          });
+          
         }
         
         // Clear live tooltip
@@ -550,10 +527,6 @@ export function MapParcelPicker({
 
       // Show results in toast with range if different
       const rangeText = minCSR2 !== maxCSR2 ? ` (Range: ${minCSR2}-${maxCSR2})` : '';
-      toast({
-        title: "Custom Polygon Analysis",
-        description: `Area: ${acres} acres • Average CSR2: ${avgCSR2}${rangeText}`
-      });
 
       // Create parcel data with acres
       const parcelData: ParcelData = {
@@ -579,11 +552,7 @@ export function MapParcelPicker({
 
     } catch (error) {
       console.error('Error calculating CSR2:', error);
-      toast({
-        title: "Error",
-        description: "Failed to calculate polygon analysis",
-        variant: "destructive"
-      });
+      
     }
   }, [onParcelSelected, toast]);
 
@@ -592,11 +561,7 @@ export function MapParcelPicker({
     console.log('Finish drawing called, points:', drawingPoints.length);
     
     if (drawingPoints.length < 3) {
-      toast({
-        title: "Drawing Error",
-        description: "Need at least 3 points to create a polygon",
-        variant: "destructive"
-      });
+      
       return;
     }
 
@@ -631,11 +596,7 @@ export function MapParcelPicker({
       
     } catch (error) {
       console.error('Error in finishDrawing:', error);
-      toast({
-        title: "Drawing Error",
-        description: "Failed to complete polygon drawing",
-        variant: "destructive"
-      });
+      
     } finally {
       setIsFetchingCSR2(false);
     }
@@ -1053,10 +1014,6 @@ export function MapParcelPicker({
       onLocationChange?.(lastPoint.coordinates[1], lastPoint.coordinates[0]);
     }, 0);
 
-    toast({
-      title: csr2Points.length === 1 ? "Point Added" : `${csr2Points.length} Points Selected`,
-      description: `Average CSR2: ${avgCSR2.toFixed(1)} (${getCSR2Rating(avgCSR2)})`
-    });
   }, [csr2Points, onParcelSelected, onLocationChange, toast]);
 
   // Toggle owner labels visibility - Updated for enhanced system
@@ -1117,11 +1074,7 @@ export function MapParcelPicker({
       }
     } catch (error) {
       console.error('CSR2 fetch error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch soil data for selected area",
-        variant: "destructive"
-      });
+      
     } finally {
       setIsFetchingCSR2(false);
     }
@@ -1135,10 +1088,7 @@ export function MapParcelPicker({
     setCsr2Points([]);
     setSelectedArea(null);
     
-    toast({
-      title: "Points Cleared",
-      description: "All CSR2 measurement points removed"
-    });
+    
   };
 
   const handleAddressSearch = async () => {
@@ -1171,18 +1121,11 @@ export function MapParcelPicker({
           onLocationChange?.(data.latitude, data.longitude, address);
         }, 0);
 
-        toast({
-          title: "Location Found",
-          description: "Map centered on address. Click to select an area."
-        });
+        
       }
     } catch (error) {
       console.error('Geocoding error:', error);
-      toast({
-        title: "Address Not Found",
-        description: "Please check the address and try again",
-        variant: "destructive"
-      });
+      
     } finally {
       setIsGeocoding(false);
     }
@@ -1326,10 +1269,7 @@ export function MapParcelPicker({
                     onClick={() => {
                       setIsDrawing(true);
                       setDrawingPoints([]);
-                      toast({
-                        title: "Drawing Mode",
-                        description: "Click on the map to draw a polygon. Draw at least 3 points."
-                      });
+                      
                     }}
                     className="bg-white/90 backdrop-blur-sm border border-slate-200 hover:bg-white/95 shadow-sm"
                   >
@@ -1534,10 +1474,7 @@ export function MapParcelPicker({
                       onClick={() => {
                         setIsDrawing(true);
                         setDrawingPoints([]);
-                        toast({
-                          title: "Drawing Mode",
-                          description: "Click on the map to draw a polygon. Use the Finish Drawing button when done."
-                        });
+                        
                       }}
                       className="bg-white/90 backdrop-blur-sm border border-slate-200 hover:bg-white/95 shadow-sm"
                     >

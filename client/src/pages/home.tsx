@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PropertyForm } from "@/components/property-form";
@@ -15,7 +14,6 @@ import type { PropertyForm as PropertyFormData, Valuation } from "@shared/schema
 
 export default function Home() {
   const [currentValuationId, setCurrentValuationId] = useState<number | null>(null);
-  const { toast } = useToast();
 
   // Start valuation mutation
   const startValuationMutation = useMutation({
@@ -25,19 +23,11 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setCurrentValuationId(data.valuationId);
-      toast({
-        title: "Valuation Started",
-        description: "AI analysis pipeline has been initiated for your property.",
-      });
       // Start polling for updates
       queryClient.invalidateQueries({ queryKey: ["/api/valuations"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start valuation process",
-        variant: "destructive",
-      });
+      console.error('Valuation error:', error);
     },
   });
 

@@ -327,19 +327,11 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
       return response.json();
     },
     onSuccess: (data) => {
-      toast({
-        title: "Valuation Started",
-        description: "AI analysis pipeline has been initiated for your property.",
-      });
       queryClient.invalidateQueries({ queryKey: ["/api/valuations"] });
       onValuationCreated(data.valuationId);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start valuation process",
-        variant: "destructive",
-      });
+      console.error('Valuation error:', error);
     },
   });
 
