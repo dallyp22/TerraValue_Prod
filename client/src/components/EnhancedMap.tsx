@@ -436,30 +436,13 @@ export default function EnhancedMap({
               essential: true
             }
           );
-
-          toast({
-            title: "Parcel Matched",
-            description: `${result.data.acreage || auction.acreage} acre parcel highlighted on map`,
-          });
         }
       } else {
         // No parcel match found
         console.log(`⚠️  No parcel match found for auction`);
-        
-        toast({
-          title: "No Parcel Match",
-          description: "Using auction coordinates - parcel data unavailable",
-          variant: "default",
-        });
       }
     } catch (error) {
       console.error('Error highlighting auction parcel:', error);
-      
-      toast({
-        title: "Could Not Load Parcel",
-        description: "Continuing with auction data",
-        variant: "default",
-      });
     }
   }, [toast]);
 
@@ -764,11 +747,6 @@ export default function EnhancedMap({
         if (source) {
           source.setData({ type: 'FeatureCollection', features: [] });
         }
-        toast({
-          title: "Too Many Parcels",
-          description: "Zoom in further to view property boundaries",
-          variant: "default"
-        });
       } else {
         // Handle empty results
         console.warn('No parcels found in current view');
@@ -1238,24 +1216,12 @@ export default function EnhancedMap({
                 console.log('👆 First tap on mobile - tap again to open parcel');
                 lastTapTime.current = now;
                 lastTapPosition.current = currentPosition;
-                
-                // Show visual feedback for first tap
-                toast({
-                  title: "Tap Again to Open",
-                  description: "Double-tap to open parcel details",
-                  duration: 1500
-                });
                 return; // Don't open parcel yet
               }
             } else {
               // First tap ever
               lastTapTime.current = now;
               lastTapPosition.current = currentPosition;
-              toast({
-                title: "Tap Again to Open",
-                description: "Double-tap to open parcel details",
-                duration: 1500
-              });
               return;
             }
           }
@@ -1776,22 +1742,12 @@ export default function EnhancedMap({
               // First tap or timeout
               lastTapTime.current = now;
               lastTapPosition.current = currentPosition;
-              toast({
-                title: "Tap Again to Open",
-                description: "Double-tap to open parcel details",
-                duration: 1500
-              });
               return;
             }
           } else {
             // First tap
             lastTapTime.current = now;
             lastTapPosition.current = currentPosition;
-            toast({
-              title: "Tap Again to Open",
-              description: "Double-tap to open parcel details",
-              duration: 1500
-            });
             return;
           }
         }
@@ -2806,11 +2762,6 @@ export default function EnhancedMap({
       if (mapContainer.current) {
         mapContainer.current.innerHTML = '<div class="flex items-center justify-center h-full bg-gray-100 text-gray-500"><p>Map visualization unavailable (WebGL required)</p></div>';
       }
-      toast({
-        title: "Map Initialization Failed",
-        description: "Map visualization is not available in this environment. The valuation form is still functional.",
-        variant: "default"
-      });
     }
   }, []);
 
@@ -2869,18 +2820,13 @@ export default function EnhancedMap({
     if (features.features.length > 0) {
       // Delete all features
       draw.current.deleteAll();
-      toast({
-        title: "Polygons Cleared",
-        description: "All drawn polygons have been removed",
-        variant: "default"
-      });
     }
 
     // Call the callback to reset the clear flag
     if (onClearComplete) {
       onClearComplete();
     }
-  }, [clearDrawnPolygons, onClearComplete, toast]);
+  }, [clearDrawnPolygons, onClearComplete]);
 
   // Add drawn polygon to map if data is provided
   useEffect(() => {
@@ -2983,11 +2929,6 @@ export default function EnhancedMap({
       const ownerSummary = largestOwners
         .map(([owner, parcels]) => `${parcels.length} parcels`)
         .join(', ');
-        
-      toast({
-        title: "Ownership Heatmap Active",
-        description: `Highlighting ${multiParcelOwners.length} multi-parcel owners. Largest: ${ownerSummary}`,
-      });
     }
   };
 
