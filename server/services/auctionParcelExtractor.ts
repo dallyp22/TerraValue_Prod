@@ -58,6 +58,8 @@ IMPORTANT:
 - Distinguish between auction location (city hall, auction house) vs actual property location
 - Legal descriptions are most reliable for location
 - CSR2 may be listed as "CSR2", "CSR rating", "Corn Suitability Rating", or "soil productivity index"
+- When multiple parcels have different CSR2 values, calculate the arithmetic mean, identify the minimum, and maximum
+- If CSR2 values are listed per parcel (e.g., "Parcel 1: 66.53, Parcel 2: 68.39"), extract ALL values and compute mean/min/max
 - Be conservative - if unsure, indicate lower confidence`;
 
       const userPrompt = `Analyze this auction listing and extract parcel information:
@@ -100,12 +102,12 @@ Return a JSON object with this exact structure:
     "longitude": number or null
   },
   "csr2Data": {
-    "mean": number or null (5-100 range),
-    "min": number or null,
-    "max": number or null
+    "mean": number or null (5-100 range, arithmetic average if multiple parcels),
+    "min": number or null (lowest CSR2 value across all parcels),
+    "max": number or null (highest CSR2 value across all parcels)
   },
   "confidence": "high" | "medium" | "low",
-  "reasoning": "Brief explanation of extraction confidence and key findings"
+  "reasoning": "Brief explanation of extraction confidence and key findings. If multiple parcel CSR2 values found, explain calculation."
 }`;
 
       const completion = await openai.chat.completions.create({
