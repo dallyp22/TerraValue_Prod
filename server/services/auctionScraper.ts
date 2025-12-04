@@ -88,7 +88,7 @@ export class AuctionScraperService {
     { name: 'McCall Auctions', url: 'https://www.mccallauctions.com', searchPath: '/mccall-listings?cat=17' },
     { name: 'Midwest Land Management', url: 'https://www.midwestlandmanagement.com/' },
     { name: 'Randy Pryor Real Estate', url: 'https://randypryorrealestate.com', searchPath: '/farm-land-auctions/' },
-    { name: 'Jim Schaben Real Estate', url: 'https://jimschabenrealestate.com', searchPath: '/land-listings' },
+    { name: 'Jim Schaben Real Estate', url: 'https://www.schabenre.com', searchPath: '/auctions' },
     { name: 'Denison Livestock', url: 'https://www.denisonlivestock.com/' },
     { name: 'Spencer Auction Group', url: 'https://spencerauctiongroup.com', searchPath: '/auctions/' },
     { name: 'Sieren Auction Sales', url: 'https://www.sierenauctionsales.com', searchPath: '/current-auctions' },
