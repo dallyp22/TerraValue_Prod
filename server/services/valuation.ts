@@ -353,6 +353,13 @@ export class ValuationService {
         nonTillableType: propertyData.nonTillableType,
         nonTillableMultiplier: tillableBlendedValue?.nonTillableMultiplier,
         blendedValuePerAcre: tillableBlendedValue?.blendedValue,
+        // Calculate $ per CSR Tax Acre metric
+        dollarPerCsrTaxAcre: (() => {
+          if (!propertyData.csr2Mean || propertyData.csr2Mean <= 0) return undefined;
+          // Use blendedValue if available (when tillable acres specified), otherwise use csr2Value
+          const valuePerAcre = tillableBlendedValue?.blendedValue || csr2Value;
+          return valuePerAcre > 0 ? Math.round((valuePerAcre / propertyData.csr2Mean) * 100) / 100 : undefined;
+        })(),
         // Iowa market analysis data
         iowaMarketComps: marketCompsUsed.length > 0 ? marketCompsUsed : undefined,
         marketCompsUsed: marketCompsUsed.length > 0 ? marketCompsUsed : undefined,

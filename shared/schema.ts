@@ -390,6 +390,7 @@ export interface ValuationBreakdown {
   nonTillableType?: "CRP" | "Timber" | "Other";
   nonTillableMultiplier?: number;
   blendedValuePerAcre?: number;
+  dollarPerCsrTaxAcre?: number;
   improvementDetails?: {
     type: string;
     description: string;

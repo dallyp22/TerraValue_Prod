@@ -626,7 +626,22 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
                     ${blendedPerAcreDollar.toLocaleString()}<span className="ml-1">/acre</span>
                   </span>
                 </div>
+                {breakdown?.dollarPerCsrTaxAcre && breakdown?.csr2Mean && breakdown.csr2Mean > 0 && (
+                  <div className="flex justify-between pt-2 border-t border-blue-100">
+                    <span className="text-sm text-slate-600">$ per CSR Tax Acre</span>
+                    <span className="font-medium print:text-sm text-blue-700">
+                      ${breakdown.dollarPerCsrTaxAcre.toLocaleString()}<span className="ml-1">/CSR point</span>
+                    </span>
+                  </div>
+                )}
               </div>
+              {breakdown?.dollarPerCsrTaxAcre && breakdown?.csr2Mean && breakdown.csr2Mean > 0 && (
+                <div className="mt-3 pt-3 border-t border-blue-100">
+                  <p className="text-xs text-slate-500">
+                    <strong>$ per CSR Tax Acre</strong> normalizes price by soil productivity. Calculated as Blended Average (${blendedPerAcreDollar.toLocaleString()}/acre) ÷ CSR2 ({breakdown.csr2Mean.toFixed(1)}) = ${breakdown.dollarPerCsrTaxAcre.toLocaleString()}/CSR point. This metric helps compare land values across properties with different soil quality.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
