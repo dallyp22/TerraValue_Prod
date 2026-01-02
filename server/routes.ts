@@ -13,7 +13,7 @@ import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
 import { parcelAggregationService } from "./services/parcelAggregation.js";
 import { auctionParcelExtractor } from "./services/auctionParcelExtractor.js";
-import { propertyFormSchema, auctions, parcels } from "@shared/schema";
+import { propertyFormSchema, auctions, parcels, auctionBlocklist } from "@shared/schema";
 import { db } from "./db.js";
 import { and, gte, lte, eq, asc, desc, sql, or, isNull } from "drizzle-orm";
 import { getCountyCentroid } from "./services/iowaCountyCentroids.js";
@@ -1108,7 +1108,8 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         auctions: filteredAuctions,
         count: filteredAuctions.length,
         totalInDatabase: auctionList.length,
-        withoutCoordinates: auctionList.filter(a => !a.latitude || !a.longitude).length
+        withoutCoordinates: auctionList.filter(a => !a.latitude || !a.longitude).length,
+        timestamp: new Date().toISOString() // Add timestamp for debugging
       });
     } catch (error) {
       console.error("Auction fetch error:", error);
@@ -1410,6 +1411,115 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     }
   });
   // ==================== END ENRICHMENT ROUTES ====================
+
+  // ==================== BLOCKLIST ROUTES ====================
+  
+  // Get all blocked URLs
+  app.get("/api/auctions/blocklist/all", async (req, res) => {
+    try {
+      const blocked = await db.query.auctionBlocklist.findMany({
+        orderBy: [desc(auctionBlocklist.addedAt)]
+      });
+      
+      res.json({
+        success: true,
+        blocklist: blocked,
+        count: blocked.length
+      });
+    } catch (error) {
+      console.error("Blocklist fetch error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch blocklist'
+      });
+    }
+  });
+
+  // Add URL to blocklist
+  app.post("/api/auctions/blocklist/add", async (req, res) => {
+    try {
+      const { url, reason = 'non-farm' } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({
+          success: false,
+          message: 'URL is required'
+        });
+      }
+
+      // Check if already blocked
+      const existing = await db.query.auctionBlocklist.findFirst({
+        where: eq(auctionBlocklist.url, url)
+      });
+
+      if (existing) {
+        return res.json({
+          success: true,
+          message: 'URL is already in blocklist',
+          alreadyBlocked: true
+        });
+      }
+
+      // Add to blocklist
+      await db.insert(auctionBlocklist).values({
+        url,
+        reason,
+        addedBy: 'ui'
+      });
+
+      // Also delete from auctions table if it exists
+      const auction = await db.query.auctions.findFirst({
+        where: eq(auctions.url, url)
+      });
+
+      let deletedId = null;
+      if (auction) {
+        await db.delete(auctions).where(eq(auctions.url, url));
+        deletedId = auction.id;
+      }
+
+      res.json({
+        success: true,
+        message: 'URL added to blocklist',
+        deletedAuctionId: deletedId
+      });
+    } catch (error) {
+      console.error("Add to blocklist error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to add to blocklist'
+      });
+    }
+  });
+
+  // Remove URL from blocklist
+  app.delete("/api/auctions/blocklist/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid blocklist ID'
+        });
+      }
+
+      await db.delete(auctionBlocklist).where(eq(auctionBlocklist.id, id));
+      
+      res.json({
+        success: true,
+        message: 'URL removed from blocklist'
+      });
+    } catch (error) {
+      console.error("Remove from blocklist error:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to remove from blocklist'
+      });
+    }
+  });
+  
+  // ==================== END BLOCKLIST ROUTES ====================
 
   // Get auction details
   app.get("/api/auctions/:id", async (req, res) => {

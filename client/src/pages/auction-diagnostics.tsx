@@ -78,6 +78,11 @@ export default function AuctionDiagnostics() {
   const [editNotes, setEditNotes] = useState<string>('');
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [regionFilter, setRegionFilter] = useState<string>('all');
+  
+  // Blocklist tracking
+  const [blocklist, setBlocklist] = useState<any[]>([]);
+  const [loadingBlocklist, setLoadingBlocklist] = useState(false);
+  const [blocklistSearch, setBlocklistSearch] = useState<string>('');
 
   const checkAuctions = async () => {
     setLoading(true);
@@ -294,6 +299,65 @@ export default function AuctionDiagnostics() {
       setExpandedDetail(null);
     } else {
       setExpandedDetail({ source, category });
+    }
+  };
+
+  // Fetch blocklist
+  const fetchBlocklist = async () => {
+    setLoadingBlocklist(true);
+    try {
+      const response = await fetch('/api/auctions/blocklist/all');
+      const data = await response.json();
+      if (data.success) {
+        setBlocklist(data.blocklist || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch blocklist:', error);
+    }
+    setLoadingBlocklist(false);
+  };
+
+  // Add auction to blocklist
+  const addToBlocklist = async (url: string, reason: string = 'non-farm') => {
+    try {
+      const response = await fetch('/api/auctions/blocklist/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, reason })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh blocklist and auction data
+        await fetchBlocklist();
+        await checkAuctions();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to add to blocklist:', error);
+      return false;
+    }
+  };
+
+  // Remove from blocklist
+  const removeFromBlocklist = async (id: number) => {
+    try {
+      const response = await fetch(`/api/auctions/blocklist/${id}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        await fetchBlocklist();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to remove from blocklist:', error);
+      return false;
     }
   };
 
@@ -533,6 +597,7 @@ export default function AuctionDiagnostics() {
     loadScheduleSettings();
     loadSourceStats();
     loadEnrichmentStats();
+    fetchBlocklist();
   }, []);
 
   // Recalculate source stats when auction data changes
@@ -1369,8 +1434,29 @@ export default function AuctionDiagnostics() {
                     {auctionData.auctions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((auction: any, i: number) => (
                       <div key={i} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="font-semibold text-base">{auction.title}</div>
-                          <Badge variant="outline">{auction.sourceWebsite}</Badge>
+                          <div className="font-semibold text-base flex-1">{auction.title}</div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{auction.sourceWebsite}</Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="hover:bg-red-100 hover:text-red-700 h-7 px-2"
+                              onClick={async () => {
+                                const reason = prompt('Reason for blocking (e.g., "non-farm", "equipment-only"):', 'non-farm');
+                                if (reason && confirm(`Block this auction?\n\n"${auction.title}"\n\nReason: ${reason}`)) {
+                                  const success = await addToBlocklist(auction.url, reason);
+                                  if (success) {
+                                    alert('✅ Auction blocked and removed');
+                                  } else {
+                                    alert('❌ Failed to block auction');
+                                  }
+                                }
+                              }}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Block
+                            </Button>
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           {auction.county && (
@@ -2131,6 +2217,126 @@ export default function AuctionDiagnostics() {
           </CardContent>
         </Card>
       )}
+
+      {/* Blocklist Management */}
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+        <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-red-500 flex items-center justify-center">
+                <X className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Auction Blocklist</CardTitle>
+                <CardDescription>Permanently block non-farm auctions</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={fetchBlocklist}
+                variant="outline"
+                size="sm"
+                className="hover:bg-rose-100"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {/* Stats */}
+          <div className="mb-6 p-4 rounded-xl bg-gradient-to-br from-rose-50 to-red-100/50 border border-rose-200">
+            <div className="text-3xl font-bold bg-gradient-to-r from-rose-600 to-red-600 bg-clip-text text-transparent">
+              {blocklist.length}
+            </div>
+            <div className="text-sm text-gray-600 font-medium">Blocked URLs</div>
+          </div>
+
+          {/* Search */}
+          <div className="mb-4">
+            <Input
+              placeholder="Search blocked URLs..."
+              value={blocklistSearch}
+              onChange={(e) => setBlocklistSearch(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          {/* Blocklist Table */}
+          {loadingBlocklist ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600 mx-auto"></div>
+              <p className="text-sm text-gray-600 mt-2">Loading blocklist...</p>
+            </div>
+          ) : blocklist.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <X className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>No blocked URLs yet</p>
+              <p className="text-xs mt-1">Click "Block" on any auction to add it here</p>
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left p-3 text-xs font-semibold text-gray-700">URL</th>
+                    <th className="text-left p-3 text-xs font-semibold text-gray-700">Reason</th>
+                    <th className="text-left p-3 text-xs font-semibold text-gray-700">Added</th>
+                    <th className="text-right p-3 text-xs font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blocklist
+                    .filter(item => 
+                      !blocklistSearch || 
+                      item.url.toLowerCase().includes(blocklistSearch.toLowerCase()) ||
+                      item.reason.toLowerCase().includes(blocklistSearch.toLowerCase())
+                    )
+                    .map((item: any) => (
+                      <tr key={item.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">
+                          <div className="max-w-md truncate text-sm">{item.url}</div>
+                        </td>
+                        <td className="p-3">
+                          <Badge variant="outline" className="text-xs">
+                            {item.reason}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-xs text-gray-500">
+                          {new Date(item.addedAt).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            onClick={() => {
+                              if (confirm('Remove this URL from the blocklist?')) {
+                                removeFromBlocklist(item.id);
+                              }
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="hover:bg-red-100 hover:text-red-700"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {blocklist.filter(item => 
+                !blocklistSearch || 
+                item.url.toLowerCase().includes(blocklistSearch.toLowerCase()) ||
+                item.reason.toLowerCase().includes(blocklistSearch.toLowerCase())
+              ).length === 0 && blocklistSearch && (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  No results found for "{blocklistSearch}"
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* County CSR2 Rates Management */}
       <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">

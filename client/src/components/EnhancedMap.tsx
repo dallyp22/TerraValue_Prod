@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -132,6 +133,7 @@ export default function EnhancedMap({
   const [selectedLake, setSelectedLake] = useState<any>(null);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
+  const [mapBounds, setMapBounds] = useState<string>('');
   
   // Highlighted auction parcel state
   const [highlightedParcelGeometry, setHighlightedParcelGeometry] = useState<any>(null);
@@ -464,112 +466,157 @@ export default function EnhancedMap({
   }, []);
 
   // Function to load auctions within current map bounds
-  // Memoized to ensure filters persist during zoom/pan
-  const loadAuctions = useCallback(async () => {
-    if (!map.current || !showAuctionLayer) {
-      // Clear auction markers if layer is disabled
-      const source = map.current?.getSource('auctions') as maplibregl.GeoJSONSource;
+  // Build auction query key for React Query caching
+  const buildAuctionQueryKey = useCallback(() => {
+    if (!map.current || !showAuctionLayer || !mapBounds) {
+      return ['auctions', 'disabled'];
+    }
+    
+    return [
+      'auctions',
+      mapBounds,
+      auctionFilters.minAcreage,
+      auctionFilters.maxAcreage,
+      auctionFilters.minCSR2,
+      auctionFilters.maxCSR2,
+      auctionFilters.auctionDateRange,
+      auctionFilters.propertyTypes?.join(','),
+      auctionFilters.counties?.join(','),
+      auctionFilters.minValue,
+      auctionFilters.maxValue,
+    ];
+  }, [mapBounds, auctionFilters, showAuctionLayer]);
+
+  // Fetch auctions using React Query for automatic caching
+  const { data: auctionsData, isLoading: auctionsLoading, error: auctionsError } = useQuery({
+    queryKey: buildAuctionQueryKey(),
+    queryFn: async () => {
+      if (!map.current || !showAuctionLayer) {
+        return { auctions: [], count: 0, success: true };
+      }
+      
+      const bounds = map.current.getBounds();
+      const params = new URLSearchParams({
+        minLat: bounds.getSouth().toString(),
+        maxLat: bounds.getNorth().toString(),
+        minLon: bounds.getWest().toString(),
+        maxLon: bounds.getEast().toString()
+      });
+      
+      // Add filter params if provided
+      if (auctionFilters) {
+        if (auctionFilters.minAcreage !== undefined && auctionFilters.minAcreage !== null) {
+          params.append('minAcreage', auctionFilters.minAcreage.toString());
+        }
+        if (auctionFilters.maxAcreage !== undefined && auctionFilters.maxAcreage !== null) {
+          params.append('maxAcreage', auctionFilters.maxAcreage.toString());
+        }
+        if (auctionFilters.minCSR2 !== undefined && auctionFilters.minCSR2 !== null) {
+          params.append('minCSR2', auctionFilters.minCSR2.toString());
+        }
+        if (auctionFilters.maxCSR2 !== undefined && auctionFilters.maxCSR2 !== null) {
+          params.append('maxCSR2', auctionFilters.maxCSR2.toString());
+        }
+        if (auctionFilters.auctionDateRange && auctionFilters.auctionDateRange !== 'all') {
+          params.append('auctionDateRange', auctionFilters.auctionDateRange);
+        }
+        if (auctionFilters.propertyTypes?.length > 0) {
+          auctionFilters.propertyTypes.forEach((type: string) => params.append('landTypes[]', type));
+        }
+        if (auctionFilters.counties?.length > 0) {
+          auctionFilters.counties.forEach((county: string) => params.append('counties[]', county));
+        }
+        if (auctionFilters.minValue !== undefined && auctionFilters.minValue !== null) {
+          params.append('minValue', auctionFilters.minValue.toString());
+        }
+        if (auctionFilters.maxValue !== undefined && auctionFilters.maxValue !== null) {
+          params.append('maxValue', auctionFilters.maxValue.toString());
+        }
+      }
+      
+      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const response = await fetch(`${apiUrl}/api/auctions?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch auctions: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      console.log(`✅ Auctions loaded: ${data.auctions?.length || 0} total`);
+      
+      return data.success ? data : { auctions: [], count: 0, success: false };
+    },
+    enabled: !!map.current && showAuctionLayer && !!mapBounds,
+    staleTime: 2 * 60 * 1000, // 2 minutes - data stays fresh
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache
+    refetchOnMount: true, // Refetch on component mount to ensure fresh data
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    retry: 2, // Retry failed requests twice
+  });
+
+  // Update auctions state and map source when data changes
+  useEffect(() => {
+    if (!map.current) return;
+    
+    if (!showAuctionLayer || !auctionsData?.success) {
+      // Clear auction markers if layer is disabled or data fetch failed
+      const source = map.current.getSource('auctions') as maplibregl.GeoJSONSource;
       if (source) {
         source.setData({ type: 'FeatureCollection', features: [] });
       }
+      setAuctions([]);
       return;
     }
     
-    const bounds = map.current.getBounds();
-    const params = new URLSearchParams({
-      minLat: bounds.getSouth().toString(),
-      maxLat: bounds.getNorth().toString(),
-      minLon: bounds.getWest().toString(),
-      maxLon: bounds.getEast().toString()
-    });
-    
-    // Add filter params if provided (check for undefined, not truthy, to handle 0 values)
-    if (auctionFilters) {
-      if (auctionFilters.minAcreage !== undefined && auctionFilters.minAcreage !== null) {
-        params.append('minAcreage', auctionFilters.minAcreage.toString());
-      }
-      if (auctionFilters.maxAcreage !== undefined && auctionFilters.maxAcreage !== null) {
-        params.append('maxAcreage', auctionFilters.maxAcreage.toString());
-      }
-      if (auctionFilters.minCSR2 !== undefined && auctionFilters.minCSR2 !== null) {
-        params.append('minCSR2', auctionFilters.minCSR2.toString());
-      }
-      if (auctionFilters.maxCSR2 !== undefined && auctionFilters.maxCSR2 !== null) {
-        params.append('maxCSR2', auctionFilters.maxCSR2.toString());
-      }
-      if (auctionFilters.auctionDateRange && auctionFilters.auctionDateRange !== 'all') {
-        params.append('auctionDateRange', auctionFilters.auctionDateRange);
-      }
-      if (auctionFilters.propertyTypes?.length > 0) {
-        auctionFilters.propertyTypes.forEach((type: string) => params.append('landTypes[]', type));
-      }
-      if (auctionFilters.counties?.length > 0) {
-        auctionFilters.counties.forEach((county: string) => params.append('counties[]', county));
-      }
-      if (auctionFilters.minValue !== undefined && auctionFilters.minValue !== null) {
-        params.append('minValue', auctionFilters.minValue.toString());
-      }
-      if (auctionFilters.maxValue !== undefined && auctionFilters.maxValue !== null) {
-        params.append('maxValue', auctionFilters.maxValue.toString());
-      }
-    }
-    
-    try {
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
-      const response = await fetch(`${apiUrl}/api/auctions?${params}`);
-      const data = await response.json();
+    if (auctionsData?.auctions) {
+      setAuctions(auctionsData.auctions);
       
-      if (data.success && data.auctions) {
-        setAuctions(data.auctions);
-        
-        // Convert auctions to GeoJSON features with color-coding based on urgency
-        const features = data.auctions
-          .filter((a: Auction) => a.latitude && a.longitude)
-          .map((auction: Auction) => {
-            // Determine marker color based on days until auction
-            let markerColor = '#10b981'; // green default (> 30 days)
-            if (auction.auctionDate) {
-              const daysUntil = Math.floor((new Date(auction.auctionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-              if (daysUntil <= 7) {
-                markerColor = '#ef4444'; // red (< 7 days)
-              } else if (daysUntil <= 30) {
-                markerColor = '#f59e0b'; // orange (7-30 days)
-              }
+      // Convert auctions to GeoJSON features with color-coding based on urgency
+      const features = auctionsData.auctions
+        .filter((a: Auction) => a.latitude && a.longitude)
+        .map((auction: Auction) => {
+          // Determine marker color based on days until auction
+          let markerColor = '#10b981'; // green default (> 30 days)
+          if (auction.auctionDate) {
+            const daysUntil = Math.floor((new Date(auction.auctionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            if (daysUntil <= 7) {
+              markerColor = '#ef4444'; // red (< 7 days)
+            } else if (daysUntil <= 30) {
+              markerColor = '#f59e0b'; // orange (7-30 days)
             }
-            
-            // Check if this is a county-level location (approximate)
-            const isCountyLevel = auction.rawData?.isCountyLevel || false;
-            
-            return {
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [auction.longitude, auction.latitude]
-              },
-              properties: {
-                id: auction.id,
-                title: auction.title,
-                acreage: auction.acreage,
-                county: auction.county,
-                state: auction.state,
-                markerColor,
-                isCountyLevel // Add flag for county-level locations
-              }
-            };
-          });
-        
-        const source = map.current?.getSource('auctions') as maplibregl.GeoJSONSource;
-        if (source) {
-          source.setData({
-            type: 'FeatureCollection',
-            features
-          });
-        }
+          }
+          
+          // Check if this is a county-level location (approximate)
+          const isCountyLevel = auction.rawData?.isCountyLevel || false;
+          
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [auction.longitude, auction.latitude]
+            },
+            properties: {
+              id: auction.id,
+              title: auction.title,
+              acreage: auction.acreage,
+              county: auction.county,
+              state: auction.state,
+              markerColor,
+              isCountyLevel // Add flag for county-level locations
+            }
+          };
+        });
+      
+      const source = map.current.getSource('auctions') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({
+          type: 'FeatureCollection',
+          features
+        });
       }
-    } catch (error) {
-      console.error('Failed to load auctions:', error);
     }
-  }, [auctionFilters, showAuctionLayer]); // Dependencies ensure latest filter values are always used
+  }, [auctionsData, showAuctionLayer]);
 
   // Function to load aggregated parcels from self-hosted database
   // NOTE: Removed loadAggregatedParcels function - now using vector tiles instead of GeoJSON
@@ -2687,8 +2734,9 @@ export default function EnhancedMap({
           map.current.on('mouseenter', 'auction-markers-bg', handleAuctionMouseEnter);
           map.current.on('mouseleave', 'auction-markers-bg', handleAuctionMouseLeave);
 
-          // Initial auction load
-          loadAuctions();
+          // Set initial map bounds to trigger auction load
+          const bounds = map.current.getBounds();
+          setMapBounds(`${bounds.getSouth()},${bounds.getNorth()},${bounds.getWest()},${bounds.getEast()}`);
         }
       };
       img.src = '/auction-icon.svg';
@@ -2738,8 +2786,7 @@ export default function EnhancedMap({
       }
     });
 
-      // Note: moveend listener is now managed by useEffect hook to ensure
-      // it always has the latest loadAuctions reference with current filters
+      // Note: moveend listener is now managed by useEffect hook to update map bounds
 
       // Handle polygon drawn
       map.current.on('draw.create', (e) => {
@@ -2783,26 +2830,25 @@ export default function EnhancedMap({
     updateLabelVisibility();
   }, [showOwnerLabels]);
 
-  // Reload auctions when filters change (loadAuctions is memoized with useCallback)
-  useEffect(() => {
-    if (map.current) {
-      loadAuctions();
-    }
-  }, [loadAuctions]);
+  // Map bounds change triggers auction refetch via React Query
+  // No need for manual refetch - React Query handles it automatically based on queryKey changes
 
-  // Re-attach moveend listener whenever loadAuctions changes to ensure current filters are used
+  // Handle map moveend event to update bounds and trigger auction refetch
   useEffect(() => {
     if (!map.current) return;
     
     // Debounce the handler to avoid excessive calls during rapid zoom/pan
     const moveHandler = debounce(() => {
+      if (map.current) {
+        // Update map bounds, which triggers React Query refetch via queryKey change
+        const bounds = map.current.getBounds();
+        setMapBounds(`${bounds.getSouth()},${bounds.getNorth()},${bounds.getWest()},${bounds.getEast()}`);
+      }
       loadParcels();
-      // Removed loadAggregatedParcels() - deprecated, vector tiles load automatically
-      loadAuctions();
       updateLabelVisibility();
     }, 250); // Wait 250ms after user stops moving
     
-    // Attach the debounced listener with current loadAuctions reference
+    // Attach the debounced listener
     map.current.on('moveend', moveHandler);
     
     // Cleanup: remove listener when effect re-runs or unmounts
@@ -2811,7 +2857,7 @@ export default function EnhancedMap({
         map.current.off('moveend', moveHandler);
       }
     };
-  }, [loadAuctions]); // Re-run when loadAuctions changes (when filters change)
+  }, []); // Only setup once
 
   // Handle clearing drawn polygons
   useEffect(() => {
@@ -2989,18 +3035,8 @@ export default function EnhancedMap({
       );
     }
     
-    // Load or clear auctions based on visibility
-    if (showAuctionLayer) {
-      loadAuctions();
-    }
+    // React Query automatically handles refetching when showAuctionLayer changes
   }, [showAuctionLayer]);
-
-  // Reload auctions when filters change
-  useEffect(() => {
-    if (map.current && showAuctionLayer) {
-      loadAuctions();
-    }
-  }, [auctionFilters]);
 
   // Toggle aggregated parcels layer visibility
   // NOTE: Removed showAggregatedParcels useEffect - now using vector tiles only

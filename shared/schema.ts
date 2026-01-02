@@ -152,6 +152,15 @@ export const scraperSettings = pgTable("scraper_settings", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Auction Blocklist - URLs that should never be scraped
+export const auctionBlocklist = pgTable("auction_blocklist", {
+  id: serial("id").primaryKey(),
+  url: text("url").notNull().unique(),
+  reason: text("reason").notNull(), // "non-farm", "spam", "duplicate", etc.
+  addedAt: timestamp("added_at").defaultNow(),
+  addedBy: text("added_by").default("manual")
+});
+
 // Archived Auctions - Past auctions moved from active table
 export const archivedAuctions = pgTable("archived_auctions", {
   id: serial("id").primaryKey(),
@@ -351,6 +360,8 @@ export type Auction = typeof auctions.$inferSelect;
 export type InsertAuction = typeof auctions.$inferInsert;
 export type ScraperSettings = typeof scraperSettings.$inferSelect;
 export type InsertScraperSettings = typeof scraperSettings.$inferInsert;
+export type AuctionBlocklist = typeof auctionBlocklist.$inferSelect;
+export type InsertAuctionBlocklist = typeof auctionBlocklist.$inferInsert;
 export type ArchivedAuction = typeof archivedAuctions.$inferSelect;
 export type InsertArchivedAuction = typeof archivedAuctions.$inferInsert;
 export type Parcel = typeof parcels.$inferSelect;
