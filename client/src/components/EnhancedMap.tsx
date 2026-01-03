@@ -543,17 +543,26 @@ export default function EnhancedMap({
       
       const data = await response.json();
       
-      console.log(`✅ Auctions loaded: ${data.auctions?.length || 0} total`);
+      console.log(`✅ Auctions fetched from API: ${data.auctions?.length || 0} auctions at ${data.timestamp || 'unknown time'}`);
       
       return data.success ? data : { auctions: [], count: 0, success: false };
     },
     enabled: !!map.current && showAuctionLayer && !!mapBounds,
-    staleTime: 2 * 60 * 1000, // 2 minutes - data stays fresh
-    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache
-    refetchOnMount: true, // Refetch on component mount to ensure fresh data
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh (increased for better caching)
+    gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache longer
+    refetchOnMount: false, // Don't refetch on mount - use cache (key change for better caching)
+    refetchOnWindowFocus: false, // Don't refetch on focus - use cache (key change for better caching)
+    refetchOnReconnect: true, // Refetch if connection was lost
     retry: 2, // Retry failed requests twice
   });
+
+  // Debug logging for cache behavior
+  useEffect(() => {
+    if (auctionsData && !auctionsLoading) {
+      console.log('🔵 React Query Cache: Displaying', auctionsData.auctions?.length || 0, 'auctions', 
+        auctionsLoading ? '(fetching...)' : '(from cache or fresh)');
+    }
+  }, [auctionsData, auctionsLoading]);
 
   // Update auctions state and map source when data changes
   useEffect(() => {
