@@ -27,6 +27,19 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks for better caching
+          'vendor-react': ['react', 'react-dom', 'wouter'],
+          'vendor-map': ['maplibre-gl', '@mapbox/mapbox-gl-draw'],
+          'vendor-turf': ['@turf/turf'],
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-switch', '@radix-ui/react-tooltip', '@radix-ui/react-tabs'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-pdf': ['jspdf'],
+        },
+      },
+    },
   },
   server: {
     fs: {

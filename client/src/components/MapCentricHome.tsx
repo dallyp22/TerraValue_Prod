@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,14 @@ import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
 import LeftSidebar, { type AuctionFilters, type MapOverlays, type MapInfo } from './LeftSidebar';
 import MapControls from './MapControls';
-import PropertyFormOverlay from './PropertyFormOverlay';
-import ValuationPipelineOverlay from './ValuationPipelineOverlay';
-import ValuationReportOverlay from './ValuationReportOverlay';
 import { Header } from './layout/header';
 import { apiRequest } from '@/lib/queryClient';
 import type { PropertyForm as PropertyFormData, Valuation, Auction } from '@shared/schema';
+
+// Lazy load overlay components for code splitting
+const PropertyFormOverlay = lazy(() => import('./PropertyFormOverlay'));
+const ValuationPipelineOverlay = lazy(() => import('./ValuationPipelineOverlay'));
+const ValuationReportOverlay = lazy(() => import('./ValuationReportOverlay'));
 
 export default function MapCentricHome() {
   // Map state
@@ -645,33 +647,39 @@ export default function MapCentricHome() {
         )}
       </div>
 
-      {/* Overlays: Valuation Form, Pipeline, Report */}
-      {showForm && (
-        <PropertyFormOverlay 
-          onClose={() => {
-            setShowForm(false);
-            setParcelData(null);
-            setDrawnPolygonData(null);
-          }}
-          onValuationCreated={handleValuationCreated}
-          drawnPolygonData={drawnPolygonData}
-          parcelData={parcelData}
-        />
-      )}
-      
-      {showPipeline && valuation && (
-        <ValuationPipelineOverlay 
-          data={valuation} 
-          onClose={() => setShowPipeline(false)} 
-        />
-      )}
-      
-      {showReport && valuation && (
-        <ValuationReportOverlay 
-          data={valuation} 
-          onClose={() => setShowReport(false)} 
-        />
-      )}
+      {/* Overlays: Valuation Form, Pipeline, Report (lazy loaded) */}
+      <Suspense fallback={null}>
+        {showForm && (
+          <PropertyFormOverlay
+            onClose={() => {
+              setShowForm(false);
+              setParcelData(null);
+              setDrawnPolygonData(null);
+            }}
+            onValuationCreated={handleValuationCreated}
+            drawnPolygonData={drawnPolygonData}
+            parcelData={parcelData}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {showPipeline && valuation && (
+          <ValuationPipelineOverlay
+            data={valuation}
+            onClose={() => setShowPipeline(false)}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {showReport && valuation && (
+          <ValuationReportOverlay
+            data={valuation}
+            onClose={() => setShowReport(false)}
+          />
+        )}
+      </Suspense>
     </div>
     </>
   );
