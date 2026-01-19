@@ -1440,7 +1440,7 @@ export default function EnhancedMap({
           'text-field': [
             'case',
             // If combined parcels, show owner + parcel count + acres
-            ['get', 'COMBINED'],
+            ['==', ['get', 'COMBINED'], true],
             ['concat',
               ['case',
                 ['>', ['length', ['get', 'DEEDHOLDER']], 15],
