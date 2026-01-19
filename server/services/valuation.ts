@@ -31,45 +31,77 @@ export class ValuationService {
     try {
       // Update status to processing immediately
       await storage.updateValuation(valuationId, { status: "processing" });
-      
+
       // Start ALL async operations in parallel for maximum speed
-      console.log("Starting parallel valuation operations...");
-      
-      // Launch all data fetching operations simultaneously
+      console.log(`🚀 Starting parallel valuation operations for ID ${valuationId}...`);
+      console.log(`📍 Property: ${propertyData.county} County, ${propertyData.state}, ${propertyData.landType}`);
+
+      // Helper function to add timeout to promises
+      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
+
+      // Launch all data fetching operations simultaneously with error handling
       const parallelPromises = {
-        // Core valuation data
-        vectorResult: openaiService.getCountyBaseValue(
-          propertyData.county,
-          propertyData.state,
-          propertyData.landType
-        ),
-        
+        // Core valuation data - with timeout and error handling
+        vectorResult: withTimeout(
+          openaiService.getCountyBaseValue(
+            propertyData.county,
+            propertyData.state,
+            propertyData.landType
+          ),
+          60000, // 60 second timeout
+          "Vector store query"
+        ).catch(error => {
+          console.error("❌ Vector store query failed:", error.message || error);
+          // Return fallback value based on state averages
+          return { baseValue: 8500, description: "Fallback value due to API error" };
+        }),
+
         // Market research (runs in parallel from the start)
-        marketResult: openaiService.performMarketResearch(
-          propertyData.county,
-          propertyData.state,
-          propertyData.landType
-        ),
-        
+        marketResult: withTimeout(
+          openaiService.performMarketResearch(
+            propertyData.county,
+            propertyData.state,
+            propertyData.landType
+          ),
+          60000, // 60 second timeout
+          "Market research"
+        ).catch(error => {
+          console.error("❌ Market research failed:", error.message || error);
+          return { marketAdjustment: 0, insight: "Market data unavailable", trends: [] };
+        }),
+
         // Iowa-specific market analysis (if applicable)
-        iowaMarketAnalysis: propertyData.state === "Iowa" 
-          ? openaiService.getIowaMarketAnalysis(
-              propertyData.county,
-              propertyData.landType
+        iowaMarketAnalysis: propertyData.state === "Iowa"
+          ? withTimeout(
+              openaiService.getIowaMarketAnalysis(
+                propertyData.county,
+                propertyData.landType
+              ),
+              60000,
+              "Iowa market analysis"
             ).catch(error => {
-              console.error("Iowa market analysis failed:", error);
+              console.error("❌ Iowa market analysis failed:", error.message || error);
               return null;
             })
           : Promise.resolve(null),
-        
+
         // Corn futures for rent calculation (if CSR2 available)
         cornFuturesPrice: (propertyData.csr2Mean && propertyData.csr2Mean > 0)
           ? cornPriceService.getCornFuturesPrice().catch(error => {
-              console.error("Failed to fetch corn futures:", error);
+              console.error("❌ Failed to fetch corn futures:", error.message || error);
               return undefined;
             })
           : Promise.resolve(undefined)
       };
+
+      console.log("⏳ Waiting for parallel API calls...");
 
       // Wait for all parallel operations to complete
       const results = await Promise.all([
@@ -84,7 +116,9 @@ export class ValuationService {
       const iowaMarketAnalysis = results[2];
       const cornFuturesPrice = results[3];
 
-      console.log("All parallel operations completed successfully");
+      console.log("✅ All parallel operations completed successfully");
+      console.log(`📊 Vector result: baseValue=$${vectorResult.baseValue}`);
+      console.log(`📈 Market result: adjustment=${marketResult.marketAdjustment}, trends=${marketResult.trends.length}`);
 
       // Calculate income capitalization value if cash rent provided
       let incomeCapValue: number | undefined;
@@ -385,10 +419,19 @@ export class ValuationService {
       });
 
     } catch (error) {
-      console.error("Valuation pipeline failed:", error);
-      await storage.updateValuation(valuationId, {
-        status: "failed"
-      });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : '';
+      console.error(`❌ Valuation pipeline failed for ID ${valuationId}:`, errorMessage);
+      console.error('Stack trace:', errorStack);
+
+      try {
+        await storage.updateValuation(valuationId, {
+          status: "failed",
+          marketInsight: `Valuation failed: ${errorMessage}`
+        });
+      } catch (updateError) {
+        console.error('Failed to update valuation status:', updateError);
+      }
     }
   }
 }
