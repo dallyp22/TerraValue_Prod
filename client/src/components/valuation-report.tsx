@@ -11,9 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Database, Brain, TrendingUp, Activity, DollarSign, Check, MapPin, User, Sprout } from "lucide-react";
 import { motion } from "framer-motion";
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { Valuation, ValuationBreakdown } from "@shared/schema";
+import { generatePDF } from '@/lib/pdf-export';
 import { SoilDataReadOnly } from "./SoilDataReadOnly";
 
 interface ValuationReportProps {
@@ -119,168 +118,31 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
   const nonTillableLandValue = Math.round(nonTillablePerAcreDollar * nonTillableAcres);
   const totalPropertyValue = Math.round(tillableLandValue + nonTillableLandValue + improvements);
   
-  // PDF Export Function
+  // PDF Export Function - Programmatic layout for crisp output
   const exportToPDF = async () => {
-    if (!reportRef.current || !valuation || isExporting) return;
-    
+    if (!valuation || !breakdown || !valuationMethods || isExporting) return;
+
     setIsExporting(true);
-    
+
     try {
-      // Create a clone of the report element for PDF generation
-      const element = reportRef.current;
-      
-      // Configure html2canvas options for better quality and professional appearance
-      const canvas = await html2canvas(element, {
-        scale: 2.5, // Higher scale for even better text quality
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: element.scrollWidth,
-        height: element.scrollHeight,
-        // Remove scroll bars and improve rendering
-        scrollX: 0,
-        scrollY: 0,
-        // Better text rendering options
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true,
+      await generatePDF({
+        valuation,
+        breakdown,
+        selectedMethod,
+        totalValue: totalPropertyValue,
+        tillableAcres,
+        nonTillableAcres,
+        tillablePerAcre: tillablePerAcreDollar,
+        nonTillablePerAcre: nonTillablePerAcreDollar,
+        tillableValue: tillableLandValue,
+        nonTillableValue: nonTillableLandValue,
+        improvements,
+        valuationMethods: {
+          csr2: { perAcre: valuationMethods.csr2.perAcre, confidence: 0.85 },
+          income: { perAcre: valuationMethods.income.perAcre, confidence: breakdown.cashRentPerAcre ? 0.9 : 0.6 },
+          ai_market: { perAcre: valuationMethods.ai_market.perAcre, confidence: 0.75 },
+        },
       });
-
-      const imgData = canvas.toDataURL('image/png', 1.0); // Maximum quality
-      
-      // Create PDF with Letter size (8.5" x 11")
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4' // A4 size for more professional appearance
-      });
-
-      // Get PDF dimensions in mm (A4: 210 x 297 mm)
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const margin = 15; // 15mm margins
-      
-      // Available content area
-      const contentWidth = pdfWidth - (2 * margin);
-      const contentHeight = pdfHeight - (2 * margin);
-      
-      // Calculate image dimensions in mm
-      const imgAspectRatio = canvas.width / canvas.height;
-      
-      // Fit content to page width first
-      let finalWidth = contentWidth;
-      let finalHeight = contentWidth / imgAspectRatio;
-      
-      // If height exceeds page, we'll need multiple pages
-      const pagesNeeded = Math.ceil(finalHeight / contentHeight);
-      
-      // Add professional header to first page
-      pdf.setFontSize(20);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('FarmScope AI Property Valuation Report', margin, margin - 5);
-      
-      // Add date
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      const currentDate = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      pdf.text(`Generated: ${currentDate}`, pdfWidth - margin - 50, margin - 5);
-      
-      // Add parcel info if available (small text under header)
-      if (valuation.parcelNumber || valuation.ownerName) {
-        let yPos = margin + 2;
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 100, 100);
-        if (valuation.parcelNumber) {
-          pdf.text(`Parcel #${valuation.parcelNumber}`, margin, yPos);
-          yPos += 3;
-        }
-        if (valuation.ownerName) {
-          pdf.text(`Owner: ${valuation.ownerName}`, margin, yPos);
-        }
-        pdf.setTextColor(0, 0, 0); // Reset to black
-      }
-      
-      if (pagesNeeded === 1) {
-        // Single page - center vertically if there's space
-        const yPosition = finalHeight < contentHeight ? 
-          margin + (contentHeight - finalHeight) / 2 : 
-          margin;
-        
-        pdf.addImage(imgData, 'PNG', margin, yPosition, finalWidth, finalHeight);
-      } else {
-        // Multiple pages needed
-        const pageHeight = contentHeight;
-        
-        for (let page = 0; page < pagesNeeded; page++) {
-          if (page > 0) {
-            pdf.addPage();
-            // Add header to each page
-            pdf.setFontSize(12);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('FarmScope AI Property Valuation Report (continued)', margin, margin - 5);
-          }
-          
-          // Calculate the source Y offset for this page
-          const sourceY = page * (pageHeight * canvas.height / finalHeight);
-          const sourceHeight = Math.min(
-            pageHeight * canvas.height / finalHeight,
-            canvas.height - sourceY
-          );
-          
-          // Calculate the actual height to render on this page
-          const renderHeight = Math.min(pageHeight, finalHeight - (page * pageHeight));
-          
-          // Create a cropped canvas for this page
-          const pageCanvas = document.createElement('canvas');
-          const pageCtx = pageCanvas.getContext('2d');
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = sourceHeight;
-          
-          if (pageCtx) {
-            pageCtx.fillStyle = '#ffffff';
-            pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-            pageCtx.drawImage(
-              canvas,
-              0, sourceY, canvas.width, sourceHeight,
-              0, 0, pageCanvas.width, pageCanvas.height
-            );
-            
-            const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
-            pdf.addImage(pageImgData, 'PNG', margin, margin, finalWidth, renderHeight);
-          }
-        }
-      }
-      
-      // Add footer with page numbers if multiple pages
-      if (pagesNeeded > 1) {
-        const totalPages = pdf.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-          pdf.setPage(i);
-          pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'normal');
-          pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - margin - 20, pdfHeight - 5);
-          pdf.text('\u00A9 FarmScope AI Agricultural Valuation Platform', margin, pdfHeight - 5);
-        }
-      } else {
-        // Add footer for single page
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text('© Terra Value Agricultural Valuation Platform', margin, pdfHeight - 5);
-      }
-
-      // Generate filename with property address and timestamp
-      const propertyAddress = valuation.address?.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_') || 'Property';
-      const timestamp = Date.now();
-      const filename = `FarmScope_AI_Valuation_${propertyAddress}_${new Date().toISOString().split('T')[0]}_${timestamp}.pdf`;
-
-      // Save the PDF
-      pdf.save(filename);
-      
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('There was an error generating the PDF. Please try again.');
