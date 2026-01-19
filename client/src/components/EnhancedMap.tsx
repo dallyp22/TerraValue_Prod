@@ -54,16 +54,9 @@ interface EnhancedMapProps {
     lakes: boolean;
     reservoirs: boolean;
   };
-  showPowerLines?: boolean;
-  powerLineVoltages?: {
-    kv345: boolean;
-    kv161: boolean;
-    kv138: boolean;
-    kv115: boolean;
-    kv69: boolean;
-  };
   showTransmissionLines?: boolean;
   transmissionLineStates?: {
+    iowa: boolean;
     kansas: boolean;
     minnesota: boolean;
     missouri: boolean;
@@ -106,10 +99,8 @@ export default function EnhancedMap({
   datacenterStates = { iowa: true, illinois: false, missouri: true, nebraska: true, wisconsin: true },
   showLakes = true,
   lakeTypes = { lakes: true, reservoirs: true },
-  showPowerLines = true,
-  powerLineVoltages = { kv345: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showTransmissionLines = true,
-  transmissionLineStates = { kansas: true, minnesota: true, missouri: true, nebraska: true, southDakota: true },
+  transmissionLineStates = { iowa: true, kansas: true, minnesota: true, missouri: true, nebraska: true, southDakota: true },
   transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
   showHighways = true,
@@ -139,7 +130,6 @@ export default function EnhancedMap({
 
   // Lazy loading refs - track whether each GeoJSON source has been loaded
   const lakesLoadedRef = useRef(false);
-  const powerlinesLoadedRef = useRef(false);
   const transmissionLoadedRef = useRef(false);
 
   // Iowa-only filter - persisted to localStorage
@@ -2060,13 +2050,12 @@ export default function EnhancedMap({
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Add power lines data source (lazy loaded - starts empty)
-      map.current!.addSource('powerlines', {
+      // Add transmission line data sources for each state (lazy loaded - start empty)
+      map.current!.addSource('transmission-iowa', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Add transmission line data sources for each state (lazy loaded - start empty)
       map.current!.addSource('transmission-kansas', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
@@ -2505,152 +2494,12 @@ export default function EnhancedMap({
             if (map.current) map.current.getCanvas().style.cursor = '';
           });
 
-          // Add power lines layers with orange gradient (darkest to lightest by voltage)
-          
-          // 345 kV - Darkest Orange (highest voltage)
-          map.current!.addLayer({
-            id: 'powerlines-345kv',
-            type: 'line',
-            source: 'powerlines',
-            paint: {
-              'line-color': '#c2410c',
-              'line-width': 3,
-              'line-opacity': 0.8
-            },
-            layout: {
-              'visibility': showPowerLines && powerLineVoltages.kv345 ? 'visible' : 'none'
-            },
-            filter: ['any',
-              ['==', ['get', 'voltage'], '345000'],
-              ['in', '345000', ['get', 'voltage']]
-            ]
-          });
-
-          // 161 kV - Dark Orange
-          map.current!.addLayer({
-            id: 'powerlines-161kv',
-            type: 'line',
-            source: 'powerlines',
-            paint: {
-              'line-color': '#ea580c',
-              'line-width': 2.5,
-              'line-opacity': 0.7
-            },
-            layout: {
-              'visibility': showPowerLines && powerLineVoltages.kv161 ? 'visible' : 'none'
-            },
-            filter: ['any',
-              ['==', ['get', 'voltage'], '161000'],
-              ['in', '161000', ['get', 'voltage']]
-            ]
-          });
-
-          // 138 kV - Medium Orange
-          map.current!.addLayer({
-            id: 'powerlines-138kv',
-            type: 'line',
-            source: 'powerlines',
-            paint: {
-              'line-color': '#f97316',
-              'line-width': 2,
-              'line-opacity': 0.6
-            },
-            layout: {
-              'visibility': showPowerLines && powerLineVoltages.kv138 ? 'visible' : 'none'
-            },
-            filter: ['any',
-              ['==', ['get', 'voltage'], '138000'],
-              ['in', '138000', ['get', 'voltage']]
-            ]
-          });
-
-          // 115 kV - Light Orange
-          map.current!.addLayer({
-            id: 'powerlines-115kv',
-            type: 'line',
-            source: 'powerlines',
-            paint: {
-              'line-color': '#fb923c',
-              'line-width': 1.5,
-              'line-opacity': 0.5
-            },
-            layout: {
-              'visibility': showPowerLines && powerLineVoltages.kv115 ? 'visible' : 'none'
-            },
-            filter: ['any',
-              ['==', ['get', 'voltage'], '115000'],
-              ['in', '115000', ['get', 'voltage']]
-            ]
-          });
-
-          // 69 kV - Lightest Orange (lowest voltage)
-          map.current!.addLayer({
-            id: 'powerlines-69kv',
-            type: 'line',
-            source: 'powerlines',
-            paint: {
-              'line-color': '#fdba74',
-              'line-width': 1,
-              'line-opacity': 0.4
-            },
-            layout: {
-              'visibility': showPowerLines && powerLineVoltages.kv69 ? 'visible' : 'none'
-            },
-            filter: ['any',
-              ['==', ['get', 'voltage'], '69000'],
-              ['in', '69000', ['get', 'voltage']]
-            ]
-          });
-
           lightningImg.src = 'data:image/svg+xml;base64,' + btoa(lightningBoltSVG);
-
-          // Add click handlers for powerlines to show operator info
-          const powerlineLayers = ['powerlines-345kv', 'powerlines-161kv', 'powerlines-138kv', 'powerlines-115kv', 'powerlines-69kv'];
-          
-          powerlineLayers.forEach(layerId => {
-            map.current!.on('click', layerId, (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-              if (e.features && e.features.length > 0) {
-                const props = e.features[0].properties;
-                const operator = props?.operator || 'Unknown Operator';
-                const voltage = props?.voltage || 'Unknown';
-                const voltageKV = voltage ? (parseInt(voltage) / 1000).toFixed(0) : '?';
-                
-                const html = `
-                  <div style="padding: 10px; min-width: 200px;">
-                    <strong style="display: block; margin-bottom: 8px; font-size: 14px; color: #1f2937;">⚡ Transmission Line</strong>
-                    <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
-                      <strong>Operator:</strong> ${operator}
-                    </div>
-                    <div style="font-size: 12px; color: #4b5563; margin-bottom: 6px;">
-                      <strong>Voltage:</strong> ${voltageKV} kV
-                    </div>
-                    ${props?.circuits ? `<div style="font-size: 11px; color: #6b7280;">Circuits: ${props.circuits}</div>` : ''}
-                    <div style="font-size: 10px; color: #9ca3af; margin-top: 8px; padding-top: 6px; border-top: 1px solid #e5e7eb;">
-                      High voltage transmission infrastructure
-                    </div>
-                  </div>
-                `;
-                
-                new maplibregl.Popup()
-                  .setLngLat(e.lngLat)
-                  .setHTML(html)
-                  .addTo(map.current!);
-              }
-            });
-
-            // Add hover cursor
-            map.current!.on('mouseenter', layerId, () => {
-              if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-            });
-
-            map.current!.on('mouseleave', layerId, () => {
-              if (map.current) map.current.getCanvas().style.cursor = '';
-            });
-          });
 
           // Helper function to add transmission line layers for each state and voltage
           const addTransmissionLineLayers = () => {
             const states = [
+              { id: 'iowa', name: 'Iowa', source: 'transmission-iowa' },
               { id: 'kansas', name: 'Kansas', source: 'transmission-kansas' },
               { id: 'minnesota', name: 'Minnesota', source: 'transmission-minnesota' },
               { id: 'missouri', name: 'Missouri', source: 'transmission-missouri' },
@@ -3477,51 +3326,12 @@ export default function EnhancedMap({
     });
   }, [lakeTypes]);
 
-  // Toggle power lines layer visibility + lazy load data
-  useEffect(() => {
-    if (!map.current) return;
-
-    // Lazy load powerlines data when first enabled
-    if (showPowerLines && !powerlinesLoadedRef.current) {
-      console.log('⚡ Lazy loading powerlines.geojson...');
-      fetch('/powerlines.geojson')
-        .then(res => res.json())
-        .then(data => {
-          const source = map.current?.getSource('powerlines') as maplibregl.GeoJSONSource;
-          if (source) {
-            source.setData(data);
-            powerlinesLoadedRef.current = true;
-            console.log('✅ Powerlines data loaded');
-          }
-        })
-        .catch(err => console.error('Failed to load powerlines:', err));
-    }
-
-    const voltageLayerMap = [
-      { id: 'powerlines-345kv', enabled: powerLineVoltages.kv345 },
-      { id: 'powerlines-161kv', enabled: powerLineVoltages.kv161 },
-      { id: 'powerlines-138kv', enabled: powerLineVoltages.kv138 },
-      { id: 'powerlines-115kv', enabled: powerLineVoltages.kv115 },
-      { id: 'powerlines-69kv', enabled: powerLineVoltages.kv69 }
-    ];
-
-    voltageLayerMap.forEach(({ id, enabled }) => {
-      const layer = map.current?.getLayer(id);
-      if (layer) {
-        map.current?.setLayoutProperty(
-          id,
-          'visibility',
-          showPowerLines && enabled ? 'visible' : 'none'
-        );
-      }
-    });
-  }, [showPowerLines, powerLineVoltages]);
-
   // Toggle transmission lines layer visibility + lazy load data
   useEffect(() => {
     if (!map.current) return;
 
     const states = [
+      { id: 'iowa', enabled: transmissionLineStates.iowa, file: '/powerlines.geojson' },
       { id: 'kansas', enabled: transmissionLineStates.kansas, file: '/KS_HighVtransmission.geojson' },
       { id: 'minnesota', enabled: transmissionLineStates.minnesota, file: '/MN_HighVtransmission.geojson' },
       { id: 'missouri', enabled: transmissionLineStates.missouri, file: '/MO_HighVtransmission.geojson' },

@@ -63,16 +63,9 @@ export default function MapCentricHome() {
       lakes: true,
       reservoirs: true
     },
-    showPowerLines: false,
-    powerLineVoltages: {
-      kv345: true,
-      kv161: true,
-      kv138: true,
-      kv115: true,
-      kv69: true
-    },
     showTransmissionLines: false,
     transmissionLineStates: {
+      iowa: true,
       kansas: true,
       minnesota: true,
       missouri: true,
@@ -447,8 +440,6 @@ export default function MapCentricHome() {
           datacenterStates={mapOverlays.datacenterStates}
           showLakes={mapOverlays.showLakes}
           lakeTypes={mapOverlays.lakeTypes}
-          showPowerLines={mapOverlays.showPowerLines}
-          powerLineVoltages={mapOverlays.powerLineVoltages}
           showTransmissionLines={mapOverlays.showTransmissionLines}
           transmissionLineStates={mapOverlays.transmissionLineStates}
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
