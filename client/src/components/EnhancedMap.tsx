@@ -3125,8 +3125,57 @@ export default function EnhancedMap({
     }
   }, [showArcgisParcels]);
 
-  // Toggle aggregated parcels layer visibility
-  // NOTE: Removed showAggregatedParcels useEffect - now using vector tiles only
+  // Unified parcel visibility control - handles ALL parcel layer types based on mode
+  // Mode: Off (!showArcgisParcels && !useSelfHostedParcels) - hide all parcels
+  // Mode: ArcGIS (showArcgisParcels) - show ArcGIS/Harrison, hide ownership
+  // Mode: Aggregated (useSelfHostedParcels) - show ownership/Harrison, hide ArcGIS
+  useEffect(() => {
+    if (!map.current) return;
+
+    const harrison = isInHarrisonCounty();
+    const isOffMode = !showArcgisParcels && !useSelfHostedParcels;
+
+    console.log(`🎛️ Parcel Mode: ${isOffMode ? 'OFF' : showArcgisParcels ? 'ArcGIS' : 'Aggregated'} | Harrison: ${harrison}`);
+
+    // Harrison County layers
+    const harrisonLayers = ['harrison-parcels-fill', 'harrison-parcels-outline', 'harrison-parcels-labels', 'harrison-parcels-selected'];
+    harrisonLayers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        // Show Harrison parcels only when: in Harrison AND NOT in "Off" mode
+        const shouldShow = harrison && !isOffMode;
+        // Special handling for labels - also needs showOwnerLabels
+        const visibility = layerId === 'harrison-parcels-labels'
+          ? (shouldShow && showOwnerLabels ? 'visible' : 'none')
+          : (shouldShow ? 'visible' : 'none');
+        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
+        console.log(`   └─ ${layerId}: ${visibility}`);
+      }
+    });
+
+    // When in "Off" mode, ensure all other parcel layers are hidden
+    if (isOffMode) {
+      // Hide ArcGIS layers
+      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+      });
+
+      // Hide ownership layers
+      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels', 'ownership-selected'];
+      ownershipLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+      });
+
+      console.log('   All parcel layers hidden (Off mode)');
+    }
+  }, [showArcgisParcels, useSelfHostedParcels, showOwnerLabels]);
 
   // Toggle self-hosted ownership layers visibility
   useEffect(() => {
