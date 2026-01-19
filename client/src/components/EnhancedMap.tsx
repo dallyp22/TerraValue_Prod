@@ -3127,19 +3127,9 @@ export default function EnhancedMap({
           console.log(`   └─ ownership-selected: ${selectedVisibility} (selected: ${selectedParcelId})`);
         }
       }
-      
-      // Only hide ArcGIS layers when self-hosted is ON (to prevent overlap)
-      // When self-hosted is OFF, let the showArcgisParcels useEffect control ArcGIS visibility
-      if (useSelfHostedParcels) {
-        const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-        arcgisLayers.forEach(layerId => {
-          const layer = map.current?.getLayer(layerId);
-          if (layer) {
-            map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-            console.log(`   └─ ${layerId}: none (hidden for self-hosted mode)`);
-          }
-        });
-      }
+
+      // NOTE: ArcGIS layer hiding is handled by the unified parcel visibility effect
+      // to avoid race conditions between multiple useEffects
     };
     
     // Wait for style to load before manipulating layers
