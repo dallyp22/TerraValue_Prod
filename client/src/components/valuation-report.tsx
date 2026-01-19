@@ -1,3 +1,11 @@
+/**
+ * @deprecated This component is maintained for backward compatibility.
+ * Prefer using ValuationReportTerra from './ValuationReportTerra' which has:
+ * - Enhanced PDF export with multi-page support
+ * - Professional header/footer design
+ * - Consistent FarmScope AI branding
+ * - Better aesthetics and TerraValue design system
+ */
 import { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -214,7 +222,7 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
             // Add header to each page
             pdf.setFontSize(12);
             pdf.setFont('helvetica', 'bold');
-            pdf.text('Terra Value Property Valuation Report (continued)', margin, margin - 5);
+            pdf.text('FarmScope AI Property Valuation Report (continued)', margin, margin - 5);
           }
           
           // Calculate the source Y offset for this page
@@ -256,7 +264,7 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
           pdf.setFontSize(8);
           pdf.setFont('helvetica', 'normal');
           pdf.text(`Page ${i} of ${totalPages}`, pdfWidth - margin - 20, pdfHeight - 5);
-          pdf.text('© Terra Value Agricultural Valuation Platform', margin, pdfHeight - 5);
+          pdf.text('\u00A9 FarmScope AI Agricultural Valuation Platform', margin, pdfHeight - 5);
         }
       } else {
         // Add footer for single page

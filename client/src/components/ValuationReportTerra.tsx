@@ -126,45 +126,185 @@ export function ValuationReportTerra({ valuation, className = '' }: ValuationRep
   const nonTillableLandValue = Math.round(nonTillablePerAcre * nonTillableAcres);
   const totalPropertyValue = Math.round(tillableLandValue + nonTillableLandValue + improvements);
 
-  // PDF Export
+  // PDF Export - Professional multi-page with FarmScope AI branding
   const exportToPDF = async () => {
     if (!reportRef.current || !valuation || isExporting) return;
     setIsExporting(true);
 
     try {
-      const canvas = await html2canvas(reportRef.current, {
+      const element = reportRef.current;
+
+      // High-quality canvas capture
+      const canvas = await html2canvas(element, {
         scale: 2.5,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#faf6ed',
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
       });
 
       const imgData = canvas.toDataURL('image/png', 1.0);
+
+      // A4 PDF setup
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pdfWidth = 210;
       const pdfHeight = 297;
       const margin = 15;
-      const contentWidth = pdfWidth - 2 * margin;
+      const headerHeight = 25;
+      const footerHeight = 15;
+      const contentWidth = pdfWidth - (2 * margin);
+      const contentHeight = pdfHeight - headerHeight - footerHeight - margin;
+
+      // Calculate image dimensions
       const imgAspectRatio = canvas.width / canvas.height;
-      let finalWidth = contentWidth;
-      let finalHeight = contentWidth / imgAspectRatio;
+      const finalWidth = contentWidth;
+      const finalHeight = contentWidth / imgAspectRatio;
+      const pagesNeeded = Math.ceil(finalHeight / contentHeight);
 
-      pdf.setFontSize(18);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('FarmScope AI Property Valuation Report', margin, margin);
+      // Brand colors
+      const brandGreen = [46, 125, 50]; // FarmScope green
+      const warmGray = [120, 113, 108];
+      const darkText = [41, 37, 36];
 
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pdfWidth - margin - 45, margin);
+      // Helper function to draw header
+      const drawHeader = (pageNum: number, totalPages: number) => {
+        // Header background accent line
+        pdf.setDrawColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+        pdf.setLineWidth(0.8);
+        pdf.line(margin, 12, pdfWidth - margin, 12);
 
-      const yOffset = margin + 10;
-      if (finalHeight < pdfHeight - yOffset - margin) {
-        pdf.addImage(imgData, 'PNG', margin, yOffset, finalWidth, finalHeight);
+        // Logo/Brand text
+        pdf.setFontSize(16);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+        pdf.text('FarmScope AI', margin, 9);
+
+        // Report title
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(darkText[0], darkText[1], darkText[2]);
+        if (pageNum === 1) {
+          pdf.text('Property Valuation Report', margin + 45, 9);
+        } else {
+          pdf.text('Property Valuation Report (continued)', margin + 45, 9);
+        }
+
+        // Date on right
+        pdf.setFontSize(9);
+        pdf.setTextColor(warmGray[0], warmGray[1], warmGray[2]);
+        const currentDate = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        pdf.text(currentDate, pdfWidth - margin - 40, 9);
+
+        // Property info subtitle (first page only)
+        if (pageNum === 1) {
+          pdf.setFontSize(9);
+          pdf.setTextColor(warmGray[0], warmGray[1], warmGray[2]);
+          const propertyInfo = valuation.address || `${valuation.county} County, ${valuation.state}`;
+          pdf.text(propertyInfo, margin, 18);
+
+          if (valuation.parcelNumber) {
+            pdf.text(`Parcel #${valuation.parcelNumber}`, margin + 90, 18);
+          }
+          if (valuation.ownerName) {
+            pdf.text(`Owner: ${valuation.ownerName}`, pdfWidth - margin - 60, 18);
+          }
+        }
+      };
+
+      // Helper function to draw footer
+      const drawFooter = (pageNum: number, totalPages: number) => {
+        const footerY = pdfHeight - 8;
+
+        // Footer line
+        pdf.setDrawColor(230, 226, 221);
+        pdf.setLineWidth(0.3);
+        pdf.line(margin, footerY - 5, pdfWidth - margin, footerY - 5);
+
+        // Copyright
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(warmGray[0], warmGray[1], warmGray[2]);
+        pdf.text('\u00A9 FarmScope AI Agricultural Valuation Platform', margin, footerY);
+
+        // Disclaimer
+        pdf.setFontSize(6);
+        pdf.text('This valuation is an estimate for informational purposes only.', margin, footerY + 3);
+
+        // Page number
+        pdf.setFontSize(8);
+        pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth - margin - 18, footerY);
+      };
+
+      if (pagesNeeded === 1) {
+        // Single page PDF
+        drawHeader(1, 1);
+
+        const yPosition = headerHeight + 5;
+        pdf.addImage(imgData, 'PNG', margin, yPosition, finalWidth, finalHeight);
+
+        drawFooter(1, 1);
+      } else {
+        // Multi-page PDF
+        const pageContentHeight = contentHeight;
+
+        for (let page = 0; page < pagesNeeded; page++) {
+          if (page > 0) {
+            pdf.addPage();
+          }
+
+          drawHeader(page + 1, pagesNeeded);
+
+          // Calculate source crop for this page
+          const sourceY = page * (pageContentHeight * canvas.height / finalHeight);
+          const sourceHeight = Math.min(
+            pageContentHeight * canvas.height / finalHeight,
+            canvas.height - sourceY
+          );
+
+          // Render height for this page
+          const renderHeight = Math.min(pageContentHeight, finalHeight - (page * pageContentHeight));
+
+          // Create cropped canvas for this page
+          const pageCanvas = document.createElement('canvas');
+          const pageCtx = pageCanvas.getContext('2d');
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = sourceHeight;
+
+          if (pageCtx) {
+            pageCtx.fillStyle = '#faf6ed';
+            pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            pageCtx.drawImage(
+              canvas,
+              0, sourceY, canvas.width, sourceHeight,
+              0, 0, pageCanvas.width, pageCanvas.height
+            );
+
+            const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
+            pdf.addImage(pageImgData, 'PNG', margin, headerHeight + 5, finalWidth, renderHeight);
+          }
+
+          drawFooter(page + 1, pagesNeeded);
+        }
       }
 
-      const filename = `FarmScope AI_${valuation.address?.replace(/[^a-zA-Z0-9]/g, '_') || 'Property'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      // Generate filename
+      const propertyAddress = valuation.address?.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_') || 'Property';
+      const filename = `FarmScope_AI_Valuation_${propertyAddress}_${new Date().toISOString().split('T')[0]}.pdf`;
+
       pdf.save(filename);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again.');
     } finally {
       setIsExporting(false);
     }
