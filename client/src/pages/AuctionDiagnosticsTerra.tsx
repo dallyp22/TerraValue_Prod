@@ -388,6 +388,21 @@ export default function AuctionDiagnosticsTerra() {
   const [auctionPage, setAuctionPage] = useState(1);
   const auctionsPerPage = 10;
 
+  // Iowa-only filter - persisted to localStorage
+  const [showIowaOnly, setShowIowaOnly] = useState<boolean>(() => {
+    const saved = localStorage.getItem('farmscope-iowa-only-filter');
+    return saved === 'true';
+  });
+
+  // Handler for toggling Iowa filter
+  const toggleIowaFilter = () => {
+    const newValue = !showIowaOnly;
+    setShowIowaOnly(newValue);
+    localStorage.setItem('farmscope-iowa-only-filter', String(newValue));
+    // Dispatch custom event so EnhancedMap can react to the change
+    window.dispatchEvent(new CustomEvent('farmscope-iowa-filter-changed'));
+  };
+
   // Load initial data
   useEffect(() => {
     checkAuctions();
@@ -674,14 +689,42 @@ export default function AuctionDiagnosticsTerra() {
                 <p className="text-sm text-warm-500">System Diagnostics & Data Management</p>
               </div>
             </div>
-            <Button
-              onClick={() => (window.location.href = '/')}
-              variant="outline"
-              className="btn-terra-outline"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Map
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* Iowa-only toggle */}
+              <button
+                onClick={toggleIowaFilter}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm font-medium',
+                  showIowaOnly
+                    ? 'bg-field text-wheat-cream border-field shadow-terra'
+                    : 'bg-white text-warm-600 border-warm-300 hover:border-warm-400 hover:bg-warm-50'
+                )}
+              >
+                <Map className="w-4 h-4" />
+                <span>Iowa Only</span>
+                <div
+                  className={cn(
+                    'w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all',
+                    showIowaOnly
+                      ? 'bg-wheat-cream border-wheat-cream'
+                      : 'bg-transparent border-warm-400'
+                  )}
+                >
+                  {showIowaOnly && (
+                    <CheckCircle className="w-3 h-3 text-field" />
+                  )}
+                </div>
+              </button>
+
+              <Button
+                onClick={() => (window.location.href = '/')}
+                variant="outline"
+                className="btn-terra-outline"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Map
+              </Button>
+            </div>
           </div>
         </div>
       </header>

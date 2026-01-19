@@ -136,6 +136,35 @@ export default function EnhancedMap({
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const auctionsRef = useRef<Auction[]>([]);
   const [mapBounds, setMapBounds] = useState<string>('');
+
+  // Iowa-only filter - persisted to localStorage
+  const [showIowaOnly, setShowIowaOnly] = useState<boolean>(() => {
+    const saved = localStorage.getItem('farmscope-iowa-only-filter');
+    return saved === 'true';
+  });
+
+  // Listen for changes to Iowa filter from other components (like diagnostics page)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'farmscope-iowa-only-filter') {
+        setShowIowaOnly(e.newValue === 'true');
+      }
+    };
+
+    // Also listen for custom event for same-tab updates
+    const handleCustomEvent = () => {
+      const saved = localStorage.getItem('farmscope-iowa-only-filter');
+      setShowIowaOnly(saved === 'true');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('farmscope-iowa-filter-changed', handleCustomEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('farmscope-iowa-filter-changed', handleCustomEvent);
+    };
+  }, []);
   
   // Highlighted auction parcel state
   const [highlightedParcelGeometry, setHighlightedParcelGeometry] = useState<any>(null);
@@ -584,8 +613,10 @@ export default function EnhancedMap({
       setAuctions(auctionsData.auctions);
       
       // Convert auctions to GeoJSON features with color-coding based on urgency
+      // Apply Iowa-only filter if enabled (persisted in localStorage)
       const features = auctionsData.auctions
         .filter((a: Auction) => a.latitude && a.longitude)
+        .filter((a: Auction) => !showIowaOnly || a.state?.toLowerCase() === 'iowa')
         .map((auction: Auction) => {
           // Determine marker color based on days until auction
           let markerColor = '#10b981'; // green default (> 30 days)
@@ -627,7 +658,7 @@ export default function EnhancedMap({
         });
       }
     }
-  }, [auctionsData, showAuctionLayer]);
+  }, [auctionsData, showAuctionLayer, showIowaOnly]);
 
   // Function to load aggregated parcels from self-hosted database
   // NOTE: Removed loadAggregatedParcels function - now using vector tiles instead of GeoJSON
