@@ -82,6 +82,7 @@ interface EnhancedMapProps {
   showHighways?: boolean;
   useSelfHostedParcels?: boolean; // Enable self-hosted vector tiles instead of ArcGIS
   showAggregatedParcels?: boolean; // Show self-hosted aggregated ownership parcels
+  showArcgisParcels?: boolean; // Show ArcGIS individual parcels
 }
 
 export default function EnhancedMap({ 
@@ -112,7 +113,8 @@ export default function EnhancedMap({
   transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
   showHighways = true,
-  showAggregatedParcels = false
+  showAggregatedParcels = false,
+  showArcgisParcels = false
 }: EnhancedMapProps) {
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -684,6 +686,16 @@ export default function EnhancedMap({
   const loadParcels = async () => {
     if (!map.current) return;
     
+    // Only load ArcGIS parcels if explicitly enabled
+    if (!showArcgisParcels) {
+      // Clear ArcGIS parcels if disabled
+      const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+      }
+      return;
+    }
+    
     // FIRST: Check if we're in Harrison County - this takes priority over everything
     if (isInHarrisonCounty()) {
       console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset');
@@ -1003,8 +1015,8 @@ export default function EnhancedMap({
           },
         ]
       },
-      center: [-93.5, 42.0], // Iowa center
-      zoom: 8,
+      center: [-95.7159, 41.7407], // Woodbine, Iowa (Harrison County)
+      zoom: 13,
       attributionControl: false
     });
 
@@ -3047,6 +3059,24 @@ export default function EnhancedMap({
     // React Query automatically handles refetching when showAuctionLayer changes
   }, [showAuctionLayer]);
 
+  // Load/clear ArcGIS parcels based on showArcgisParcels prop
+  useEffect(() => {
+    if (!map.current) return;
+    
+    console.log(`🗺️ ArcGIS Parcels Toggle: ${showArcgisParcels ? 'ON' : 'OFF'}`);
+    
+    if (showArcgisParcels) {
+      loadParcels();
+    } else {
+      // Clear ArcGIS parcels
+      const source = map.current.getSource('parcels') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData({ type: 'FeatureCollection', features: [] });
+        console.log('   Cleared ArcGIS parcels');
+      }
+    }
+  }, [showArcgisParcels]);
+
   // Toggle aggregated parcels layer visibility
   // NOTE: Removed showAggregatedParcels useEffect - now using vector tiles only
 
@@ -3060,7 +3090,7 @@ export default function EnhancedMap({
       const zoom = map.current.getZoom();
       const harrison = isInHarrisonCounty();
       
-      console.log(`🔵 Aggregated Parcels Toggle Update: ${useSelfHostedParcels ? 'ON' : 'OFF'} | Zoom: ${zoom.toFixed(1)} | Harrison: ${harrison}`);
+      console.log(`🔵 Self-Hosted Parcels Toggle: ${useSelfHostedParcels ? 'ON' : 'OFF'} | Zoom: ${zoom.toFixed(1)} | Harrison: ${harrison}`);
       
       // Show/hide ownership layers (blue aggregated parcels)
       const ownershipFillOutline = ['ownership-fill', 'ownership-outline'];

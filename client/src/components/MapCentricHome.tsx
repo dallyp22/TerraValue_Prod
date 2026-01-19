@@ -46,7 +46,7 @@ export default function MapCentricHome() {
   // Map overlays state
   const [mapOverlays, setMapOverlays] = useState<MapOverlays>({
     showAuctions: true,
-    showAggregatedParcels: false,
+    parcelDisplayMode: 'off',
     showSubstations: false,
     showDatacenters: false,
     datacenterStates: {
@@ -452,8 +452,9 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
-          showAggregatedParcels={mapOverlays.showAggregatedParcels}
-          useSelfHostedParcels={mapOverlays.showAggregatedParcels || false} // Toggle controls self-hosted parcels
+          showAggregatedParcels={mapOverlays.parcelDisplayMode === 'self-hosted'}
+          useSelfHostedParcels={mapOverlays.parcelDisplayMode === 'self-hosted'}
+          showArcgisParcels={mapOverlays.parcelDisplayMode === 'arcgis'}
         />
 
         {/* Map Controls */}
@@ -524,16 +525,38 @@ export default function MapCentricHome() {
                 />
               </div>
               
-              {/* Aggregated Parcels Toggle */}
-              <div className="flex items-center justify-between gap-4">
+              {/* Parcel Display Mode - Three State Toggle */}
+              <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <Layers className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700">Aggregated Parcels</span>
+                  <span className="text-sm text-slate-700 font-medium">Parcel Display</span>
                 </div>
-                <Switch
-                  checked={mapOverlays.showAggregatedParcels}
-                  onCheckedChange={(checked) => setMapOverlays({ ...mapOverlays, showAggregatedParcels: checked })}
-                />
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant={mapOverlays.parcelDisplayMode === 'off' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'off' })}
+                    className="flex-1 h-8 text-xs"
+                  >
+                    Off
+                  </Button>
+                  <Button
+                    variant={mapOverlays.parcelDisplayMode === 'arcgis' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'arcgis' })}
+                    className="flex-1 h-8 text-xs"
+                  >
+                    ArcGIS
+                  </Button>
+                  <Button
+                    variant={mapOverlays.parcelDisplayMode === 'self-hosted' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'self-hosted' })}
+                    className="flex-1 h-8 text-xs"
+                  >
+                    Aggregated
+                  </Button>
+                </div>
               </div>
             </div>
 

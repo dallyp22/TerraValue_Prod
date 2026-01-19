@@ -35,7 +35,7 @@ export interface AuctionFilters {
 
 export interface MapOverlays {
   showAuctions: boolean;
-  showAggregatedParcels?: boolean;
+  parcelDisplayMode: 'off' | 'arcgis' | 'self-hosted';
   showSubstations: boolean;
   showDatacenters: boolean;
   datacenterStates: {
@@ -481,7 +481,7 @@ export default function LeftSidebar({
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
                       showAuctions: allEnabled,
-                      showAggregatedParcels: allEnabled,
+                      parcelDisplayMode: allEnabled ? 'self-hosted' : 'off',
                       showSubstations: allEnabled,
                       showDatacenters: allEnabled,
                       showLakes: allEnabled,
