@@ -1046,8 +1046,8 @@ export default function EnhancedMap({
           },
         ]
       },
-      center: [-95.7159, 41.7407], // Woodbine, Iowa (Harrison County)
-      zoom: 13,
+      center: [-95.5, 41.55], // Western Iowa overview (Harrison/Shelby/Pottawattamie area)
+      zoom: 9,
       attributionControl: false
     });
 
