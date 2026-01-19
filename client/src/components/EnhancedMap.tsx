@@ -3062,17 +3062,34 @@ export default function EnhancedMap({
   // Load/clear ArcGIS parcels based on showArcgisParcels prop
   useEffect(() => {
     if (!map.current) return;
-    
+
     console.log(`🗺️ ArcGIS Parcels Toggle: ${showArcgisParcels ? 'ON' : 'OFF'}`);
-    
+
+    const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+
     if (showArcgisParcels) {
+      // Set ArcGIS layer visibility to visible
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
+          console.log(`   └─ ${layerId}: visible`);
+        }
+      });
       loadParcels();
     } else {
-      // Clear ArcGIS parcels
+      // Hide ArcGIS layers and clear data
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+          console.log(`   └─ ${layerId}: none`);
+        }
+      });
       const source = map.current.getSource('parcels') as maplibregl.GeoJSONSource;
       if (source) {
         source.setData({ type: 'FeatureCollection', features: [] });
-        console.log('   Cleared ArcGIS parcels');
+        console.log('   Cleared ArcGIS parcels data');
       }
     }
   }, [showArcgisParcels]);
@@ -3153,16 +3170,18 @@ export default function EnhancedMap({
         }
       }
       
-      // Hide/show ArcGIS parcel layers based on toggle
-      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          // Keep ArcGIS layers hidden by default (user can enable via layer controls)
-          const visibility = 'none';
-          map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        }
-      });
+      // Only hide ArcGIS layers when self-hosted is ON (to prevent overlap)
+      // When self-hosted is OFF, let the showArcgisParcels useEffect control ArcGIS visibility
+      if (useSelfHostedParcels) {
+        const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+        arcgisLayers.forEach(layerId => {
+          const layer = map.current?.getLayer(layerId);
+          if (layer) {
+            map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+            console.log(`   └─ ${layerId}: none (hidden for self-hosted mode)`);
+          }
+        });
+      }
     };
     
     // Wait for style to load before manipulating layers
