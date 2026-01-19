@@ -544,7 +544,13 @@ export default function MapCentricHome() {
                   <Button
                     variant={mapOverlays.parcelDisplayMode === 'self-hosted' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'self-hosted' })}
+                    onClick={() => {
+                      setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'self-hosted' });
+                      // Auto-zoom to level where aggregated parcels are visible (need zoom > 10)
+                      if (mapRef && mapRef.getZoom() < 11) {
+                        mapRef.easeTo({ zoom: 11, duration: 500 });
+                      }
+                    }}
                     className="flex-1 h-8 text-xs"
                   >
                     Aggregated
