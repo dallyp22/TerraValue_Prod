@@ -3007,7 +3007,7 @@ export default function EnhancedMap({
       }
     });
 
-    // When in "Off" mode, ensure all other parcel layers are hidden
+    // When in "Off" mode, ensure all parcel layers are hidden
     if (isOffMode) {
       // Hide ArcGIS layers
       const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
@@ -3028,6 +3028,30 @@ export default function EnhancedMap({
       });
 
       console.log('   All parcel layers hidden (Off mode)');
+    }
+
+    // When in ArcGIS mode, hide ownership layers to prevent overlap
+    if (showArcgisParcels && !useSelfHostedParcels) {
+      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels', 'ownership-selected'];
+      ownershipLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+          console.log(`   └─ ${layerId}: none (hidden for ArcGIS mode)`);
+        }
+      });
+    }
+
+    // When in Aggregated mode, hide ArcGIS layers to prevent overlap
+    if (useSelfHostedParcels && !showArcgisParcels) {
+      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+          console.log(`   └─ ${layerId}: none (hidden for Aggregated mode)`);
+        }
+      });
     }
   }, [showArcgisParcels, useSelfHostedParcels, showOwnerLabels]);
 
