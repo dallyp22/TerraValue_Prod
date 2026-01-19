@@ -1993,6 +1993,54 @@ export default function EnhancedMap({
         }
       });
 
+      // Add important places source (places that should show even when zoomed out)
+      map.current!.addSource('important-places', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [-95.7159, 41.7407] // Woodbine, Iowa
+              },
+              properties: {
+                name: 'Woodbine'
+              }
+            }
+          ]
+        }
+      });
+
+      // Add important places label layer (shows at all zoom levels)
+      map.current!.addLayer({
+        id: 'important-places-labels',
+        type: 'symbol',
+        source: 'important-places',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            6, 11,
+            10, 14,
+            14, 16
+          ],
+          'text-anchor': 'center',
+          'text-offset': [0, 0],
+          'visibility': showCityLabels ? 'visible' : 'none'
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#1a1814',
+          'text-halo-width': 2,
+          'text-halo-blur': 1
+        }
+      });
+
       // Add substations/infrastructure data source
       map.current!.addSource('substations', {
         type: 'geojson',
@@ -3302,7 +3350,7 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
 
-    const layers = ['place-labels-city', 'place-labels-village'];
+    const layers = ['place-labels-city', 'place-labels-village', 'important-places-labels'];
 
     layers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
