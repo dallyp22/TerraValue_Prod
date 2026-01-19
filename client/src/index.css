@@ -2,6 +2,389 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   TerraValue Design System - "Modern Cartographic"
+   Iowa Land Intelligence Platform
+   ============================================ */
+
+@layer base {
+  :root {
+    /* TerraValue Color System */
+    --terra-black: 30 12% 9%;
+    --terra-brown: 25 33% 18%;
+    --terra-umber: 25 45% 28%;
+
+    --field-green: 94 54% 20%;
+    --field-spring: 94 54% 31%;
+
+    --wheat-pale: 36 34% 85%;
+    --wheat-cream: 43 50% 96%;
+
+    --gold: 40 62% 53%;
+    --gold-light: 43 82% 67%;
+
+    /* Warm Neutral Scale */
+    --warm-50: 40 14% 97%;
+    --warm-100: 36 11% 95%;
+    --warm-200: 36 10% 90%;
+    --warm-300: 35 8% 81%;
+    --warm-400: 33 6% 63%;
+    --warm-500: 32 5% 44%;
+    --warm-600: 30 7% 34%;
+    --warm-700: 30 8% 25%;
+    --warm-800: 30 9% 17%;
+    --warm-900: 30 12% 9%;
+
+    /* shadcn/ui semantic tokens - TerraValue themed */
+    --background: 43 50% 98%;
+    --foreground: 30 12% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 12% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 12% 9%;
+    --primary: 94 54% 20%;
+    --primary-foreground: 43 50% 96%;
+    --secondary: 36 34% 90%;
+    --secondary-foreground: 30 12% 9%;
+    --muted: 36 11% 95%;
+    --muted-foreground: 32 5% 44%;
+    --accent: 40 62% 53%;
+    --accent-foreground: 30 12% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 10% 88%;
+    --input: 36 10% 88%;
+    --ring: 40 62% 53%;
+    --radius: 0.625rem;
+
+    /* Chart colors - Earth tones */
+    --chart-1: 94 54% 20%;
+    --chart-2: 40 62% 53%;
+    --chart-3: 25 45% 28%;
+    --chart-4: 94 54% 31%;
+    --chart-5: 36 34% 70%;
+
+    /* Sidebar colors */
+    --sidebar-background: 43 50% 98%;
+    --sidebar-foreground: 30 12% 9%;
+    --sidebar-primary: 94 54% 20%;
+    --sidebar-primary-foreground: 43 50% 96%;
+    --sidebar-accent: 36 34% 90%;
+    --sidebar-accent-foreground: 30 12% 9%;
+    --sidebar-border: 36 10% 88%;
+    --sidebar-ring: 40 62% 53%;
+  }
+
+  .dark {
+    --background: 30 12% 9%;
+    --foreground: 43 50% 96%;
+    --card: 30 9% 12%;
+    --card-foreground: 43 50% 96%;
+    --popover: 30 9% 12%;
+    --popover-foreground: 43 50% 96%;
+    --primary: 94 54% 35%;
+    --primary-foreground: 30 12% 9%;
+    --secondary: 30 8% 20%;
+    --secondary-foreground: 43 50% 96%;
+    --muted: 30 8% 20%;
+    --muted-foreground: 33 6% 63%;
+    --accent: 40 62% 53%;
+    --accent-foreground: 30 12% 9%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 8% 20%;
+    --input: 30 8% 20%;
+    --ring: 40 62% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Display headings use serif font */
+  h1, h2, .font-display {
+    font-family: 'DM Serif Display', Georgia, serif;
+  }
+
+  /* Mono for data/numbers */
+  .font-mono, code, pre, .tabular-nums {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+/* ============================================
+   TerraValue Component Styles
+   ============================================ */
+
+@layer components {
+  /* TerraValue Button Variants */
+  .btn-terra-primary {
+    @apply bg-field text-wheat-cream font-medium px-4 py-2.5 rounded-lg
+           shadow-terra hover:shadow-terra-lg
+           transition-all duration-200 ease-out
+           hover:bg-field-spring active:scale-[0.98];
+  }
+
+  .btn-terra-secondary {
+    @apply border-2 border-gold text-gold bg-transparent font-medium px-4 py-2.5 rounded-lg
+           transition-all duration-200 ease-out
+           hover:bg-gold/10 active:scale-[0.98];
+  }
+
+  .btn-terra-ghost {
+    @apply text-warm-600 bg-transparent font-medium px-3 py-2 rounded-lg
+           transition-all duration-200 ease-out
+           hover:bg-warm-100 hover:text-warm-800;
+  }
+
+  /* TerraValue Card Variants */
+  .card-terra-elevated {
+    @apply bg-white rounded-xl shadow-terra border border-warm-200
+           transition-shadow duration-200
+           hover:shadow-terra-lg;
+  }
+
+  .card-terra-inset {
+    @apply bg-warm-50 rounded-lg shadow-inset-terra border border-warm-200/50;
+  }
+
+  .card-terra-data {
+    @apply bg-wheat-cream rounded-lg border border-warm-200
+           bg-grid-paper bg-[length:40px_40px];
+  }
+
+  /* CSR2 Quality Indicators */
+  .csr-badge-excellent {
+    @apply bg-csr-excellent/10 text-csr-excellent border border-csr-excellent/20
+           px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .csr-badge-good {
+    @apply bg-csr-good/10 text-csr-good border border-csr-good/20
+           px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .csr-badge-fair {
+    @apply bg-csr-fair/10 text-csr-fair border border-csr-fair/20
+           px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .csr-badge-poor {
+    @apply bg-csr-poor/10 text-csr-poor border border-csr-poor/20
+           px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  /* Contour pattern decorations */
+  .contour-border-top {
+    @apply relative;
+    &::before {
+      content: '';
+      @apply absolute top-0 left-0 right-0 h-1 bg-contour bg-repeat-x opacity-50;
+    }
+  }
+
+  /* Metric display */
+  .metric-display {
+    @apply font-mono text-2xl font-semibold tracking-tight text-terra-black;
+  }
+
+  .metric-label {
+    @apply text-xs font-medium uppercase tracking-wider text-warm-500;
+  }
+
+  /* Section headers */
+  .section-header {
+    @apply font-display text-xl text-terra-black;
+  }
+
+  /* Form field styling */
+  .field-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-warm-500 mb-1.5;
+  }
+
+  .field-input {
+    @apply w-full px-3 py-2.5 bg-white border-b-2 border-warm-300
+           focus:border-gold focus:outline-none
+           transition-colors duration-200
+           font-body text-terra-black placeholder:text-warm-400;
+  }
+
+  .field-hint {
+    @apply text-xs text-warm-400 mt-1;
+  }
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+@layer utilities {
+  /* Text gradient */
+  .text-gradient-terra {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-field to-field-spring;
+  }
+
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-gold to-gold-light;
+  }
+
+  /* Contour background utilities */
+  .bg-contour-subtle {
+    background-image: url('/patterns/contour-lines.svg');
+    background-size: 200px 200px;
+    @apply opacity-30;
+  }
+
+  /* Touch targets */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* TerraValue shimmer loading */
+  .shimmer-terra {
+    background: linear-gradient(90deg,
+      hsl(var(--warm-100)) 0%,
+      hsl(var(--wheat-pale)) 50%,
+      hsl(var(--warm-100)) 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer-terra 2s linear infinite;
+  }
+
+  @keyframes shimmer-terra {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+  }
+
+  /* Smooth scrolling for mobile */
+  @media (max-width: 640px) {
+    html {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+
+    input, select, textarea, button {
+      min-height: 44px;
+    }
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  .animate-slide-in-bottom {
+    animation: slideInBottom 0.3s ease-out;
+  }
+
+  .animate-slide-in-top {
+    animation: slideInTop 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+}
+
+/* ============================================
+   Keyframe Animations
+   ============================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideInBottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideInTop {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideInFromTop {
+  from { opacity: 0; transform: translate(-50%, -20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes progressBar {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.animate-slide-in-top { animation: slideInFromTop 0.5s ease-out; }
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+.animate-bounce { animation: bounce 1.5s ease-in-out infinite; }
+.animate-fade { animation: fadeInOut 2s ease-in-out infinite; }
+
+/* ============================================
+   Map & Layout Styles
+   ============================================ */
+
 /* Fix iOS touch events on map */
 .maplibregl-canvas,
 .maplibregl-map {
@@ -9,20 +392,17 @@
   -webkit-touch-callout: none;
 }
 
-/* Ensure map container doesn't block touches */
 .map-container {
   touch-action: pan-x pan-y;
 }
 
-/* Fix iOS click delay - but NOT on map elements */
-body, 
-html,
+/* Fix iOS click delay */
+body, html,
 div:not(.maplibregl-canvas-container):not(.maplibregl-map),
 p, span, h1, h2, h3, h4, h5, h6 {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
-/* HTML and body must allow touch events */
 html, body {
   touch-action: pan-x pan-y;
   -webkit-text-size-adjust: 100%;
@@ -31,7 +411,6 @@ html, body {
   position: relative;
 }
 
-/* Explicitly ALLOW map elements to handle touches */
 .maplibregl-canvas-container,
 .maplibregl-canvas,
 .maplibregl-map {
@@ -41,105 +420,9 @@ html, body {
   -webkit-touch-callout: none !important;
 }
 
-/* Ensure buttons and interactive elements are clickable on iOS */
-button,
-a,
-[role="button"],
-.touch-target {
+button, a, [role="button"], .touch-target {
   cursor: pointer;
-  -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
-}
-
-/* Pipeline Animation Styles */
-@keyframes slideInFromTop {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -20px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes progressBar {
-  0% {
-    width: 0%;
-  }
-  100% {
-    width: 100%;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes fadeInOut {
-  0%, 100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.animate-slide-in-top {
-  animation: slideInFromTop 0.5s ease-out;
-}
-
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  background-size: 1000px 100%;
-  animation: shimmer 2s infinite;
-}
-
-.animate-bounce {
-  animation: bounce 1.5s ease-in-out infinite;
-}
-
-.animate-fade {
-  animation: fadeInOut 2s ease-in-out infinite;
+  -webkit-tap-highlight-color: rgba(212, 160, 60, 0.15);
 }
 
 /* Global map control positioning */
@@ -152,314 +435,6 @@ a,
 .maplibregl-ctrl-top-right {
   right: 10px !important;
   top: 10px !important;
-}
-
-/* Mobile-specific optimizations */
-@media (max-width: 640px) {
-  /* Prevent horizontal scroll on mobile */
-  html, body {
-    overflow-x: hidden;
-  }
-  
-  /* Ensure touch targets are large enough */
-  button, .touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  
-  /* Prevent text selection on interactive elements */
-  button, a, .clickable {
-    -webkit-user-select: none;
-    user-select: none;
-  }
-}
-
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.75rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-/* Print-specific styles for professional PDF output */
-@media print {
-  * {
-    -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  body {
-    font-size: 12px !important;
-    line-height: 1.4 !important;
-  }
-  
-  .print\\:page-break-before {
-    page-break-before: always !important;
-  }
-  
-  .print\\:page-break-after {
-    page-break-after: always !important;
-  }
-  
-  .print\\:break-inside-avoid {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-  
-  /* Ensure backgrounds and colors print */
-  .bg-green-50, .bg-blue-50, .bg-slate-50, .bg-purple-50 {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  /* Optimize spacing for print */
-  .space-y-6 > * + * {
-    margin-top: 1rem !important;
-  }
-  
-  .space-y-4 > * + * {
-    margin-top: 0.75rem !important;
-  }
-  
-  /* Better text rendering and spacing */
-  body, p, span, div {
-    -webkit-font-smoothing: antialiased !important;
-    -moz-osx-font-smoothing: grayscale !important;
-  }
-  
-  /* Ensure proper spacing around inline elements */
-  .ml-1 {
-    margin-left: 0.25rem !important;
-  }
-  
-  .ml-2 {
-    margin-left: 0.5rem !important;
-  }
-  
-  /* Prevent text crushing */
-  .font-medium, .font-semibold, .font-bold {
-    letter-spacing: 0.01em !important;
-  }
-  
-  /* Better line height for amber/orange sections */
-  .text-amber-700, .text-amber-600, .text-amber-900 {
-    line-height: 1.5 !important;
-  }
-  
-  /* Ensure proper spacing in gradient sections */
-  .bg-gradient-to-br {
-    padding: 1rem !important;
-  }
-  
-  /* Remove hover effects in print */
-  .hover\:shadow-lg:hover,
-  .hover\:-translate-y-0\.5:hover {
-    box-shadow: none !important;
-    transform: none !important;
-  }
-}
-
-/* Enhanced Mobile Touch Targets */
-@layer utilities {
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  
-  /* Smooth scrolling for mobile */
-  @media (max-width: 640px) {
-    html {
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    /* Prevent horizontal scroll on mobile */
-    body {
-      overflow-x: hidden;
-    }
-    
-    /* Adjust font sizes for mobile readability */
-    .text-xs {
-      font-size: 0.75rem;
-    }
-    
-    .text-sm {
-      font-size: 0.875rem;
-    }
-    
-    .text-base {
-      font-size: 1rem;
-    }
-    
-    /* Better tap targets for mobile inputs */
-    input, select, textarea, button {
-      min-height: 44px;
-    }
-    
-    /* Improve card spacing on mobile */
-    .space-y-4 > * + * {
-      margin-top: 0.75rem;
-    }
-    
-    /* Adjust padding for mobile screens */
-    .p-6 {
-      padding: 1rem;
-    }
-    
-    .p-4 {
-      padding: 0.875rem;
-    }
-    
-    /* Ensure modals and overlays are full width on mobile */
-    .max-w-4xl, .max-w-3xl, .max-w-2xl {
-      max-width: 100%;
-    }
-  }
-  
-  /* Animations for overlays */
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-in;
-  }
-  
-  .animate-slide-in-right {
-    animation: slideInRight 0.3s ease-out;
-  }
-  
-  .animate-slide-in-bottom {
-    animation: slideInBottom 0.3s ease-out;
-  }
-  
-  .animate-slide-in-top {
-    animation: slideInTop 0.3s ease-out;
-  }
-  
-  .animate-scale-in {
-    animation: scaleIn 0.3s ease-out;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideInBottom {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInTop {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* Improved tap highlights */
-button, a, input, select, textarea {
-  -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
-}
-
-/* Remove default input styling on iOS */
-input[type="text"],
-input[type="email"],
-input[type="number"],
-input[type="password"],
-input[type="search"],
-input[type="tel"],
-input[type="url"],
-select,
-textarea {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  border-radius: 0.75rem;
-}
-
-/* Enhanced focus states for accessibility */
-.focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
 }
 
 /* Enhanced MapLibre popup close button styling */
@@ -476,19 +451,20 @@ textarea {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
   transition: all 0.2s ease !important;
   font-weight: bold !important;
-  color: #374151 !important;
+  color: #45423c !important;
 }
 
 .maplibregl-popup-close-button:hover {
-  background-color: #f3f4f6 !important;
+  background-color: #f4f3f0 !important;
   border-color: rgba(0, 0, 0, 0.25) !important;
   transform: scale(1.1) !important;
-  color: #1f2937 !important;
+  color: #1a1814 !important;
 }
 
-/* Enhanced Auction Map UI Styles */
+/* ============================================
+   App Layout Grid
+   ============================================ */
 
-/* Main 2-column grid layout */
 .app-grid-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -506,20 +482,23 @@ textarea {
 .left-sidebar {
   display: flex;
   flex-direction: column;
-  background: white;
+  background: hsl(var(--wheat-cream));
   overflow-y: auto;
+  border-right: 1px solid hsl(var(--warm-200));
 }
 
 .search-section {
   padding: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid hsl(var(--warm-200));
+  background: white;
 }
 
 .search-section h2 {
+  font-family: 'DM Serif Display', Georgia, serif;
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 400;
   margin-bottom: 16px;
-  color: #111827;
+  color: hsl(var(--terra-black));
 }
 
 .search-box {
@@ -571,7 +550,7 @@ textarea {
   gap: 8px;
   padding: 8px 0;
   font-size: 14px;
-  color: #374151;
+  color: hsl(var(--warm-600));
   cursor: pointer;
 }
 
@@ -583,8 +562,8 @@ textarea {
 /* Results Summary */
 .results-summary {
   padding: 16px 24px;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
+  background: white;
+  border-top: 1px solid hsl(var(--warm-200));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -592,12 +571,13 @@ textarea {
 
 .result-count {
   font-size: 14px;
-  color: #6b7280;
+  color: hsl(var(--warm-500));
 }
 
 .result-count strong {
-  color: #111827;
+  color: hsl(var(--terra-black));
   font-size: 18px;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 /* Right Sidebar */
@@ -679,19 +659,20 @@ textarea {
 
 .property-title-section {
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid hsl(var(--warm-200));
 }
 
 .property-title-section h2 {
+  font-family: 'DM Serif Display', Georgia, serif;
   font-size: 28px;
-  font-weight: 700;
-  color: #111827;
+  font-weight: 400;
+  color: hsl(var(--terra-black));
   margin-bottom: 4px;
 }
 
 .property-location {
   font-size: 14px;
-  color: #6b7280;
+  color: hsl(var(--warm-500));
 }
 
 /* Metrics Grid */
@@ -700,34 +681,38 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding: 20px 24px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: hsl(var(--warm-50));
+  border-bottom: 1px solid hsl(var(--warm-200));
 }
 
 .metric-label {
   display: block;
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 11px;
+  color: hsl(var(--warm-500));
   margin-bottom: 4px;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .metric-value {
   display: block;
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: hsl(var(--terra-black));
 }
 
 .metric-subtext {
   font-size: 12px;
-  color: #6b7280;
+  color: hsl(var(--warm-500));
 }
 
 /* Tabs */
 .detail-tabs {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid hsl(var(--warm-200));
   padding: 0 24px;
 }
 
@@ -740,8 +725,8 @@ textarea {
 /* Property Actions */
 .property-actions {
   padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid hsl(var(--warm-200));
+  background: hsl(var(--warm-50));
 }
 
 .action-row {
@@ -766,9 +751,9 @@ textarea {
   width: 40px;
   height: 40px;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid hsl(var(--warm-200));
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(26, 24, 20, 0.1);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -777,8 +762,8 @@ textarea {
 }
 
 .map-control-btn:hover {
-  background: #f9fafb;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: hsl(var(--warm-50));
+  box-shadow: 0 4px 12px rgba(26, 24, 20, 0.15);
 }
 
 .map-controls-bottom-right {
@@ -794,7 +779,7 @@ textarea {
   background: white;
   padding: 8px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(26, 24, 20, 0.1);
 }
 
 .layer-option {
@@ -809,7 +794,7 @@ textarea {
 
 .layer-option:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(26, 24, 20, 0.2);
 }
 
 .map-legend {
@@ -819,7 +804,7 @@ textarea {
   background: white;
   padding: 16px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(26, 24, 20, 0.1);
   z-index: 1000;
   max-width: 250px;
 }
@@ -828,7 +813,7 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #111827;
+  color: hsl(var(--terra-black));
 }
 
 .legend-item {
@@ -837,7 +822,7 @@ textarea {
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: hsl(var(--warm-500));
 }
 
 .legend-marker {
@@ -847,23 +832,26 @@ textarea {
   flex-shrink: 0;
 }
 
-/* Mobile Responsive Adjustments */
+/* ============================================
+   Mobile Responsive Adjustments
+   ============================================ */
+
 @media (max-width: 1024px) {
   .map-legend {
     bottom: 8rem;
     left: 8px;
     padding: 12px;
   }
-  
+
   .map-controls-bottom-right {
     bottom: 8rem;
     right: 8px;
   }
-  
+
   .layer-switcher {
     padding: 6px;
   }
-  
+
   .layer-option {
     width: 60px;
     height: 60px;
@@ -871,19 +859,100 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden;
+  }
+
+  button, .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  button, a, .clickable {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   .property-header {
     height: 180px;
   }
-  
+
   .property-title-section h2 {
     font-size: 24px;
   }
-  
+
   .metrics-grid {
     padding: 16px;
   }
-  
+
   .metric-value {
     font-size: 20px;
   }
+
+  .p-6 { padding: 1rem; }
+  .p-4 { padding: 0.875rem; }
+  .max-w-4xl, .max-w-3xl, .max-w-2xl { max-width: 100%; }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  .print\\:page-break-before { page-break-before: always !important; }
+  .print\\:page-break-after { page-break-after: always !important; }
+  .print\\:break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  body, p, span, div {
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+  }
+
+  .hover\\:shadow-lg:hover,
+  .hover\\:-translate-y-0\\.5:hover {
+    box-shadow: none !important;
+    transform: none !important;
+  }
+}
+
+/* ============================================
+   Form Input Styles
+   ============================================ */
+
+input, select, textarea {
+  -webkit-tap-highlight-color: rgba(212, 160, 60, 0.15);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+select,
+textarea {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border-radius: 0.625rem;
+}
+
+/* Enhanced focus states */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2;
 }

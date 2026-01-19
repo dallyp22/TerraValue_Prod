@@ -474,13 +474,13 @@ export default function MapCentricHome() {
             e.stopPropagation();
             setLeftSidebarOpen(true);
           }}
-          className="fixed top-4 left-4 z-50 bg-red-500 hover:bg-red-600 text-white shadow-2xl touch-target lg:hidden"
+          className="fixed top-4 left-4 z-50 bg-field hover:bg-field-spring text-wheat-cream shadow-terra-lg touch-target lg:hidden transition-colors duration-200"
           size="icon"
-          style={{ 
+          style={{
             touchAction: 'manipulation',
             minWidth: '48px',
             minHeight: '48px',
-            WebkitTapHighlightColor: 'rgba(255, 0, 0, 0.3)'
+            WebkitTapHighlightColor: 'rgba(212, 160, 60, 0.3)'
           }}
         >
           <Menu className="h-6 w-6" />
