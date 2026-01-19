@@ -779,29 +779,10 @@ export default function EnhancedMap({
       }
     });
     
-    // THEN: Skip ArcGIS loading if using self-hosted parcels
-    if (useSelfHostedParcels) {
-      console.log('🔵 Using self-hosted vector tiles - skipping ArcGIS load');
-      
-      // Ensure ArcGIS layers stay hidden
-      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-        }
-      });
-      
-      // Clear ArcGIS GeoJSON data to be safe
-      const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
-      if (source && source.setData) {
-        source.setData({ type: 'FeatureCollection', features: [] });
-      }
-      
-      return;
-    }
-    
-    // REST: Load ArcGIS parcels for counties outside Harrison (when toggle is OFF)
+    // NOTE: Mode switching (ArcGIS vs Aggregated) is handled by the unified parcel visibility effect
+    // This function only handles ArcGIS parcel loading when showArcgisParcels is true
+
+    // Load ArcGIS parcels for counties outside Harrison
     console.log('🟢 Loading ArcGIS parcels...');
     
     if (map.current.getZoom() <= 12) {
@@ -3030,7 +3011,7 @@ export default function EnhancedMap({
       console.log('   All parcel layers hidden (Off mode)');
     }
 
-    // When in ArcGIS mode, hide ownership layers to prevent overlap
+    // When in ArcGIS mode, hide ownership layers and trigger data refresh
     if (showArcgisParcels && !useSelfHostedParcels) {
       const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels', 'ownership-selected'];
       ownershipLayers.forEach(layerId => {
@@ -3040,9 +3021,31 @@ export default function EnhancedMap({
           console.log(`   └─ ${layerId}: none (hidden for ArcGIS mode)`);
         }
       });
+
+      // Show ArcGIS layers and trigger data load
+      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
+      arcgisLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
+      });
+
+      // Force a tiny map movement to trigger ArcGIS parcel reload
+      console.log('🔄 Triggering ArcGIS parcel refresh...');
+      const currentZoom = map.current?.getZoom();
+      if (currentZoom !== undefined) {
+        map.current?.setZoom(currentZoom - 0.001);
+        requestAnimationFrame(() => {
+          if (map.current) {
+            map.current.setZoom(currentZoom);
+            loadParcels();
+          }
+        });
+      }
     }
 
-    // When in Aggregated mode, hide ArcGIS layers to prevent overlap
+    // When in Aggregated mode, hide ArcGIS layers and trigger tile refresh
     if (useSelfHostedParcels && !showArcgisParcels) {
       const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
       arcgisLayers.forEach(layerId => {
@@ -3052,6 +3055,27 @@ export default function EnhancedMap({
           console.log(`   └─ ${layerId}: none (hidden for Aggregated mode)`);
         }
       });
+
+      // Show ownership layers and trigger tile refresh
+      const ownershipLayers = ['ownership-fill', 'ownership-outline'];
+      ownershipLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
+      });
+
+      // Force a tiny map movement to trigger vector tile reload
+      console.log('🔄 Triggering Aggregated parcel refresh...');
+      const currentZoom = map.current?.getZoom();
+      if (currentZoom !== undefined) {
+        map.current?.setZoom(currentZoom - 0.001);
+        requestAnimationFrame(() => {
+          if (map.current) {
+            map.current.setZoom(currentZoom);
+          }
+        });
+      }
     }
   }, [showArcgisParcels, useSelfHostedParcels, showOwnerLabels]);
 
