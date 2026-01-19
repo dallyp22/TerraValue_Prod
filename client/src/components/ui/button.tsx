@@ -20,7 +20,7 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
 
-        // TerraValue Design System variants
+        // FarmScope AI Design System variants
         terra: "bg-field text-wheat-cream font-medium shadow-terra hover:shadow-terra-lg hover:bg-field-spring active:scale-[0.98]",
         "terra-secondary": "border-2 border-gold text-gold bg-transparent font-medium hover:bg-gold/10 active:scale-[0.98]",
         "terra-ghost": "text-warm-600 bg-transparent font-medium hover:bg-warm-100 hover:text-warm-800",

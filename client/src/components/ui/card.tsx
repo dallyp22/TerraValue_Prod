@@ -11,7 +11,7 @@ const cardVariants = cva(
         // Original shadcn variant
         default: "border bg-card shadow-sm",
 
-        // TerraValue Design System variants
+        // FarmScope AI Design System variants
         elevated: "bg-white border border-warm-200 shadow-terra hover:shadow-terra-lg",
         inset: "bg-warm-50 shadow-inset-terra border border-warm-200/50",
         data: "bg-wheat-cream border border-warm-200 bg-[url('/patterns/grid-paper.svg')] bg-[length:40px_40px]",
@@ -100,7 +100,7 @@ const CardFooter = React.forwardRef<
 ))
 CardFooter.displayName = "CardFooter"
 
-// TerraValue-specific card components
+// FarmScope AI-specific card components
 
 const MetricCard = React.forwardRef<
   HTMLDivElement,

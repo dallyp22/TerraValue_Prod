@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 /* ============================================
-   TerraValue Design System - "Modern Cartographic"
+   FarmScope AI Design System - "Modern Cartographic"
    Iowa Land Intelligence Platform
    ============================================ */
 
 @layer base {
   :root {
-    /* TerraValue Color System */
+    /* FarmScope AI Color System */
     --terra-black: 30 12% 9%;
     --terra-brown: 25 33% 18%;
     --terra-umber: 25 45% 28%;
@@ -35,7 +35,7 @@
     --warm-800: 30 9% 17%;
     --warm-900: 30 12% 9%;
 
-    /* shadcn/ui semantic tokens - TerraValue themed */
+    /* shadcn/ui semantic tokens - FarmScope AI themed */
     --background: 43 50% 98%;
     --foreground: 30 12% 9%;
     --card: 0 0% 100%;
@@ -124,11 +124,11 @@
 }
 
 /* ============================================
-   TerraValue Component Styles
+   FarmScope AI Component Styles
    ============================================ */
 
 @layer components {
-  /* TerraValue Button Variants */
+  /* FarmScope AI Button Variants */
   .btn-terra-primary {
     @apply bg-field text-wheat-cream font-medium px-4 py-2.5 rounded-lg
            shadow-terra hover:shadow-terra-lg
@@ -148,7 +148,7 @@
            hover:bg-warm-100 hover:text-warm-800;
   }
 
-  /* TerraValue Card Variants */
+  /* FarmScope AI Card Variants */
   .card-terra-elevated {
     @apply bg-white rounded-xl shadow-terra border border-warm-200
            transition-shadow duration-200
@@ -252,7 +252,7 @@
     min-width: 44px;
   }
 
-  /* TerraValue shimmer loading */
+  /* FarmScope AI shimmer loading */
   .shimmer-terra {
     background: linear-gradient(90deg,
       hsl(var(--warm-100)) 0%,

@@ -2,8 +2,8 @@ import { Link, useLocation } from "wouter";
 import { MapPin, Bell, User, Gavel, Search, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// TerraValue Logo - Stylized contour lines forming a "T"
-function TerraLogo() {
+// FarmScope AI Logo - Stylized contour lines with scope/crosshair element
+function FarmScopeLogo() {
   return (
     <svg
       width="32"
@@ -15,44 +15,31 @@ function TerraLogo() {
     >
       {/* Background circle */}
       <circle cx="16" cy="16" r="16" className="fill-field" />
-      {/* Contour lines forming abstract "T" */}
+      {/* Contour lines - rolling hills/fields */}
       <path
-        d="M8 10 Q16 8 24 10"
+        d="M4 18 Q10 14 16 16 Q22 18 28 14"
         stroke="#e8dcc4"
         strokeWidth="1.5"
         fill="none"
         strokeLinecap="round"
-        opacity="0.6"
+        opacity="0.5"
       />
       <path
-        d="M6 14 Q16 12 26 14"
+        d="M4 22 Q10 18 16 20 Q22 22 28 18"
         stroke="#e8dcc4"
         strokeWidth="1.5"
         fill="none"
         strokeLinecap="round"
-        opacity="0.8"
+        opacity="0.7"
       />
-      <path
-        d="M8 18 Q16 16 24 18"
-        stroke="#e8dcc4"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-      {/* Vertical line of T */}
-      <path
-        d="M16 12 L16 26"
-        stroke="#faf6ed"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      {/* Horizontal line of T */}
-      <path
-        d="M10 12 L22 12"
-        stroke="#faf6ed"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
+      {/* Scope/crosshair element */}
+      <circle cx="16" cy="12" r="5" stroke="#faf6ed" strokeWidth="2" fill="none" />
+      <path d="M16 5 L16 8" stroke="#faf6ed" strokeWidth="2" strokeLinecap="round" />
+      <path d="M16 16 L16 19" stroke="#faf6ed" strokeWidth="2" strokeLinecap="round" />
+      <path d="M9 12 L12 12" stroke="#faf6ed" strokeWidth="2" strokeLinecap="round" />
+      <path d="M20 12 L23 12" stroke="#faf6ed" strokeWidth="2" strokeLinecap="round" />
+      {/* Center dot */}
+      <circle cx="16" cy="12" r="1.5" fill="#faf6ed" />
     </svg>
   );
 }
@@ -71,10 +58,10 @@ export function Header() {
         <div className="flex justify-between items-center h-14">
           {/* Logo & Wordmark */}
           <Link href="/" className="flex items-center gap-3 group">
-            <TerraLogo />
+            <FarmScopeLogo />
             <div className="hidden sm:block">
               <h1 className="font-display text-lg text-terra-black tracking-tight group-hover:text-field transition-colors">
-                TerraValue
+                FarmScope <span className="text-field">AI</span>
               </h1>
               <p className="text-[10px] text-warm-500 font-medium uppercase tracking-widest -mt-0.5">
                 Iowa Land Intelligence

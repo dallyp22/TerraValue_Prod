@@ -39,7 +39,7 @@ import {
   Zap,
 } from 'lucide-react';
 
-// TerraValue styled metric card
+// FarmScope AI styled metric card
 function MetricCard({
   icon: Icon,
   label,

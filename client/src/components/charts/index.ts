@@ -1,4 +1,4 @@
-// TerraValue Chart Components
+// FarmScope AI Chart Components
 // Data visualization for agricultural land valuation
 
 export { CSR2Gauge, CSR2Indicator } from './CSR2Gauge';
