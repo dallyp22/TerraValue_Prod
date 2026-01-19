@@ -137,6 +137,11 @@ export default function EnhancedMap({
   const auctionsRef = useRef<Auction[]>([]);
   const [mapBounds, setMapBounds] = useState<string>('');
 
+  // Lazy loading refs - track whether each GeoJSON source has been loaded
+  const lakesLoadedRef = useRef(false);
+  const powerlinesLoadedRef = useRef(false);
+  const transmissionLoadedRef = useRef(false);
+
   // Iowa-only filter - persisted to localStorage
   const [showIowaOnly, setShowIowaOnly] = useState<boolean>(() => {
     const saved = localStorage.getItem('farmscope-iowa-only-filter');
@@ -2049,42 +2054,42 @@ export default function EnhancedMap({
         data: '/WI_DataCenters.geojson'
       });
 
-      // Add lakes data source
+      // Add lakes data source (lazy loaded - starts empty)
       map.current!.addSource('lakes', {
         type: 'geojson',
-        data: '/lakes.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Add power lines data source
+      // Add power lines data source (lazy loaded - starts empty)
       map.current!.addSource('powerlines', {
         type: 'geojson',
-        data: '/powerlines.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Add transmission line data sources for each state
+      // Add transmission line data sources for each state (lazy loaded - start empty)
       map.current!.addSource('transmission-kansas', {
         type: 'geojson',
-        data: '/KS_HighVtransmission.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
       map.current!.addSource('transmission-minnesota', {
         type: 'geojson',
-        data: '/MN_HighVtransmission.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
       map.current!.addSource('transmission-missouri', {
         type: 'geojson',
-        data: '/MO_HighVtransmission.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
       map.current!.addSource('transmission-nebraska', {
         type: 'geojson',
-        data: '/NE_HighVtransmission.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
       map.current!.addSource('transmission-southdakota', {
         type: 'geojson',
-        data: '/SD_HighVtransmission.geojson'
+        data: { type: 'FeatureCollection', features: [] }
       });
 
       // Add auction marker layers with color-coding
@@ -3372,11 +3377,27 @@ export default function EnhancedMap({
     });
   }, [showDatacenters, datacenterStates]);
 
-  // Toggle lakes layer visibility
+  // Toggle lakes layer visibility + lazy load data
   useEffect(() => {
     if (!map.current) return;
 
     const layers = ['lakes-fill', 'lakes-outline'];
+
+    // Lazy load lakes data when first enabled
+    if (showLakes && !lakesLoadedRef.current) {
+      console.log('🌊 Lazy loading lakes.geojson...');
+      fetch('/lakes.geojson')
+        .then(res => res.json())
+        .then(data => {
+          const source = map.current?.getSource('lakes') as maplibregl.GeoJSONSource;
+          if (source) {
+            source.setData(data);
+            lakesLoadedRef.current = true;
+            console.log('✅ Lakes data loaded');
+          }
+        })
+        .catch(err => console.error('Failed to load lakes:', err));
+    }
 
     layers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
@@ -3456,9 +3477,25 @@ export default function EnhancedMap({
     });
   }, [lakeTypes]);
 
-  // Toggle power lines layer visibility based on voltage selections
+  // Toggle power lines layer visibility + lazy load data
   useEffect(() => {
     if (!map.current) return;
+
+    // Lazy load powerlines data when first enabled
+    if (showPowerLines && !powerlinesLoadedRef.current) {
+      console.log('⚡ Lazy loading powerlines.geojson...');
+      fetch('/powerlines.geojson')
+        .then(res => res.json())
+        .then(data => {
+          const source = map.current?.getSource('powerlines') as maplibregl.GeoJSONSource;
+          if (source) {
+            source.setData(data);
+            powerlinesLoadedRef.current = true;
+            console.log('✅ Powerlines data loaded');
+          }
+        })
+        .catch(err => console.error('Failed to load powerlines:', err));
+    }
 
     const voltageLayerMap = [
       { id: 'powerlines-345kv', enabled: powerLineVoltages.kv345 },
@@ -3480,17 +3517,36 @@ export default function EnhancedMap({
     });
   }, [showPowerLines, powerLineVoltages]);
 
-  // Toggle transmission lines layer visibility based on state and voltage selections
+  // Toggle transmission lines layer visibility + lazy load data
   useEffect(() => {
     if (!map.current) return;
 
     const states = [
-      { id: 'kansas', enabled: transmissionLineStates.kansas },
-      { id: 'minnesota', enabled: transmissionLineStates.minnesota },
-      { id: 'missouri', enabled: transmissionLineStates.missouri },
-      { id: 'nebraska', enabled: transmissionLineStates.nebraska },
-      { id: 'southdakota', enabled: transmissionLineStates.southDakota }
+      { id: 'kansas', enabled: transmissionLineStates.kansas, file: '/KS_HighVtransmission.geojson' },
+      { id: 'minnesota', enabled: transmissionLineStates.minnesota, file: '/MN_HighVtransmission.geojson' },
+      { id: 'missouri', enabled: transmissionLineStates.missouri, file: '/MO_HighVtransmission.geojson' },
+      { id: 'nebraska', enabled: transmissionLineStates.nebraska, file: '/NE_HighVtransmission.geojson' },
+      { id: 'southdakota', enabled: transmissionLineStates.southDakota, file: '/SD_HighVtransmission.geojson' }
     ];
+
+    // Lazy load transmission line data when first enabled
+    if (showTransmissionLines && !transmissionLoadedRef.current) {
+      console.log('🔌 Lazy loading transmission line data...');
+      transmissionLoadedRef.current = true; // Mark as loading to prevent duplicate fetches
+
+      states.forEach(state => {
+        fetch(state.file)
+          .then(res => res.json())
+          .then(data => {
+            const source = map.current?.getSource(`transmission-${state.id}`) as maplibregl.GeoJSONSource;
+            if (source) {
+              source.setData(data);
+              console.log(`✅ Transmission data loaded: ${state.id}`);
+            }
+          })
+          .catch(err => console.error(`Failed to load transmission ${state.id}:`, err));
+      });
+    }
 
     const voltages = [
       { kv: 345, enabled: transmissionLineVoltages.kv345 },

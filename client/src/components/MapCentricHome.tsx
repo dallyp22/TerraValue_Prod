@@ -58,7 +58,7 @@ export default function MapCentricHome() {
       nebraska: true,
       wisconsin: true
     },
-    showLakes: true,
+    showLakes: false, // Disabled by default - lazy loads 11MB when enabled
     lakeTypes: {
       lakes: true,
       reservoirs: true
