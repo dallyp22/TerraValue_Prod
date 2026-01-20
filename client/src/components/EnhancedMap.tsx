@@ -722,62 +722,27 @@ export default function EnhancedMap({
       return;
     }
     
-    // FIRST: Check if we're in Harrison County - this takes priority over everything
+    // Show Harrison County layers if in Harrison County (they overlay on top of other layers)
     if (isInHarrisonCounty()) {
-      console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset');
-      // Show Harrison County layers if they exist
+      console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset as overlay');
       const harrisonSource = map.current.getSource('harrison-parcels');
-      console.log('Harrison source exists?', !!harrisonSource);
       if (harrisonSource) {
         map.current.setLayoutProperty('harrison-parcels-fill', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
         map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'visible');
-        
-        // Hide ALL other parcel layers (regular and self-hosted)
-        console.log('🚫 Hiding other parcel layers for Harrison County');
-        const regularLayer = map.current.getLayer('parcels-labels');
-        if (regularLayer) {
-          map.current.setLayoutProperty('parcels-labels', 'visibility', 'none');
-          console.log('  - Hidden parcels-labels');
-        }
-        
-        const parcelFill = map.current.getLayer('parcels-fill');
-        const parcelOutline = map.current.getLayer('parcels-outline');
-        if (parcelFill) {
-          map.current.setLayoutProperty('parcels-fill', 'visibility', 'none');
-          console.log('  - Hidden parcels-fill');
-        }
-        if (parcelOutline) {
-          map.current.setLayoutProperty('parcels-outline', 'visibility', 'none');
-          console.log('  - Hidden parcels-outline');
-        }
-        
-        // Hide ownership layers (self-hosted aggregated parcels)
-        const ownershipFill = map.current.getLayer('ownership-fill');
-        const ownershipOutline = map.current.getLayer('ownership-outline');
-        const ownershipLabels = map.current.getLayer('ownership-labels');
-        if (ownershipFill) map.current.setLayoutProperty('ownership-fill', 'visibility', 'none');
-        if (ownershipOutline) map.current.setLayoutProperty('ownership-outline', 'visibility', 'none');
-        if (ownershipLabels) map.current.setLayoutProperty('ownership-labels', 'visibility', 'none');
-        
-        // Clear the default parcel GeoJSON source to avoid overlap
-        const defaultSource = map.current.getSource('parcels') as maplibregl.GeoJSONSource;
-        if (defaultSource) {
-          defaultSource.setData({ type: 'FeatureCollection', features: [] });
-        }
-        return;
       }
+      // Continue to load ArcGIS parcels - Harrison overlays on top
+    } else {
+      // NOT in Harrison County - hide Harrison layers
+      const harrisonLayers = ['harrison-parcels-fill', 'harrison-parcels-outline', 'harrison-parcels-labels', 'harrison-parcels-selected'];
+      harrisonLayers.forEach(layerId => {
+        const layer = map.current?.getLayer(layerId);
+        if (layer) {
+          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+      });
     }
-    
-    // NOT in Harrison County - hide Harrison layers
-    const harrisonLayers = ['harrison-parcels-fill', 'harrison-parcels-outline', 'harrison-parcels-labels', 'harrison-parcels-selected'];
-    harrisonLayers.forEach(layerId => {
-      const layer = map.current?.getLayer(layerId);
-      if (layer) {
-        map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-      }
-    });
     
     // NOTE: Mode switching (ArcGIS vs Aggregated) is handled by the unified parcel visibility effect
     // This function only handles ArcGIS parcel loading when showArcgisParcels is true
