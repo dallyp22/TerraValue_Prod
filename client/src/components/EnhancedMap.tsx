@@ -113,6 +113,10 @@ export default function EnhancedMap({
   const draw = useRef<MapboxDraw | null>(null);
   const drawModeEnabledRef = useRef(drawModeEnabled);
   const featureClickedRef = useRef<boolean>(false); // Track if any feature (auction, substation, datacenter, lake) was just clicked
+
+  // Refs to track current prop values for use in event handlers (avoids stale closures)
+  const showArcgisParcelsRef = useRef(showArcgisParcels);
+  const showOwnerLabelsRef = useRef(showOwnerLabels);
   
   // Double-tap detection for mobile devices
   const lastTapTime = useRef<number>(0);
@@ -178,23 +182,34 @@ export default function EnhancedMap({
     drawModeEnabledRef.current = drawModeEnabled;
   }, [drawModeEnabled]);
 
+  // Keep refs in sync with props for use in event handlers
+  useEffect(() => {
+    showArcgisParcelsRef.current = showArcgisParcels;
+  }, [showArcgisParcels]);
+
+  useEffect(() => {
+    showOwnerLabelsRef.current = showOwnerLabels;
+  }, [showOwnerLabels]);
+
   // Function to update label visibility based on current location
+  // Uses ref to get current prop value (avoids stale closures in event handlers)
   const updateLabelVisibility = () => {
     if (!map.current) return;
 
     const inHarrisonCounty = isInHarrisonCounty();
-    
+    const currentShowOwnerLabels = showOwnerLabelsRef.current;
+
     // Handle regular parcel labels (only show outside Harrison County)
     const regularLayer = map.current.getLayer('parcels-labels');
     if (regularLayer) {
-      const shouldShowRegular = showOwnerLabels && !inHarrisonCounty;
+      const shouldShowRegular = currentShowOwnerLabels && !inHarrisonCounty;
       map.current.setLayoutProperty('parcels-labels', 'visibility', shouldShowRegular ? 'visible' : 'none');
     }
 
     // Handle Harrison County parcel labels (only show inside Harrison County)
     const harrisonLayer = map.current.getLayer('harrison-parcels-labels');
     if (harrisonLayer) {
-      const shouldShowHarrison = showOwnerLabels && inHarrisonCounty;
+      const shouldShowHarrison = currentShowOwnerLabels && inHarrisonCounty;
       map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', shouldShowHarrison ? 'visible' : 'none');
     }
   };
@@ -709,11 +724,16 @@ export default function EnhancedMap({
   };
 
   // Function to load parcels based on current map bounds
+  // Uses refs to get current prop values (avoids stale closures in event handlers)
   const loadParcels = async () => {
     if (!map.current) return;
-    
+
+    // Use refs to get current values (avoids stale closure issues)
+    const currentShowArcgisParcels = showArcgisParcelsRef.current;
+    const currentShowOwnerLabels = showOwnerLabelsRef.current;
+
     // Only load ArcGIS parcels if explicitly enabled
-    if (!showArcgisParcels) {
+    if (!currentShowArcgisParcels) {
       // Clear ArcGIS parcels if disabled
       const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
       if (source) {
@@ -721,7 +741,7 @@ export default function EnhancedMap({
       }
       return;
     }
-    
+
     // Show Harrison County layers if in Harrison County (they overlay on top of other layers)
     if (isInHarrisonCounty()) {
       console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset as overlay');
@@ -729,7 +749,7 @@ export default function EnhancedMap({
       if (harrisonSource) {
         map.current.setLayoutProperty('harrison-parcels-fill', 'visibility', 'visible');
         map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'visible');
-        map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', showOwnerLabels ? 'visible' : 'none');
+        map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', currentShowOwnerLabels ? 'visible' : 'none');
         map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'visible');
       }
       // Continue to load ArcGIS parcels - Harrison overlays on top
