@@ -1300,14 +1300,16 @@ export default function EnhancedMap({
             const feature = e.features[0];
             const props = feature.properties;
             const owner = props.owner;  // Use 'owner' property from vector tiles
-            
+            const clusterId = props.cluster_id;  // Unique cluster ID for adjacent parcels only
+
             console.log('🔍 Aggregated parcel clicked:', {
               owner,
+              cluster_id: clusterId,
               parcel_count: props.parcel_count,
               acres_db: props.acres,
               county: props.county
             });
-            
+
             // Calculate acres from geometry using Turf.js
             let calculatedAcres = 0;
             try {
@@ -1319,32 +1321,40 @@ export default function EnhancedMap({
             } catch (error) {
               console.error('   Error calculating area:', error);
             }
-            
-            // Set selected parcel and update highlight filter
-            setSelectedParcelId(owner);
-            
-            // Update highlight layer filter and force visibility
-            if (map.current && owner) {
-              map.current.setFilter('ownership-selected', ['==', ['get', 'owner'], owner]);
+
+            // Set selected parcel using cluster_id (not owner) to only highlight adjacent parcels
+            setSelectedParcelId(clusterId ? String(clusterId) : owner);
+
+            // Update highlight layer filter using cluster_id for precise selection
+            // This ensures only the clicked cluster is highlighted, not all parcels by same owner
+            if (map.current) {
+              if (clusterId) {
+                // Use cluster_id for precise selection (only adjacent parcels)
+                map.current.setFilter('ownership-selected', ['==', ['get', 'cluster_id'], clusterId]);
+                console.log('✅ Set highlight filter for cluster_id:', clusterId);
+              } else if (owner) {
+                // Fallback to owner if cluster_id not available (old tile data)
+                map.current.setFilter('ownership-selected', ['==', ['get', 'owner'], owner]);
+                console.log('⚠️ Falling back to owner filter (no cluster_id):', owner);
+              }
               map.current.setLayoutProperty('ownership-selected', 'visibility', 'visible');
-              console.log('✅ Set highlight filter and visibility for owner:', owner);
-              
+
               // Query to verify filter works
               setTimeout(() => {
-                const features = map.current?.queryRenderedFeatures({ 
-                  layers: ['ownership-selected'] 
+                const features = map.current?.queryRenderedFeatures({
+                  layers: ['ownership-selected']
                 });
                 console.log('🔍 Features matching highlight filter:', features?.length || 0);
               }, 100);
             }
-            
+
             // Create parcel object matching Harrison County structure
             const parcel = {
               owner_name: owner || 'Unknown',
               address: owner || 'N/A',
               acres: Math.round(calculatedAcres * 100) / 100, // Round to 2 decimals like Harrison
               coordinates: [e.lngLat.lng, e.lngLat.lat],
-              parcel_number: `${props.county}-AGG-${props.parcel_count}`, // Synthetic parcel number
+              parcel_number: clusterId ? `${props.county}-CL${clusterId}` : `${props.county}-AGG-${props.parcel_count}`, // Use cluster ID if available
               parcel_class: 'Aggregated',
               county: props.county || 'Unknown',
               geometry: feature.geometry, // Include geometry for CSR2 calculation

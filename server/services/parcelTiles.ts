@@ -43,10 +43,10 @@ export async function generateParcelTile(
           SELECT ST_TileEnvelope($1, $2, $3) AS geom
         ),
         mvtgeom AS (
-          SELECT 
+          SELECT
             ST_AsMVTGeom(
               -- Aggressive simplification at low zooms for faster rendering
-              CASE 
+              CASE
                 WHEN $1 <= 8 THEN ST_Simplify(geom_3857, 200)
                 WHEN $1 <= 10 THEN ST_Simplify(geom_3857, 100)
                 WHEN $1 <= 12 THEN ST_Simplify(geom_3857, 50)
@@ -57,6 +57,7 @@ export async function generateParcelTile(
               256,
               true
             ) AS geom,
+            id as cluster_id,  -- Include cluster ID for precise selection
             normalized_owner as owner,
             parcel_count,
             ROUND(total_acres::numeric, 1) as acres,
