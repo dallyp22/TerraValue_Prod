@@ -3146,7 +3146,8 @@ export default function EnhancedMap({
         const layer = map.current?.getLayer(layerId);
         if (layer) {
           // Show at ALL zoom levels when toggle ON (not just zoom <14)
-          const shouldShow = useSelfHostedParcels && !harrison;
+          // Harrison County layers overlay on top, don't hide these
+          const shouldShow = useSelfHostedParcels;
           const visibility = shouldShow ? 'visible' : 'none';
           const currentVisibility = map.current?.getLayoutProperty(layerId, 'visibility');
           
@@ -3161,7 +3162,7 @@ export default function EnhancedMap({
       });
       
       // Force vector tile source to reload when layers become visible
-      if (layersChanged && useSelfHostedParcels && !harrison) {
+      if (layersChanged && useSelfHostedParcels) {
         console.log('🔄 Triggering vector tile reload...');
         // Force new tile requests by doing a minimal zoom change
         // This is the most reliable way to force MapLibre to request tiles for newly visible layers
@@ -3181,7 +3182,7 @@ export default function EnhancedMap({
       // Handle ownership-labels separately (controlled by both toggles)
       const ownershipLabelsLayer = map.current?.getLayer('ownership-labels');
       if (ownershipLabelsLayer) {
-        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels && !harrison;
+        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels;
         const labelVisibility = shouldShowLabels ? 'visible' : 'none';
         map.current?.setLayoutProperty('ownership-labels', 'visibility', labelVisibility);
         console.log(`   └─ ownership-labels: ${labelVisibility} (parcels toggle: ${useSelfHostedParcels}, labels toggle: ${showOwnerLabels})`);
@@ -3192,7 +3193,7 @@ export default function EnhancedMap({
       // Handle ownership-selected layer (only show if parcels enabled and something selected)
       const ownershipSelectedLayer = map.current?.getLayer('ownership-selected');
       if (ownershipSelectedLayer) {
-        const shouldShowSelected = useSelfHostedParcels && selectedParcelId && !harrison;
+        const shouldShowSelected = useSelfHostedParcels && !!selectedParcelId;
         const selectedVisibility = shouldShowSelected ? 'visible' : 'none';
         map.current?.setLayoutProperty('ownership-selected', 'visibility', selectedVisibility);
         if (selectedParcelId) {
@@ -3232,7 +3233,7 @@ export default function EnhancedMap({
       ownershipShapes.forEach(layerId => {
         const layer = map.current?.getLayer(layerId);
         if (layer && useSelfHostedParcels) {
-          const shouldShow = !harrison;  // Show at all zoom levels
+          const shouldShow = true;  // Always show when useSelfHostedParcels is true
           map.current?.setLayoutProperty(layerId, 'visibility', shouldShow ? 'visible' : 'none');
         }
       });
@@ -3240,7 +3241,7 @@ export default function EnhancedMap({
       // Update ownership-labels separately - requires BOTH toggles
       const labelLayer = map.current?.getLayer('ownership-labels');
       if (labelLayer) {
-        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels && !harrison;
+        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels;
         map.current?.setLayoutProperty('ownership-labels', 'visibility', shouldShowLabels ? 'visible' : 'none');
       }
     };
