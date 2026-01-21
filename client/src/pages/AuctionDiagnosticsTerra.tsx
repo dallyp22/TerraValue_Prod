@@ -340,6 +340,16 @@ function getRelativeTime(dateString: string) {
   return date.toLocaleDateString();
 }
 
+// Helper function for days until auction
+function getDaysUntil(dateString: string): number {
+  const date = new Date(dateString);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const diffMs = date.getTime() - now.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
 export default function AuctionDiagnosticsTerra() {
   // Core state
   const [loading, setLoading] = useState(false);
@@ -360,6 +370,8 @@ export default function AuctionDiagnosticsTerra() {
   const [diagnosticsData, setDiagnosticsData] = useState<any>(null);
   const [sourceStats, setSourceStats] = useState<any[]>([]);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [recentAuctions, setRecentAuctions] = useState<any[]>([]);
+  const [upcomingAuctions, setUpcomingAuctions] = useState<any[]>([]);
 
   // Schedule settings
   const [scheduleSettings, setScheduleSettings] = useState({
@@ -428,11 +440,17 @@ export default function AuctionDiagnosticsTerra() {
 
   const loadDiagnostics = async () => {
     try {
-      const response = await fetch('/api/auctions/diagnostics');
-      const data = await response.json();
-      if (data.success) {
-        setDiagnosticsData(data);
+      const [diagnostics, recent, upcoming] = await Promise.all([
+        fetch('/api/auctions/diagnostics').then(r => r.json()),
+        fetch('/api/auctions/diagnostics/recent-acquisitions?limit=10').then(r => r.json()),
+        fetch('/api/auctions/diagnostics/upcoming?limit=15').then(r => r.json()),
+      ]);
+
+      if (diagnostics.success) {
+        setDiagnosticsData(diagnostics);
       }
+      setRecentAuctions(recent.auctions || []);
+      setUpcomingAuctions(upcoming.auctions || []);
     } catch (error) {
       console.error('Failed to load diagnostics:', error);
     }
@@ -930,6 +948,166 @@ export default function AuctionDiagnosticsTerra() {
                 <p className="font-mono text-xl font-bold text-warm-600">{sourceStats.length}</p>
                 <p className="text-xs text-warm-500">Sources Active</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Acquisitions & Upcoming Auctions - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Recently Acquired */}
+          <div className="card-terra-elevated overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-field/10 to-field/5 border-b border-field/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-field flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-wheat-cream" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-terra-black">Recently Acquired</h3>
+                  <p className="text-xs text-warm-500">Latest 10 scraped auctions</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 max-h-[400px] overflow-y-auto space-y-2">
+              {recentAuctions.length > 0 ? (
+                recentAuctions.map((auction, i) => (
+                  <div
+                    key={auction.id || i}
+                    className="p-3 bg-white rounded-lg border border-warm-200 hover:border-field/40 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-terra-black text-sm truncate">{auction.title}</h4>
+                        <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-warm-500">
+                          <span className="px-1.5 py-0.5 bg-warm-100 rounded text-warm-600 text-xs">
+                            {auction.sourceWebsite?.replace('https://', '').replace('www.', '').split('/')[0] || 'Unknown'}
+                          </span>
+                          {auction.county && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {auction.county}{auction.state ? `, ${auction.state}` : ''}
+                            </span>
+                          )}
+                          {auction.acres && (
+                            <span className="flex items-center gap-1">
+                              <Ruler className="w-3 h-3" />
+                              {auction.acres} ac
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {auction.latitude && auction.longitude && (
+                          <a
+                            href={`/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=14`}
+                            className="p-1.5 rounded-lg hover:bg-field/10 text-warm-400 hover:text-field transition-colors"
+                            title="View on map"
+                          >
+                            <Map className="w-4 h-4" />
+                          </a>
+                        )}
+                        {auction.url && (
+                          <a
+                            href={auction.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg hover:bg-warm-100 text-warm-400 hover:text-terra-black transition-colors"
+                            title="View listing"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-warm-500 py-8 text-sm">No recent auctions found</p>
+              )}
+            </div>
+          </div>
+
+          {/* Upcoming Auctions */}
+          <div className="card-terra-elevated overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-gold/15 to-gold/5 border-b border-gold/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gold flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-terra-black" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-terra-black">Upcoming Auctions</h3>
+                  <p className="text-xs text-warm-500">Next 15 auction dates</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 max-h-[400px] overflow-y-auto space-y-2">
+              {upcomingAuctions.length > 0 ? (
+                upcomingAuctions.map((auction, i) => {
+                  const daysUntil = auction.auctionDate ? getDaysUntil(auction.auctionDate) : null;
+                  const urgencyClass = daysUntil !== null
+                    ? daysUntil <= 2
+                      ? 'bg-red-100 text-red-700 border-red-200'
+                      : daysUntil <= 7
+                      ? 'bg-gold/20 text-gold-dark border-gold/30'
+                      : 'bg-field/10 text-field border-field/20'
+                    : 'bg-warm-100 text-warm-600 border-warm-200';
+
+                  return (
+                    <div
+                      key={auction.id || i}
+                      className="p-3 bg-white rounded-lg border border-warm-200 hover:border-gold/40 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-terra-black text-sm truncate">{auction.title}</h4>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-warm-500">
+                            {auction.auctionDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(auction.auctionDate).toLocaleDateString()}
+                              </span>
+                            )}
+                            {daysUntil !== null && (
+                              <span className={cn('px-1.5 py-0.5 rounded text-xs font-medium border', urgencyClass)}>
+                                {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`}
+                              </span>
+                            )}
+                            {auction.county && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                {auction.county}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {auction.latitude && auction.longitude && (
+                            <a
+                              href={`/?lat=${auction.latitude}&lng=${auction.longitude}&zoom=14`}
+                              className="p-1.5 rounded-lg hover:bg-gold/10 text-warm-400 hover:text-gold-dark transition-colors"
+                              title="View on map"
+                            >
+                              <Map className="w-4 h-4" />
+                            </a>
+                          )}
+                          {auction.url && (
+                            <a
+                              href={auction.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg hover:bg-warm-100 text-warm-400 hover:text-terra-black transition-colors"
+                              title="View listing"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center text-warm-500 py-8 text-sm">No upcoming auctions found</p>
+              )}
             </div>
           </div>
         </div>
