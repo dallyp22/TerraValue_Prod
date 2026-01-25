@@ -6,11 +6,13 @@ import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import * as turf from '@turf/turf';
 import { useToast } from '@/hooks/use-toast';
+import { useParcelDisplay } from '@/hooks/use-parcel-display';
 import { AuctionDetailsPanel } from './AuctionDetailsPanel';
 import { SubstationInfoPanel } from './SubstationInfoPanel';
 import { DataCenterInfoPanel } from './DataCenterInfoPanel';
 import { LakeInfoPanel } from './LakeInfoPanel';
 import type { Auction } from '@shared/schema';
+import type { ParcelDisplayMode } from '@/types/parcel-display';
 import { API_BASE_URL } from '@/config';
 
 // Debounce helper to prevent excessive function calls during rapid zoom/pan
@@ -73,16 +75,13 @@ interface EnhancedMapProps {
   };
   showCityLabels?: boolean;
   showHighways?: boolean;
-  useSelfHostedParcels?: boolean; // Enable self-hosted vector tiles instead of ArcGIS
-  showAggregatedParcels?: boolean; // Show self-hosted aggregated ownership parcels
-  showArcgisParcels?: boolean; // Show ArcGIS individual parcels
+  parcelDisplayMode?: ParcelDisplayMode; // Unified parcel display mode: 'off' | 'arcgis' | 'self-hosted'
 }
 
-export default function EnhancedMap({ 
-  drawModeEnabled, 
-  onParcelClick, 
+export default function EnhancedMap({
+  drawModeEnabled,
+  onParcelClick,
   onPolygonDrawn,
-  useSelfHostedParcels = false,
   onAuctionClick,
   onStartAuctionValuation,
   isPreparingAuctionValuation = false,
@@ -104,9 +103,12 @@ export default function EnhancedMap({
   transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
   showHighways = true,
-  showAggregatedParcels = false,
-  showArcgisParcels = false
+  parcelDisplayMode = 'off',
 }: EnhancedMapProps) {
+
+  // Derive old props from parcelDisplayMode for backward compatibility during transition
+  const useSelfHostedParcels = parcelDisplayMode === 'self-hosted';
+  const showArcgisParcels = parcelDisplayMode === 'arcgis';
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -114,9 +116,7 @@ export default function EnhancedMap({
   const drawModeEnabledRef = useRef(drawModeEnabled);
   const featureClickedRef = useRef<boolean>(false); // Track if any feature (auction, substation, datacenter, lake) was just clicked
 
-  // Refs to track current prop values for use in event handlers (avoids stale closures)
-  const showArcgisParcelsRef = useRef(showArcgisParcels);
-  const showOwnerLabelsRef = useRef(showOwnerLabels);
+  // Note: showArcgisParcelsRef and showOwnerLabelsRef removed - useParcelDisplay hook manages this
   
   // Double-tap detection for mobile devices
   const lastTapTime = useRef<number>(0);
@@ -182,37 +182,10 @@ export default function EnhancedMap({
     drawModeEnabledRef.current = drawModeEnabled;
   }, [drawModeEnabled]);
 
-  // Keep refs in sync with props for use in event handlers
-  useEffect(() => {
-    showArcgisParcelsRef.current = showArcgisParcels;
-  }, [showArcgisParcels]);
+  // Note: Ref sync effects for showArcgisParcelsRef and showOwnerLabelsRef removed
+  // useParcelDisplay hook handles parcel visibility state management
 
-  useEffect(() => {
-    showOwnerLabelsRef.current = showOwnerLabels;
-  }, [showOwnerLabels]);
-
-  // Function to update label visibility based on current location
-  // Uses ref to get current prop value (avoids stale closures in event handlers)
-  const updateLabelVisibility = () => {
-    if (!map.current) return;
-
-    const inHarrisonCounty = isInHarrisonCounty();
-    const currentShowOwnerLabels = showOwnerLabelsRef.current;
-
-    // Handle regular parcel labels (only show outside Harrison County)
-    const regularLayer = map.current.getLayer('parcels-labels');
-    if (regularLayer) {
-      const shouldShowRegular = currentShowOwnerLabels && !inHarrisonCounty;
-      map.current.setLayoutProperty('parcels-labels', 'visibility', shouldShowRegular ? 'visible' : 'none');
-    }
-
-    // Handle Harrison County parcel labels (only show inside Harrison County)
-    const harrisonLayer = map.current.getLayer('harrison-parcels-labels');
-    if (harrisonLayer) {
-      const shouldShowHarrison = currentShowOwnerLabels && inHarrisonCounty;
-      map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', shouldShowHarrison ? 'visible' : 'none');
-    }
-  };
+  // Note: updateLabelVisibility function removed - useParcelDisplay hook handles label visibility
 
   // Aggregate parcels by owner - combine adjacent parcels with same owner
   const aggregateParcelsByOwner = (features: any[]): any[] => {
@@ -723,18 +696,13 @@ export default function EnhancedMap({
     }
   };
 
-  // Function to load parcels based on current map bounds
-  // Uses refs to get current prop values (avoids stale closures in event handlers)
+  // Function to load ArcGIS parcel data based on current map bounds
+  // Note: Layer visibility is now managed by useParcelDisplay hook
   const loadParcels = async () => {
     if (!map.current) return;
 
-    // Use refs to get current values (avoids stale closure issues)
-    const currentShowArcgisParcels = showArcgisParcelsRef.current;
-    const currentShowOwnerLabels = showOwnerLabelsRef.current;
-
-    // Only load ArcGIS parcels if explicitly enabled
-    if (!currentShowArcgisParcels) {
-      // Clear ArcGIS parcels if disabled
+    // Only load if in ArcGIS mode
+    if (parcelDisplayMode !== 'arcgis') {
       const source = map.current?.getSource('parcels') as maplibregl.GeoJSONSource;
       if (source) {
         source.setData({ type: 'FeatureCollection', features: [] });
@@ -742,33 +710,7 @@ export default function EnhancedMap({
       return;
     }
 
-    // Show Harrison County layers if in Harrison County (they overlay on top of other layers)
-    if (isInHarrisonCounty()) {
-      console.log('📍 IN HARRISON COUNTY - Showing Harrison tileset as overlay');
-      const harrisonSource = map.current.getSource('harrison-parcels');
-      if (harrisonSource) {
-        map.current.setLayoutProperty('harrison-parcels-fill', 'visibility', 'visible');
-        map.current.setLayoutProperty('harrison-parcels-outline', 'visibility', 'visible');
-        map.current.setLayoutProperty('harrison-parcels-labels', 'visibility', currentShowOwnerLabels ? 'visible' : 'none');
-        map.current.setLayoutProperty('harrison-parcels-selected', 'visibility', 'visible');
-      }
-      // Continue to load ArcGIS parcels - Harrison overlays on top
-    } else {
-      // NOT in Harrison County - hide Harrison layers
-      const harrisonLayers = ['harrison-parcels-fill', 'harrison-parcels-outline', 'harrison-parcels-labels', 'harrison-parcels-selected'];
-      harrisonLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-        }
-      });
-    }
-    
-    // NOTE: Mode switching (ArcGIS vs Aggregated) is handled by the unified parcel visibility effect
-    // This function only handles ArcGIS parcel loading when showArcgisParcels is true
-
-    // Load ArcGIS parcels for counties outside Harrison
-    console.log('🟢 Loading ArcGIS parcels...');
+    console.log('Loading ArcGIS parcels...');
     
     if (map.current.getZoom() <= 12) {
       // Clear data if zoomed out
@@ -826,6 +768,15 @@ export default function EnhancedMap({
       }
     }
   };
+
+  // Use unified parcel display hook for layer management
+  const { isInHarrisonCounty: hookIsInHarrison, updateVisibility } = useParcelDisplay({
+    map: map.current,
+    mode: parcelDisplayMode,
+    showLabels: showOwnerLabels,
+    selectedParcelId,
+    onLoadArcGISParcels: loadParcels,
+  });
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -1249,6 +1200,11 @@ export default function EnhancedMap({
 
       // Add click handlers for ownership layers (always add, visibility controlled elsewhere)
       const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+          // Drawing mode guard - don't open parcel info when drawing polygons
+          if (drawModeEnabledRef.current) {
+            return;
+          }
+
           // Check if a feature (auction, substation, datacenter, lake) was just clicked - if so, ignore parcel click
           if (featureClickedRef.current) {
             console.log('Ignoring parcel click - feature was clicked');
@@ -1592,6 +1548,11 @@ export default function EnhancedMap({
 
       // Function to handle Harrison County parcel clicks
       const handleHarrisonParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        // Drawing mode guard - don't open parcel info when drawing polygons
+        if (drawModeEnabledRef.current) {
+          return;
+        }
+
         // Check if a feature (auction, substation, datacenter, lake) was just clicked - if so, ignore parcel click
         if (featureClickedRef.current) {
           console.log('Ignoring parcel click - auction was clicked');
@@ -1699,6 +1660,11 @@ export default function EnhancedMap({
 
       // Add click handlers for regular parcels (all other counties)
       const handleRegularParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        // Drawing mode guard - don't open parcel info when drawing polygons
+        if (drawModeEnabledRef.current) {
+          return;
+        }
+
         if (e.features && e.features.length > 0) {
           const props = e.features[0].properties;
           const geometry = e.features[0].geometry;
@@ -1787,6 +1753,11 @@ export default function EnhancedMap({
 
       // Function to handle parcel click (shared by both outline and fill)
       const handleParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        // Drawing mode guard - don't open parcel info when drawing polygons
+        if (drawModeEnabledRef.current) {
+          return;
+        }
+
         // Check if a feature (auction, substation, etc.) was just clicked - if so, ignore parcel click
         if (featureClickedRef.current) {
           console.log('Ignoring parcel click - feature was clicked');
@@ -2755,10 +2726,7 @@ export default function EnhancedMap({
     }
   }, [drawModeEnabled]);
 
-  // Toggle owner labels visibility - only show one type based on location
-  useEffect(() => {
-    updateLabelVisibility();
-  }, [showOwnerLabels]);
+  // NOTE: Owner label visibility is now handled by useParcelDisplay hook
 
   // Map bounds change triggers auction refetch via React Query
   // No need for manual refetch - React Query handles it automatically based on queryKey changes
@@ -2766,7 +2734,7 @@ export default function EnhancedMap({
   // Handle map moveend event to update bounds and trigger auction refetch
   useEffect(() => {
     if (!map.current) return;
-    
+
     // Debounce the handler to avoid excessive calls during rapid zoom/pan
     const moveHandler = debounce(() => {
       if (map.current) {
@@ -2774,8 +2742,11 @@ export default function EnhancedMap({
         const bounds = map.current.getBounds();
         setMapBounds(`${bounds.getSouth()},${bounds.getNorth()},${bounds.getWest()},${bounds.getEast()}`);
       }
-      loadParcels();
-      updateLabelVisibility();
+      // NOTE: ArcGIS parcel loading still needed - hook handles visibility only
+      if (parcelDisplayMode === 'arcgis') {
+        loadParcels();
+      }
+      // NOTE: Label visibility now handled by useParcelDisplay hook
     }, 250); // Wait 250ms after user stops moving
     
     // Attach the debounced listener
@@ -2968,282 +2939,12 @@ export default function EnhancedMap({
     // React Query automatically handles refetching when showAuctionLayer changes
   }, [showAuctionLayer]);
 
-  // Load/clear ArcGIS parcels based on showArcgisParcels prop
-  useEffect(() => {
-    if (!map.current) return;
-
-    console.log(`🗺️ ArcGIS Parcels Toggle: ${showArcgisParcels ? 'ON' : 'OFF'}`);
-
-    const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-
-    if (showArcgisParcels) {
-      // Set ArcGIS layer visibility to visible
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
-          console.log(`   └─ ${layerId}: visible`);
-        }
-      });
-      loadParcels();
-    } else {
-      // Hide ArcGIS layers and clear data
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-          console.log(`   └─ ${layerId}: none`);
-        }
-      });
-      const source = map.current.getSource('parcels') as maplibregl.GeoJSONSource;
-      if (source) {
-        source.setData({ type: 'FeatureCollection', features: [] });
-        console.log('   Cleared ArcGIS parcels data');
-      }
-    }
-  }, [showArcgisParcels]);
-
-  // Unified parcel visibility control - handles ALL parcel layer types based on mode
-  // Mode: Off (!showArcgisParcels && !useSelfHostedParcels) - hide all parcels
-  // Mode: ArcGIS (showArcgisParcels) - show ArcGIS/Harrison, hide ownership
-  // Mode: Aggregated (useSelfHostedParcels) - show ownership/Harrison, hide ArcGIS
-  useEffect(() => {
-    if (!map.current) return;
-
-    const harrison = isInHarrisonCounty();
-    const isOffMode = !showArcgisParcels && !useSelfHostedParcels;
-
-    console.log(`🎛️ Parcel Mode: ${isOffMode ? 'OFF' : showArcgisParcels ? 'ArcGIS' : 'Aggregated'} | Harrison: ${harrison}`);
-
-    // Harrison County layers
-    const harrisonLayers = ['harrison-parcels-fill', 'harrison-parcels-outline', 'harrison-parcels-labels', 'harrison-parcels-selected'];
-    harrisonLayers.forEach(layerId => {
-      const layer = map.current?.getLayer(layerId);
-      if (layer) {
-        // Show Harrison parcels only when: in Harrison AND NOT in "Off" mode
-        const shouldShow = harrison && !isOffMode;
-        // Special handling for labels - also needs showOwnerLabels
-        const visibility = layerId === 'harrison-parcels-labels'
-          ? (shouldShow && showOwnerLabels ? 'visible' : 'none')
-          : (shouldShow ? 'visible' : 'none');
-        map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-        console.log(`   └─ ${layerId}: ${visibility}`);
-      }
-    });
-
-    // When in "Off" mode, ensure all parcel layers are hidden
-    if (isOffMode) {
-      // Hide ArcGIS layers
-      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-        }
-      });
-
-      // Hide ownership layers
-      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels', 'ownership-selected'];
-      ownershipLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-        }
-      });
-
-      console.log('   All parcel layers hidden (Off mode)');
-    }
-
-    // When in ArcGIS mode, hide ownership layers and trigger data refresh
-    if (showArcgisParcels && !useSelfHostedParcels) {
-      const ownershipLayers = ['ownership-fill', 'ownership-outline', 'ownership-labels', 'ownership-selected'];
-      ownershipLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-          console.log(`   └─ ${layerId}: none (hidden for ArcGIS mode)`);
-        }
-      });
-
-      // Show ArcGIS layers and trigger data load
-      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
-        }
-      });
-
-      // Force a tiny map movement to trigger ArcGIS parcel reload
-      console.log('🔄 Triggering ArcGIS parcel refresh...');
-      const currentZoom = map.current?.getZoom();
-      if (currentZoom !== undefined) {
-        map.current?.setZoom(currentZoom - 0.001);
-        requestAnimationFrame(() => {
-          if (map.current) {
-            map.current.setZoom(currentZoom);
-            loadParcels();
-          }
-        });
-      }
-    }
-
-    // When in Aggregated mode, hide ArcGIS layers and trigger tile refresh
-    if (useSelfHostedParcels && !showArcgisParcels) {
-      const arcgisLayers = ['parcels-outline', 'parcels-fill', 'parcels-labels'];
-      arcgisLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'none');
-          console.log(`   └─ ${layerId}: none (hidden for Aggregated mode)`);
-        }
-      });
-
-      // Show ownership layers and trigger tile refresh
-      const ownershipLayers = ['ownership-fill', 'ownership-outline'];
-      ownershipLayers.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          map.current?.setLayoutProperty(layerId, 'visibility', 'visible');
-        }
-      });
-
-      // Force a tiny map movement to trigger vector tile reload
-      console.log('🔄 Triggering Aggregated parcel refresh...');
-      const currentZoom = map.current?.getZoom();
-      if (currentZoom !== undefined) {
-        map.current?.setZoom(currentZoom - 0.001);
-        requestAnimationFrame(() => {
-          if (map.current) {
-            map.current.setZoom(currentZoom);
-          }
-        });
-      }
-    }
-  }, [showArcgisParcels, useSelfHostedParcels, showOwnerLabels]);
-
-  // Toggle self-hosted ownership layers visibility
-  useEffect(() => {
-    if (!map.current) return;
-    
-    const updateLayerVisibility = () => {
-      if (!map.current) return;
-      
-      const zoom = map.current.getZoom();
-      const harrison = isInHarrisonCounty();
-      
-      console.log(`🔵 Self-Hosted Parcels Toggle: ${useSelfHostedParcels ? 'ON' : 'OFF'} | Zoom: ${zoom.toFixed(1)} | Harrison: ${harrison}`);
-      
-      // Show/hide ownership layers (blue aggregated parcels)
-      const ownershipFillOutline = ['ownership-fill', 'ownership-outline'];
-      let layersChanged = false;
-      ownershipFillOutline.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer) {
-          // Show at ALL zoom levels when toggle ON (not just zoom <14)
-          // Harrison County layers overlay on top, don't hide these
-          const shouldShow = useSelfHostedParcels;
-          const visibility = shouldShow ? 'visible' : 'none';
-          const currentVisibility = map.current?.getLayoutProperty(layerId, 'visibility');
-          
-          if (currentVisibility !== visibility) {
-            map.current?.setLayoutProperty(layerId, 'visibility', visibility);
-            layersChanged = true;
-            console.log(`   └─ ${layerId}: ${visibility} (shouldShow: ${shouldShow})`);
-          }
-        } else {
-          console.warn(`   ⚠️  Layer ${layerId} not found!`);
-        }
-      });
-      
-      // Force vector tile source to reload when layers become visible
-      if (layersChanged && useSelfHostedParcels) {
-        console.log('🔄 Triggering vector tile reload...');
-        // Force new tile requests by doing a minimal zoom change
-        // This is the most reliable way to force MapLibre to request tiles for newly visible layers
-        const currentZoom = map.current?.getZoom();
-        if (currentZoom !== undefined) {
-          // Zoom out by 0.001 (imperceptible) and immediately back
-          map.current?.setZoom(currentZoom - 0.001);
-          requestAnimationFrame(() => {
-            if (map.current && currentZoom !== undefined) {
-              map.current.setZoom(currentZoom);
-              console.log('✅ Forced tile reload with minimal zoom change');
-            }
-          });
-        }
-      }
-      
-      // Handle ownership-labels separately (controlled by both toggles)
-      const ownershipLabelsLayer = map.current?.getLayer('ownership-labels');
-      if (ownershipLabelsLayer) {
-        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels;
-        const labelVisibility = shouldShowLabels ? 'visible' : 'none';
-        map.current?.setLayoutProperty('ownership-labels', 'visibility', labelVisibility);
-        console.log(`   └─ ownership-labels: ${labelVisibility} (parcels toggle: ${useSelfHostedParcels}, labels toggle: ${showOwnerLabels})`);
-      } else {
-        console.warn(`   ⚠️  ownership-labels layer not found!`);
-      }
-      
-      // Handle ownership-selected layer (only show if parcels enabled and something selected)
-      const ownershipSelectedLayer = map.current?.getLayer('ownership-selected');
-      if (ownershipSelectedLayer) {
-        const shouldShowSelected = useSelfHostedParcels && !!selectedParcelId;
-        const selectedVisibility = shouldShowSelected ? 'visible' : 'none';
-        map.current?.setLayoutProperty('ownership-selected', 'visibility', selectedVisibility);
-        if (selectedParcelId) {
-          console.log(`   └─ ownership-selected: ${selectedVisibility} (selected: ${selectedParcelId})`);
-        }
-      }
-
-      // NOTE: ArcGIS layer hiding is handled by the unified parcel visibility effect
-      // to avoid race conditions between multiple useEffects
-    };
-    
-    // Wait for style to load before manipulating layers
-    if (!map.current.isStyleLoaded()) {
-      const checkReady = () => {
-        if (map.current?.isStyleLoaded()) {
-          updateLayerVisibility();
-          map.current?.off('styledata', checkReady);
-        }
-      };
-      map.current.on('styledata', checkReady);
-      return;
-    }
-    
-    updateLayerVisibility();
-  }, [useSelfHostedParcels, showOwnerLabels, selectedParcelId]);
-  
-  // Also update visibility on zoom change
-  useEffect(() => {
-    if (!map.current) return;
-    
-    const handleZoom = () => {
-      const zoom = map.current!.getZoom();
-      const harrison = isInHarrisonCounty();
-      
-      // Update parcel fill and outline layers (not labels - those need separate toggle)
-      const ownershipShapes = ['ownership-fill', 'ownership-outline'];
-      ownershipShapes.forEach(layerId => {
-        const layer = map.current?.getLayer(layerId);
-        if (layer && useSelfHostedParcels) {
-          const shouldShow = true;  // Always show when useSelfHostedParcels is true
-          map.current?.setLayoutProperty(layerId, 'visibility', shouldShow ? 'visible' : 'none');
-        }
-      });
-      
-      // Update ownership-labels separately - requires BOTH toggles
-      const labelLayer = map.current?.getLayer('ownership-labels');
-      if (labelLayer) {
-        const shouldShowLabels = useSelfHostedParcels && showOwnerLabels;
-        map.current?.setLayoutProperty('ownership-labels', 'visibility', shouldShowLabels ? 'visible' : 'none');
-      }
-    };
-    
-    map.current.on('zoom', handleZoom);
-    return () => map.current?.off('zoom', handleZoom);
-  }, [useSelfHostedParcels, showOwnerLabels]); // Added showOwnerLabels dependency
+  // NOTE: All parcel layer visibility is now managed by useParcelDisplay hook
+  // The following old useEffects have been removed:
+  // - [showArcgisParcels] - ArcGIS parcels toggle
+  // - [showArcgisParcels, useSelfHostedParcels, showOwnerLabels] - Unified parcel visibility
+  // - [useSelfHostedParcels, showOwnerLabels, selectedParcelId] - Self-hosted toggle
+  // - [useSelfHostedParcels, showOwnerLabels] + zoom handler
 
   // Toggle substations layer visibility
   useEffect(() => {

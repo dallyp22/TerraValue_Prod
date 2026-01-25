@@ -445,9 +445,7 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
-          showAggregatedParcels={mapOverlays.parcelDisplayMode === 'self-hosted'}
-          useSelfHostedParcels={mapOverlays.parcelDisplayMode === 'self-hosted'}
-          showArcgisParcels={mapOverlays.parcelDisplayMode === 'arcgis'}
+          parcelDisplayMode={mapOverlays.parcelDisplayMode}
         />
 
         {/* Map Controls */}
