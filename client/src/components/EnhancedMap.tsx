@@ -2634,13 +2634,16 @@ export default function EnhancedMap({
           map.current.on('mouseleave', 'auction-markers', handleAuctionMouseLeave);
           map.current.on('mouseenter', 'auction-markers-bg', handleAuctionMouseEnter);
           map.current.on('mouseleave', 'auction-markers-bg', handleAuctionMouseLeave);
-
-          // Set initial map bounds to trigger auction load
-          const bounds = map.current.getBounds();
-          setMapBounds(`${bounds.getSouth()},${bounds.getNorth()},${bounds.getWest()},${bounds.getEast()}`);
         }
       };
+      img.onerror = () => {
+        console.warn('Failed to load auction icon - auctions will display without custom icon');
+      };
       img.src = '/auction-icon.svg';
+
+      // Set initial map bounds to trigger auction load (outside img.onload for reliability)
+      const bounds = map.current.getBounds();
+      setMapBounds(`${bounds.getSouth()},${bounds.getNorth()},${bounds.getWest()},${bounds.getEast()}`);
 
       // Initial parcel load
       loadParcels();
