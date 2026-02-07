@@ -230,6 +230,69 @@ export default function LeftSidebar({
           </Button>
         </div>
 
+        {/* My Portfolio - pinned to top */}
+        {pinsByCategory && (
+          <div className="p-5 border-b border-slate-200">
+            <Collapsible
+              open={filterSectionsOpen.portfolio}
+              onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, portfolio: open })}
+            >
+              <CollapsibleTrigger className="w-full flex justify-between items-center">
+                <h4 className="text-sm font-semibold text-slate-700">My Portfolio</h4>
+                <span className="text-xs text-slate-500">{filterSectionsOpen.portfolio ? '−' : '+'}</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-3">
+                {PIN_CATEGORIES.map((cat) => {
+                  const catPins = pinsByCategory[cat.id] || [];
+                  if (catPins.length === 0) return null;
+                  return (
+                    <div key={cat.id}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className="text-xs font-semibold text-slate-600">{cat.label} ({catPins.length})</span>
+                      </div>
+                      <div className="space-y-1 ml-4">
+                        {catPins.map((pin) => (
+                          <div key={pin.id} className="flex items-center justify-between gap-1 py-1">
+                            <button
+                              className="text-xs text-slate-700 hover:text-blue-600 truncate text-left flex-1"
+                              onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
+                              title={pin.name}
+                            >
+                              {pin.name}
+                            </button>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                className="text-slate-400 hover:text-blue-600 p-0.5"
+                                onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
+                                title="Fly to pin"
+                              >
+                                <Navigation className="h-3 w-3" />
+                              </button>
+                              <button
+                                className="text-slate-400 hover:text-red-500 p-0.5"
+                                onClick={() => onDeletePin?.(pin.id)}
+                                title="Delete pin"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {Object.values(pinsByCategory).every(arr => arr.length === 0) && (
+                  <p className="text-xs text-slate-400 text-center py-2">
+                    No pins yet. Use "Drop Pin" to add farms.
+                  </p>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
+
         {/* Search Section */}
         <div className="search-section p-6 border-b border-slate-200">
           <h2 className="text-2xl font-bold mb-4 text-slate-800 hidden lg:block">Find Land</h2>
@@ -932,67 +995,6 @@ export default function LeftSidebar({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* My Portfolio */}
-          {pinsByCategory && (
-            <Collapsible
-              open={filterSectionsOpen.portfolio}
-              onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, portfolio: open })}
-              className="filter-group mb-6"
-            >
-              <CollapsibleTrigger className="w-full flex justify-between items-center">
-                <h4 className="text-sm font-semibold text-slate-700">My Portfolio</h4>
-                <span className="text-xs text-slate-500">{filterSectionsOpen.portfolio ? '−' : '+'}</span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 space-y-3">
-                {PIN_CATEGORIES.map((cat) => {
-                  const catPins = pinsByCategory[cat.id] || [];
-                  if (catPins.length === 0) return null;
-                  return (
-                    <div key={cat.id}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                        <span className="text-xs font-semibold text-slate-600">{cat.label} ({catPins.length})</span>
-                      </div>
-                      <div className="space-y-1 ml-4">
-                        {catPins.map((pin) => (
-                          <div key={pin.id} className="flex items-center justify-between gap-1 py-1">
-                            <button
-                              className="text-xs text-slate-700 hover:text-blue-600 truncate text-left flex-1"
-                              onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
-                              title={pin.name}
-                            >
-                              {pin.name}
-                            </button>
-                            <div className="flex gap-1 shrink-0">
-                              <button
-                                className="text-slate-400 hover:text-blue-600 p-0.5"
-                                onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
-                                title="Fly to pin"
-                              >
-                                <Navigation className="h-3 w-3" />
-                              </button>
-                              <button
-                                className="text-slate-400 hover:text-red-500 p-0.5"
-                                onClick={() => onDeletePin?.(pin.id)}
-                                title="Delete pin"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {Object.values(pinsByCategory).every(arr => arr.length === 0) && (
-                  <p className="text-xs text-slate-400 text-center py-2">
-                    No pins yet. Use "Drop Pin" to add farms.
-                  </p>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
         </div>
 
         {/* Results Summary */}
