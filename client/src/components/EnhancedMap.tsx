@@ -7,12 +7,15 @@ import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import * as turf from '@turf/turf';
 import { useToast } from '@/hooks/use-toast';
 import { useParcelDisplay } from '@/hooks/use-parcel-display';
+import { useHiddenAuctions } from '@/hooks/use-hidden-auctions';
 import { AuctionDetailsPanel } from './AuctionDetailsPanel';
+import { PinDetailsPanel } from './PinDetailsPanel';
 import { SubstationInfoPanel } from './SubstationInfoPanel';
 import { DataCenterInfoPanel } from './DataCenterInfoPanel';
 import { LakeInfoPanel } from './LakeInfoPanel';
 import type { Auction } from '@shared/schema';
 import type { ParcelDisplayMode } from '@/types/parcel-display';
+import type { FarmPin, PinCategory } from '@/types/portfolio';
 import { API_BASE_URL } from '@/config';
 
 // Debounce helper to prevent excessive function calls during rapid zoom/pan
@@ -75,6 +78,15 @@ interface EnhancedMapProps {
   };
   showCityLabels?: boolean;
   showHighways?: boolean;
+  showStreetLabels?: boolean;
+  showPortfolioPins?: boolean;
+  pinsGeoJSON?: any;
+  pinDropMode?: boolean;
+  selectedPinCategory?: PinCategory;
+  onPinPlaced?: (lng: number, lat: number) => void;
+  onPinUpdate?: (id: string, updates: Partial<Pick<FarmPin, 'name' | 'notes' | 'category'>>) => void;
+  onPinDelete?: (id: string) => void;
+  pins?: FarmPin[];
   parcelDisplayMode?: ParcelDisplayMode; // Unified parcel display mode: 'off' | 'arcgis' | 'self-hosted'
 }
 
@@ -103,6 +115,15 @@ export default function EnhancedMap({
   transmissionLineVoltages = { kv345: true, kv230: true, kv161: true, kv138: true, kv115: true, kv69: true },
   showCityLabels = true,
   showHighways = true,
+  showStreetLabels = true,
+  showPortfolioPins = true,
+  pinsGeoJSON,
+  pinDropMode = false,
+  selectedPinCategory = 'interested',
+  onPinPlaced,
+  onPinUpdate,
+  onPinDelete,
+  pins = [],
   parcelDisplayMode = 'off',
 }: EnhancedMapProps) {
 
@@ -123,6 +144,9 @@ export default function EnhancedMap({
   const lastTapPosition = useRef<{ x: number; y: number } | null>(null);
   const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   
+  const pinDropModeRef = useRef(pinDropMode);
+  const onPinPlacedRef = useRef(onPinPlaced);
+  const [selectedPin, setSelectedPin] = useState<FarmPin | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
   const [selectedDatacenter, setSelectedDatacenter] = useState<any>(null);
@@ -171,7 +195,8 @@ export default function EnhancedMap({
   const pulsePhaseRef = useRef<number>(0);
 
   const { toast } = useToast();
-  
+  const { hiddenIds, isHidden, hideAuction } = useHiddenAuctions();
+
   // Keep auctions ref in sync with state
   useEffect(() => {
     auctionsRef.current = auctions;
@@ -181,6 +206,15 @@ export default function EnhancedMap({
   useEffect(() => {
     drawModeEnabledRef.current = drawModeEnabled;
   }, [drawModeEnabled]);
+
+  // Keep pin drop mode refs in sync
+  useEffect(() => {
+    pinDropModeRef.current = pinDropMode;
+  }, [pinDropMode]);
+
+  useEffect(() => {
+    onPinPlacedRef.current = onPinPlaced;
+  }, [onPinPlaced]);
 
   // Note: Ref sync effects for showArcgisParcelsRef and showOwnerLabelsRef removed
   // useParcelDisplay hook handles parcel visibility state management
@@ -600,6 +634,7 @@ export default function EnhancedMap({
       const features = auctionsData.auctions
         .filter((a: Auction) => a.latitude && a.longitude)
         .filter((a: Auction) => !showIowaOnly || a.state?.toLowerCase() === 'iowa')
+        .filter((a: Auction) => !isHidden(a.id))
         .map((auction: Auction) => {
           // Determine marker color based on days until auction
           let markerColor = '#10b981'; // green default (> 30 days)
@@ -641,7 +676,7 @@ export default function EnhancedMap({
         });
       }
     }
-  }, [auctionsData, showAuctionLayer, showIowaOnly]);
+  }, [auctionsData, showAuctionLayer, showIowaOnly, hiddenIds]);
 
   // Function to load aggregated parcels from self-hosted database
   // NOTE: Removed loadAggregatedParcels function - now using vector tiles instead of GeoJSON
@@ -954,6 +989,99 @@ export default function EnhancedMap({
                 18, 8
               ],
               'line-opacity': 0.85
+            }
+          },
+          // Road labels - Major (motorway, trunk, primary)
+          {
+            id: 'road-labels-major',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
+            minzoom: 10,
+            layout: {
+              'symbol-placement': 'line',
+              'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']],
+              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                10, 11,
+                14, 14,
+                18, 16
+              ],
+              'text-keep-upright': true,
+              'text-max-angle': 30,
+              'visibility': showStreetLabels ? 'visible' : 'none'
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#1a1a1a',
+              'text-halo-width': 2,
+              'text-halo-blur': 1
+            }
+          },
+          // Road labels - Secondary (secondary, tertiary)
+          {
+            id: 'road-labels-secondary',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['in', 'class', 'secondary', 'tertiary'],
+            minzoom: 12,
+            layout: {
+              'symbol-placement': 'line',
+              'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']],
+              'text-font': ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                12, 10,
+                14, 12,
+                18, 14
+              ],
+              'text-keep-upright': true,
+              'text-max-angle': 30,
+              'visibility': showStreetLabels ? 'visible' : 'none'
+            },
+            paint: {
+              'text-color': '#e0e0e0',
+              'text-halo-color': '#1a1a1a',
+              'text-halo-width': 1.5,
+              'text-halo-blur': 1
+            }
+          },
+          // Road labels - Local (street, service, path)
+          {
+            id: 'road-labels-local',
+            type: 'symbol',
+            source: 'mapbox-streets',
+            'source-layer': 'road',
+            filter: ['in', 'class', 'street', 'service', 'path'],
+            minzoom: 14,
+            layout: {
+              'symbol-placement': 'line',
+              'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']],
+              'text-font': ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
+              'text-size': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                14, 10,
+                16, 11,
+                18, 13
+              ],
+              'text-keep-upright': true,
+              'text-max-angle': 30,
+              'visibility': showStreetLabels ? 'visible' : 'none'
+            },
+            paint: {
+              'text-color': '#c0c0c0',
+              'text-halo-color': '#1a1a1a',
+              'text-halo-width': 1.5,
+              'text-halo-blur': 1
             }
           },
         ]
@@ -1956,6 +2084,97 @@ export default function EnhancedMap({
         paint: {
           'line-color': '#f59e0b', // Orange
           'line-width': 3
+        }
+      });
+
+      // Add portfolio pins source and layers
+      map.current!.addSource('portfolio-pins', {
+        type: 'geojson',
+        data: pinsGeoJSON || { type: 'FeatureCollection', features: [] }
+      });
+
+      // Background circle for pins
+      map.current!.addLayer({
+        id: 'portfolio-pins-bg',
+        type: 'circle',
+        source: 'portfolio-pins',
+        paint: {
+          'circle-radius': 10,
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.9,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2.5
+        },
+        layout: {
+          'visibility': showPortfolioPins ? 'visible' : 'none'
+        }
+      });
+
+      // Pin label layer
+      map.current!.addLayer({
+        id: 'portfolio-pins-label',
+        type: 'symbol',
+        source: 'portfolio-pins',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
+          'text-size': 11,
+          'text-anchor': 'top',
+          'text-offset': [0, 1.2],
+          'text-max-width': 10,
+          'text-allow-overlap': false,
+          'visibility': showPortfolioPins ? 'visible' : 'none'
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#1a1a1a',
+          'text-halo-width': 1.5
+        }
+      });
+
+      // Portfolio pin click handler
+      const handlePinClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        e.originalEvent.stopPropagation();
+        featureClickedRef.current = true;
+        setTimeout(() => { featureClickedRef.current = false; }, 100);
+
+        if (e.features && e.features.length > 0) {
+          const pinId = e.features[0].properties?.id;
+          // Look up the full pin from the pins array via a custom event
+          window.dispatchEvent(new CustomEvent('farmscope-pin-clicked', { detail: { pinId } }));
+        }
+      };
+      map.current!.on('click', 'portfolio-pins-bg', handlePinClick);
+
+      // Pin hover
+      map.current!.on('mouseenter', 'portfolio-pins-bg', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.current!.on('mouseleave', 'portfolio-pins-bg', () => {
+        if (map.current && !pinDropModeRef.current) map.current.getCanvas().style.cursor = '';
+      });
+
+      // Pin drop handler - listen for map clicks when in pin drop mode
+      map.current!.on('click', (e) => {
+        if (!pinDropModeRef.current) return;
+        if (featureClickedRef.current) return;
+        if (drawModeEnabledRef.current) return;
+
+        // Check if clicking on an existing feature
+        const existingLayers = ['portfolio-pins-bg'];
+        // Only check auction layers if they exist
+        if (map.current?.getLayer('auction-markers')) existingLayers.push('auction-markers');
+        if (map.current?.getLayer('auction-markers-bg')) existingLayers.push('auction-markers-bg');
+
+        const features = map.current?.queryRenderedFeatures(e.point, {
+          layers: existingLayers
+        });
+        if (features && features.length > 0) return;
+
+        if (onPinPlacedRef.current) {
+          onPinPlacedRef.current(e.lngLat.lng, e.lngLat.lat);
+          // Toast is dispatched via custom event so EnhancedMap's toast hook can show it
+          window.dispatchEvent(new CustomEvent('farmscope-pin-placed'));
         }
       });
 
@@ -3082,6 +3301,89 @@ export default function EnhancedMap({
     });
   }, [showHighways]);
 
+  // Toggle street/road labels visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['road-labels-major', 'road-labels-secondary', 'road-labels-local'];
+
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showStreetLabels ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showStreetLabels]);
+
+  // Toggle portfolio pins visibility
+  useEffect(() => {
+    if (!map.current) return;
+
+    const layers = ['portfolio-pins-bg', 'portfolio-pins-label'];
+    layers.forEach(layerId => {
+      const layer = map.current?.getLayer(layerId);
+      if (layer) {
+        map.current?.setLayoutProperty(
+          layerId,
+          'visibility',
+          showPortfolioPins ? 'visible' : 'none'
+        );
+      }
+    });
+  }, [showPortfolioPins]);
+
+  // Sync portfolio pins GeoJSON data
+  useEffect(() => {
+    if (!map.current || !pinsGeoJSON) return;
+
+    const source = map.current.getSource('portfolio-pins') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(pinsGeoJSON);
+    }
+  }, [pinsGeoJSON]);
+
+  // Pin click event listener
+  useEffect(() => {
+    const handlePinClicked = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const pin = pins.find(p => p.id === detail.pinId);
+      if (pin) {
+        setSelectedAuction(null);
+        setSelectedSubstation(null);
+        setSelectedDatacenter(null);
+        setSelectedLake(null);
+        setSelectedPin(pin);
+      }
+    };
+
+    window.addEventListener('farmscope-pin-clicked', handlePinClicked);
+    return () => window.removeEventListener('farmscope-pin-clicked', handlePinClicked);
+  }, [pins]);
+
+  // Crosshair cursor in pin drop mode
+  useEffect(() => {
+    if (!map.current) return;
+
+    if (pinDropMode) {
+      map.current.getCanvas().style.cursor = 'crosshair';
+    } else {
+      map.current.getCanvas().style.cursor = '';
+    }
+  }, [pinDropMode]);
+
+  // Pin placed toast
+  useEffect(() => {
+    const handlePinPlaced = () => {
+      toast({ title: 'Pin dropped', description: 'Click the pin to add details.' });
+    };
+    window.addEventListener('farmscope-pin-placed', handlePinPlaced);
+    return () => window.removeEventListener('farmscope-pin-placed', handlePinPlaced);
+  }, [toast]);
+
   // Filter lakes by type (lake vs reservoir)
   useEffect(() => {
     if (!map.current) return;
@@ -3217,6 +3519,15 @@ export default function EnhancedMap({
           }}
           onStartValuation={onStartAuctionValuation ? () => onStartAuctionValuation(selectedAuction) : undefined}
           isPreparingValuation={isPreparingAuctionValuation}
+          onHideAuction={(id, title) => {
+            hideAuction(id, title);
+            setSelectedAuction(null);
+            clearHighlightedParcel();
+            toast({
+              title: 'Auction hidden',
+              description: 'You can restore it from the sidebar.',
+            });
+          }}
         />
       )}
       {selectedSubstation && (
@@ -3235,6 +3546,21 @@ export default function EnhancedMap({
         <LakeInfoPanel
           lake={selectedLake}
           onClose={() => setSelectedLake(null)}
+        />
+      )}
+      {selectedPin && onPinUpdate && onPinDelete && (
+        <PinDetailsPanel
+          pin={selectedPin}
+          onClose={() => setSelectedPin(null)}
+          onUpdate={(id, updates) => {
+            onPinUpdate(id, updates);
+            // Update local state with changes
+            setSelectedPin(prev => prev ? { ...prev, ...updates } : null);
+          }}
+          onDelete={(id) => {
+            onPinDelete(id);
+            setSelectedPin(null);
+          }}
         />
       )}
     </>

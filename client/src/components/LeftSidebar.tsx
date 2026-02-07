@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Search, MapPin, SlidersHorizontal, X, List } from 'lucide-react';
+import { Search, MapPin, SlidersHorizontal, X, List, EyeOff, Navigation, Trash2 } from 'lucide-react';
+import type { FarmPin, PinCategory } from '@/types/portfolio';
+import { PIN_CATEGORIES } from '@/types/portfolio';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -69,6 +71,8 @@ export interface MapOverlays {
   };
   showCityLabels: boolean;
   showHighways: boolean;
+  showStreetLabels: boolean;
+  showPortfolioPins: boolean;
 }
 
 export interface MapInfo {
@@ -89,6 +93,12 @@ interface LeftSidebarProps {
   onMapOverlaysChange: (overlays: MapOverlays) => void;
   mapInfo: MapInfo;
   onMapInfoChange: (mapInfo: MapInfo) => void;
+  hiddenCount?: number;
+  onManageHidden?: () => void;
+  onUnhideAll?: () => void;
+  pinsByCategory?: Record<PinCategory, FarmPin[]>;
+  onFlyToPin?: (lng: number, lat: number) => void;
+  onDeletePin?: (id: string) => void;
 }
 
 const PROPERTY_TYPES = [
@@ -115,7 +125,13 @@ export default function LeftSidebar({
   mapOverlays,
   onMapOverlaysChange,
   mapInfo,
-  onMapInfoChange
+  onMapInfoChange,
+  hiddenCount = 0,
+  onManageHidden,
+  onUnhideAll,
+  pinsByCategory,
+  onFlyToPin,
+  onDeletePin,
 }: LeftSidebarProps) {
   const [searchInput, setSearchInput] = useState('');
   const [countySearch, setCountySearch] = useState('');
@@ -128,6 +144,7 @@ export default function LeftSidebar({
     value: false,
     overlays: true,
     mapInfo: true,
+    portfolio: false,
   });
 
   const handleSearch = () => {
@@ -469,7 +486,7 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showTransmissionLines && mapOverlays.showCityLabels && mapOverlays.showHighways}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showTransmissionLines && mapOverlays.showCityLabels && mapOverlays.showHighways && mapOverlays.showStreetLabels && mapOverlays.showPortfolioPins}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
@@ -477,6 +494,13 @@ export default function LeftSidebar({
                       parcelDisplayMode: allEnabled ? 'self-hosted' : 'off',
                       showSubstations: allEnabled,
                       showDatacenters: allEnabled,
+                      datacenterStates: {
+                        iowa: allEnabled,
+                        illinois: allEnabled,
+                        missouri: allEnabled,
+                        nebraska: allEnabled,
+                        wisconsin: allEnabled
+                      },
                       showLakes: allEnabled,
                       lakeTypes: {
                         lakes: allEnabled,
@@ -500,7 +524,9 @@ export default function LeftSidebar({
                         kv69: allEnabled
                       },
                       showCityLabels: allEnabled,
-                      showHighways: allEnabled
+                      showHighways: allEnabled,
+                      showStreetLabels: allEnabled,
+                      showPortfolioPins: allEnabled
                     });
                   }}
                 />
@@ -534,6 +560,24 @@ export default function LeftSidebar({
                   }
                 />
                 <span className="text-sm text-slate-700">Highways & Interstates</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapOverlays.showStreetLabels}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showStreetLabels: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Street & Road Labels</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
+                <Checkbox
+                  checked={mapOverlays.showPortfolioPins}
+                  onCheckedChange={(checked) =>
+                    onMapOverlaysChange({ ...mapOverlays, showPortfolioPins: checked as boolean })
+                  }
+                />
+                <span className="text-sm text-slate-700">Pinned Farms</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
@@ -887,6 +931,68 @@ export default function LeftSidebar({
               </label>
             </CollapsibleContent>
           </Collapsible>
+
+          {/* My Portfolio */}
+          {pinsByCategory && (
+            <Collapsible
+              open={filterSectionsOpen.portfolio}
+              onOpenChange={(open) => setFilterSectionsOpen({ ...filterSectionsOpen, portfolio: open })}
+              className="filter-group mb-6"
+            >
+              <CollapsibleTrigger className="w-full flex justify-between items-center">
+                <h4 className="text-sm font-semibold text-slate-700">My Portfolio</h4>
+                <span className="text-xs text-slate-500">{filterSectionsOpen.portfolio ? '−' : '+'}</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-3">
+                {PIN_CATEGORIES.map((cat) => {
+                  const catPins = pinsByCategory[cat.id] || [];
+                  if (catPins.length === 0) return null;
+                  return (
+                    <div key={cat.id}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className="text-xs font-semibold text-slate-600">{cat.label} ({catPins.length})</span>
+                      </div>
+                      <div className="space-y-1 ml-4">
+                        {catPins.map((pin) => (
+                          <div key={pin.id} className="flex items-center justify-between gap-1 py-1">
+                            <button
+                              className="text-xs text-slate-700 hover:text-blue-600 truncate text-left flex-1"
+                              onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
+                              title={pin.name}
+                            >
+                              {pin.name}
+                            </button>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                className="text-slate-400 hover:text-blue-600 p-0.5"
+                                onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
+                                title="Fly to pin"
+                              >
+                                <Navigation className="h-3 w-3" />
+                              </button>
+                              <button
+                                className="text-slate-400 hover:text-red-500 p-0.5"
+                                onClick={() => onDeletePin?.(pin.id)}
+                                title="Delete pin"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {Object.values(pinsByCategory).every(arr => arr.length === 0) && (
+                  <p className="text-xs text-slate-400 text-center py-2">
+                    No pins yet. Use "Drop Pin" to add farms.
+                  </p>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
         </div>
 
         {/* Results Summary */}
@@ -907,6 +1013,26 @@ export default function LeftSidebar({
               </Button>
             )}
           </div>
+          {hiddenCount > 0 && (
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
+              <span className="text-xs text-slate-500 flex items-center gap-1">
+                <EyeOff className="h-3 w-3" />
+                {hiddenCount} auction{hiddenCount !== 1 ? 's' : ''} hidden
+              </span>
+              <div className="flex gap-2">
+                {onManageHidden && (
+                  <Button variant="ghost" size="sm" onClick={onManageHidden} className="text-xs h-6 px-2">
+                    Manage
+                  </Button>
+                )}
+                {onUnhideAll && (
+                  <Button variant="ghost" size="sm" onClick={onUnhideAll} className="text-xs h-6 px-2">
+                    Show All
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

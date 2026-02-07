@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { X, MapPin, Calendar, Ruler, TrendingUp, ExternalLink, Calculator, FileText, Sparkles, Sprout } from 'lucide-react';
+import { X, MapPin, Calendar, Ruler, TrendingUp, ExternalLink, Calculator, FileText, Sparkles, Sprout, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Auction } from '@shared/schema';
 
@@ -13,9 +13,10 @@ interface AuctionDetailsPanelProps {
   onClose: () => void;
   onStartValuation?: () => void;
   isPreparingValuation?: boolean;
+  onHideAuction?: (id: number, title: string) => void;
 }
 
-export function AuctionDetailsPanel({ auction, onClose, onStartValuation, isPreparingValuation = false }: AuctionDetailsPanelProps) {
+export function AuctionDetailsPanel({ auction, onClose, onStartValuation, isPreparingValuation = false, onHideAuction }: AuctionDetailsPanelProps) {
   const [calculating, setCalculating] = useState(false);
   const [valuation, setValuation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -374,6 +375,21 @@ export function AuctionDetailsPanel({ auction, onClose, onStartValuation, isPrep
                   Start Property Valuation
                 </>
               )}
+            </Button>
+          )}
+
+          {/* Hide This Auction Button */}
+          {onHideAuction && (
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground hover:text-destructive"
+              onClick={() => {
+                onHideAuction(auction.id, auction.title);
+                onClose();
+              }}
+            >
+              <EyeOff className="mr-2 h-4 w-4" />
+              Hide This Auction
             </Button>
           )}
         </div>

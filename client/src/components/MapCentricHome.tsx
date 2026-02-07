@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers } from 'lucide-react';
+import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers, MapPinPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
 import LeftSidebar, { type AuctionFilters, type MapOverlays, type MapInfo } from './LeftSidebar';
+import { useHiddenAuctions } from '@/hooks/use-hidden-auctions';
+import { HiddenAuctionsDialog } from './HiddenAuctionsDialog';
+import { usePortfolio } from '@/hooks/use-portfolio';
+import type { PinCategory } from '@/types/portfolio';
+import { PIN_CATEGORIES } from '@/types/portfolio';
 import MapControls from './MapControls';
 import { Header } from './layout/header';
 import { apiRequest } from '@/lib/queryClient';
@@ -25,6 +30,15 @@ export default function MapCentricHome() {
   const [clearPolygons, setClearPolygons] = useState(false);
   const [showAuctionLayer, setShowAuctionLayer] = useState(true);
   
+  // Hidden auctions
+  const { hiddenAuctions, hiddenCount, unhideAuction, unhideAll } = useHiddenAuctions();
+  const [hiddenDialogOpen, setHiddenDialogOpen] = useState(false);
+
+  // Portfolio pins
+  const { pins, addPin, updatePin, deletePin, pinsGeoJSON, pinsByCategory } = usePortfolio();
+  const [pinDropMode, setPinDropMode] = useState(false);
+  const [selectedPinCategory, setSelectedPinCategory] = useState<PinCategory>('interested');
+
   // Sidebar state
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   
@@ -81,7 +95,9 @@ export default function MapCentricHome() {
       kv69: true
     },
     showCityLabels: true,
-    showHighways: true
+    showHighways: true,
+    showStreetLabels: true,
+    showPortfolioPins: true
   });
 
   // Sync auction layer visibility with map overlays
@@ -414,6 +430,16 @@ export default function MapCentricHome() {
         onMapOverlaysChange={setMapOverlays}
         mapInfo={mapInfo}
         onMapInfoChange={setMapInfo}
+        hiddenCount={hiddenCount}
+        onManageHidden={() => setHiddenDialogOpen(true)}
+        onUnhideAll={unhideAll}
+        pinsByCategory={pinsByCategory}
+        onFlyToPin={(lng, lat) => {
+          if (mapRef) {
+            mapRef.flyTo({ center: [lng, lat], zoom: 15, duration: 1500 });
+          }
+        }}
+        onDeletePin={deletePin}
       />
 
       {/* Map Container */}
@@ -445,6 +471,15 @@ export default function MapCentricHome() {
           transmissionLineVoltages={mapOverlays.transmissionLineVoltages}
           showCityLabels={mapOverlays.showCityLabels}
           showHighways={mapOverlays.showHighways}
+          showStreetLabels={mapOverlays.showStreetLabels}
+          showPortfolioPins={mapOverlays.showPortfolioPins}
+          pinsGeoJSON={pinsGeoJSON}
+          pinDropMode={pinDropMode}
+          selectedPinCategory={selectedPinCategory}
+          onPinPlaced={(lng, lat) => addPin(lng, lat, selectedPinCategory)}
+          onPinUpdate={updatePin}
+          onPinDelete={deletePin}
+          pins={pins}
           parcelDisplayMode={mapOverlays.parcelDisplayMode}
         />
 
@@ -497,9 +532,42 @@ export default function MapCentricHome() {
                   onCheckedChange={(checked) => {
                     console.log('Draw polygon toggle:', checked);
                     setDrawModeEnabled(checked);
+                    if (checked) setPinDropMode(false); // Mutually exclusive
                   }}
                 />
               </div>
+
+              {/* Drop Pin Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <MapPinPlus className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-700">Drop Pin</span>
+                </div>
+                <Switch
+                  checked={pinDropMode}
+                  onCheckedChange={(checked) => {
+                    setPinDropMode(checked);
+                    if (checked) setDrawModeEnabled(false); // Mutually exclusive
+                  }}
+                />
+              </div>
+
+              {/* Pin Category Selector - visible when drop pin is on */}
+              {pinDropMode && (
+                <div className="flex gap-1 pl-7">
+                  {PIN_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className={`w-5 h-5 rounded-full border-2 transition-transform ${
+                        selectedPinCategory === cat.id ? 'scale-125 border-white shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: cat.color }}
+                      onClick={() => setSelectedPinCategory(cat.id)}
+                      title={cat.label}
+                    />
+                  ))}
+                </div>
+              )}
               
               {/* Owner Names Toggle */}
               <div className="flex items-center justify-between gap-4">
@@ -675,6 +743,17 @@ export default function MapCentricHome() {
           />
         )}
       </Suspense>
+
+      <HiddenAuctionsDialog
+        open={hiddenDialogOpen}
+        onOpenChange={setHiddenDialogOpen}
+        hiddenAuctions={hiddenAuctions}
+        onUnhide={unhideAuction}
+        onUnhideAll={() => {
+          unhideAll();
+          setHiddenDialogOpen(false);
+        }}
+      />
     </div>
     </>
   );
