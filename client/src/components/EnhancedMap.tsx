@@ -152,6 +152,8 @@ export default function EnhancedMap({
   const onPinPlacedRef = useRef(onPinPlaced);
   const portfolioSelectModeRef = useRef(portfolioSelectMode);
   const portfolioDrawModeRef = useRef(portfolioDrawMode);
+  const onParcelClickRef = useRef(onParcelClick);
+  const onPolygonDrawnRef = useRef(onPolygonDrawn);
   const [selectedPin, setSelectedPin] = useState<FarmPin | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
@@ -229,6 +231,14 @@ export default function EnhancedMap({
   useEffect(() => {
     portfolioDrawModeRef.current = portfolioDrawMode;
   }, [portfolioDrawMode]);
+
+  useEffect(() => {
+    onParcelClickRef.current = onParcelClick;
+  }, [onParcelClick]);
+
+  useEffect(() => {
+    onPolygonDrawnRef.current = onPolygonDrawn;
+  }, [onPolygonDrawn]);
 
   // Note: Ref sync effects for showArcgisParcelsRef and showOwnerLabelsRef removed
   // useParcelDisplay hook handles parcel visibility state management
@@ -1343,7 +1353,7 @@ export default function EnhancedMap({
       // Add click handlers for ownership layers (always add, visibility controlled elsewhere)
       const handleOwnershipClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
           // Drawing mode guard - don't open parcel info when drawing polygons
-          if (drawModeEnabledRef.current) {
+          if (drawModeEnabledRef.current || portfolioDrawModeRef.current) {
             return;
           }
 
@@ -1460,7 +1470,7 @@ export default function EnhancedMap({
             };
             
             // Trigger valuation workflow (same as Harrison County)
-            onParcelClick(parcel);
+            onParcelClickRef.current(parcel);
 
             if (portfolioSelectModeRef.current) {
               const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
@@ -1700,7 +1710,7 @@ export default function EnhancedMap({
       // Function to handle Harrison County parcel clicks
       const handleHarrisonParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         // Drawing mode guard - don't open parcel info when drawing polygons
-        if (drawModeEnabledRef.current) {
+        if (drawModeEnabledRef.current || portfolioDrawModeRef.current) {
           return;
         }
 
@@ -1753,7 +1763,7 @@ export default function EnhancedMap({
             };
             
             // Harrison County parcel successfully clicked
-            onParcelClick(parcel);
+            onParcelClickRef.current(parcel);
 
             if (portfolioSelectModeRef.current) {
               const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
@@ -1792,7 +1802,7 @@ export default function EnhancedMap({
               geometry: clickedFeature.geometry // Include actual polygon geometry
             };
 
-            onParcelClick(parcel);
+            onParcelClickRef.current(parcel);
 
             if (portfolioSelectModeRef.current) {
               const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
@@ -1830,7 +1840,7 @@ export default function EnhancedMap({
       // Add click handlers for regular parcels (all other counties)
       const handleRegularParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         // Drawing mode guard - don't open parcel info when drawing polygons
-        if (drawModeEnabledRef.current) {
+        if (drawModeEnabledRef.current || portfolioDrawModeRef.current) {
           return;
         }
 
@@ -1862,7 +1872,7 @@ export default function EnhancedMap({
             isCombined: props.COMBINED || false
           };
           
-          onParcelClick(parcel);
+          onParcelClickRef.current(parcel);
           
           // Show popup
           if (!drawModeEnabledRef.current) {
@@ -1923,7 +1933,7 @@ export default function EnhancedMap({
       // Function to handle parcel click (shared by both outline and fill)
       const handleParcelClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         // Drawing mode guard - don't open parcel info when drawing polygons
-        if (drawModeEnabledRef.current) {
+        if (drawModeEnabledRef.current || portfolioDrawModeRef.current) {
           return;
         }
 
@@ -2006,7 +2016,7 @@ export default function EnhancedMap({
             geometry: geometry // Include actual polygon geometry
           };
           
-          onParcelClick(parcel);
+          onParcelClickRef.current(parcel);
 
           // Portfolio select mode: show brief confirmation popup and return
           if (portfolioSelectModeRef.current) {
@@ -3015,12 +3025,12 @@ export default function EnhancedMap({
       // Handle polygon drawn
       map.current.on('draw.create', (e) => {
         const polygon = e.features[0];
-        onPolygonDrawn(polygon);
+        onPolygonDrawnRef.current(polygon);
       });
 
       map.current.on('draw.update', (e) => {
         const polygon = e.features[0];
-        onPolygonDrawn(polygon);
+        onPolygonDrawnRef.current(polygon);
       });
 
       return () => {
