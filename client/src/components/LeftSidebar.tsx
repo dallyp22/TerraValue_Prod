@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, SlidersHorizontal, X, List, EyeOff, Navigation, Trash2 } from 'lucide-react';
+import { Search, MapPin, SlidersHorizontal, X, List, EyeOff, Navigation, Trash2, Square, Pentagon } from 'lucide-react';
 import type { FarmPin, PinCategory } from '@/types/portfolio';
 import { PIN_CATEGORIES } from '@/types/portfolio';
 import { Button } from './ui/button';
@@ -301,10 +301,20 @@ export default function LeftSidebar({
                           className="flex items-center justify-between pl-5 py-1 rounded hover:bg-slate-50 group"
                         >
                           <button
-                            className="text-xs text-slate-700 truncate text-left flex-1"
+                            className="text-xs text-slate-700 truncate text-left flex-1 flex items-center gap-1.5"
                             onClick={() => onFlyToPin?.(pin.lng, pin.lat)}
                           >
-                            {pin.name}
+                            {pin.type === 'parcel' ? (
+                              <Square className="h-3 w-3 shrink-0 text-slate-400" />
+                            ) : pin.type === 'drawn' ? (
+                              <Pentagon className="h-3 w-3 shrink-0 text-slate-400" />
+                            ) : (
+                              <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
+                            )}
+                            <span className="truncate">{pin.name}</span>
+                            {pin.acres ? (
+                              <span className="text-slate-400 shrink-0">{pin.acres.toFixed(0)} ac</span>
+                            ) : null}
                           </button>
                           <button
                             className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
@@ -318,7 +328,7 @@ export default function LeftSidebar({
                   );
                 })}
                 {Object.values(pinsByCategory).every(arr => arr.length === 0) && (
-                  <p className="text-xs text-slate-500 italic">No pins yet. Use "Drop Pin" mode to add farms.</p>
+                  <p className="text-xs text-slate-500 italic">No items yet. Use Pin, Select, or Draw mode to add farms.</p>
                 )}
               </CollapsibleContent>
             </Collapsible>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers, MapPinPlus } from 'lucide-react';
+import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers, MapPinPlus, MousePointer, PenTool } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import * as turf from '@turf/turf';
@@ -11,6 +11,8 @@ import { HiddenAuctionsDialog } from './HiddenAuctionsDialog';
 import { usePortfolio } from '@/hooks/use-portfolio';
 import type { PinCategory } from '@/types/portfolio';
 import { PIN_CATEGORIES } from '@/types/portfolio';
+
+type PortfolioAddMode = 'none' | 'pin' | 'select' | 'draw';
 import MapControls from './MapControls';
 import { Header } from './layout/header';
 import { apiRequest } from '@/lib/queryClient';
@@ -35,9 +37,12 @@ export default function MapCentricHome() {
   const [hiddenDialogOpen, setHiddenDialogOpen] = useState(false);
 
   // Portfolio pins
-  const { pins, addPin, updatePin, deletePin, pinsGeoJSON, pinsByCategory } = usePortfolio();
-  const [pinDropMode, setPinDropMode] = useState(false);
+  const { pins, addPin, addParcel, addDrawnPolygon, updatePin, deletePin, pinsGeoJSON, pinsByCategory } = usePortfolio();
+  const [portfolioAddMode, setPortfolioAddMode] = useState<PortfolioAddMode>('none');
   const [selectedPinCategory, setSelectedPinCategory] = useState<PinCategory>('interested');
+  const pinDropMode = portfolioAddMode === 'pin';
+  const portfolioSelectMode = portfolioAddMode === 'select';
+  const portfolioDrawMode = portfolioAddMode === 'draw';
 
   // Sidebar state
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
@@ -203,29 +208,41 @@ export default function MapCentricHome() {
   const handlePolygonDrawn = async (polygon: any) => {
     const area = turf.area(polygon);
     const acres = Math.round((area / 4046.86) * 100) / 100;
-    
+
     const coordinates = polygon.geometry.coordinates[0];
+
+    // Portfolio draw mode: save polygon to portfolio and clear draw
+    if (portfolioAddMode === 'draw') {
+      addDrawnPolygon({
+        geometry: polygon.geometry as GeoJSON.Polygon,
+        acres,
+      }, selectedPinCategory);
+      // Signal to clear MapboxDraw
+      setClearPolygons(true);
+      return;
+    }
+
     const wkt = `POLYGON((${coordinates.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ')}))`;
-    
+
     setDrawnPolygonData({
       polygon,
       acres,
       wkt,
       coordinates: coordinates[0]
     });
-    
+
     try {
       const response = await apiRequest('POST', '/api/csr2/polygon', { wkt });
       const csr2Data = await response.json();
-      
+
       const reverseResponse = await apiRequest('POST', '/api/geocode/reverse', {
         latitude: coordinates[0][1],
         longitude: coordinates[0][0]
       });
       const locationData = await reverseResponse.json();
-      
-      setDrawnPolygonData((prev: any) => ({ 
-        ...prev, 
+
+      setDrawnPolygonData((prev: any) => ({
+        ...prev,
         csr2: csr2Data,
         county: locationData.county || '',
         state: locationData.state || 'Iowa'
@@ -237,6 +254,19 @@ export default function MapCentricHome() {
 
   // Handle parcel click
   const handleParcelClick = (parcel: any) => {
+    // Portfolio select mode: save parcel to portfolio
+    if (portfolioAddMode === 'select' && parcel.geometry) {
+      addParcel({
+        lng: parcel.coordinates?.[0] || 0,
+        lat: parcel.coordinates?.[1] || 0,
+        geometry: parcel.geometry as GeoJSON.Polygon,
+        acres: parcel.acres || 0,
+        parcelNumber: parcel.parcel_number || 'N/A',
+        county: parcel.county || 'N/A',
+        ownerName: parcel.owner_name || 'Unknown',
+      }, selectedPinCategory);
+      return;
+    }
     if (!drawModeEnabled) {
       setParcelData(parcel);
       setShowForm(true);
@@ -480,6 +510,8 @@ export default function MapCentricHome() {
           onPinUpdate={updatePin}
           onPinDelete={deletePin}
           pins={pins}
+          portfolioSelectMode={portfolioSelectMode}
+          portfolioDrawMode={portfolioDrawMode}
           parcelDisplayMode={mapOverlays.parcelDisplayMode}
         />
 
@@ -521,7 +553,7 @@ export default function MapCentricHome() {
               {/* Header */}
               <h3 className="text-sm font-medium text-slate-600 mb-4">Map Layers</h3>
               
-              {/* Draw Polygon Toggle */}
+              {/* Draw Polygon Toggle (Valuation) */}
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <Hexagon className="h-4 w-4 text-slate-500" />
@@ -532,28 +564,65 @@ export default function MapCentricHome() {
                   onCheckedChange={(checked) => {
                     console.log('Draw polygon toggle:', checked);
                     setDrawModeEnabled(checked);
-                    if (checked) setPinDropMode(false); // Mutually exclusive
+                    if (checked) setPortfolioAddMode('none'); // Mutually exclusive
                   }}
                 />
               </div>
 
-              {/* Drop Pin Toggle */}
-              <div className="flex items-center justify-between gap-4">
+              {/* Portfolio Add Mode */}
+              <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <MapPinPlus className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700">Drop Pin</span>
+                  <span className="text-sm text-slate-700 font-medium">Portfolio</span>
                 </div>
-                <Switch
-                  checked={pinDropMode}
-                  onCheckedChange={(checked) => {
-                    setPinDropMode(checked);
-                    if (checked) setDrawModeEnabled(false); // Mutually exclusive
-                  }}
-                />
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant={portfolioAddMode === 'pin' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const next = portfolioAddMode === 'pin' ? 'none' : 'pin';
+                      setPortfolioAddMode(next);
+                      if (next !== 'none') setDrawModeEnabled(false);
+                    }}
+                    className="flex-1 h-8 text-xs gap-1"
+                    title="Drop a pin anywhere on the map"
+                  >
+                    <MapPinPlus className="h-3.5 w-3.5" />
+                    Pin
+                  </Button>
+                  <Button
+                    variant={portfolioAddMode === 'select' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const next = portfolioAddMode === 'select' ? 'none' : 'select';
+                      setPortfolioAddMode(next);
+                      if (next !== 'none') setDrawModeEnabled(false);
+                    }}
+                    className="flex-1 h-8 text-xs gap-1"
+                    title="Click an existing parcel to save it"
+                  >
+                    <MousePointer className="h-3.5 w-3.5" />
+                    Select
+                  </Button>
+                  <Button
+                    variant={portfolioAddMode === 'draw' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const next = portfolioAddMode === 'draw' ? 'none' : 'draw';
+                      setPortfolioAddMode(next);
+                      if (next !== 'none') setDrawModeEnabled(false);
+                    }}
+                    className="flex-1 h-8 text-xs gap-1"
+                    title="Draw a custom polygon"
+                  >
+                    <PenTool className="h-3.5 w-3.5" />
+                    Draw
+                  </Button>
+                </div>
               </div>
 
-              {/* Pin Category Selector - visible when drop pin is on */}
-              {pinDropMode && (
+              {/* Pin Category Selector - visible when any portfolio mode is active */}
+              {portfolioAddMode !== 'none' && (
                 <div className="flex gap-1 pl-7">
                   {PIN_CATEGORIES.map((cat) => (
                     <button

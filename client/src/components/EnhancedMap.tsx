@@ -87,6 +87,8 @@ interface EnhancedMapProps {
   onPinUpdate?: (id: string, updates: Partial<Pick<FarmPin, 'name' | 'notes' | 'category'>>) => void;
   onPinDelete?: (id: string) => void;
   pins?: FarmPin[];
+  portfolioSelectMode?: boolean;
+  portfolioDrawMode?: boolean;
   parcelDisplayMode?: ParcelDisplayMode; // Unified parcel display mode: 'off' | 'arcgis' | 'self-hosted'
 }
 
@@ -124,6 +126,8 @@ export default function EnhancedMap({
   onPinUpdate,
   onPinDelete,
   pins = [],
+  portfolioSelectMode = false,
+  portfolioDrawMode = false,
   parcelDisplayMode = 'off',
 }: EnhancedMapProps) {
 
@@ -146,6 +150,8 @@ export default function EnhancedMap({
   
   const pinDropModeRef = useRef(pinDropMode);
   const onPinPlacedRef = useRef(onPinPlaced);
+  const portfolioSelectModeRef = useRef(portfolioSelectMode);
+  const portfolioDrawModeRef = useRef(portfolioDrawMode);
   const [selectedPin, setSelectedPin] = useState<FarmPin | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<any>(null);
@@ -215,6 +221,14 @@ export default function EnhancedMap({
   useEffect(() => {
     onPinPlacedRef.current = onPinPlaced;
   }, [onPinPlaced]);
+
+  useEffect(() => {
+    portfolioSelectModeRef.current = portfolioSelectMode;
+  }, [portfolioSelectMode]);
+
+  useEffect(() => {
+    portfolioDrawModeRef.current = portfolioDrawMode;
+  }, [portfolioDrawMode]);
 
   // Note: Ref sync effects for showArcgisParcelsRef and showOwnerLabelsRef removed
   // useParcelDisplay hook handles parcel visibility state management
@@ -1447,7 +1461,16 @@ export default function EnhancedMap({
             
             // Trigger valuation workflow (same as Harrison County)
             onParcelClick(parcel);
-            
+
+            if (portfolioSelectModeRef.current) {
+              const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
+                .setLngLat(e.lngLat)
+                .setHTML('<div style="padding:4px 8px;font-size:13px;font-weight:500;">Added to portfolio</div>')
+                .addTo(map.current!);
+              setTimeout(() => popup.remove(), 1500);
+              return;
+            }
+
             // Show popup only if NOT in drawing mode
             if (!drawModeEnabledRef.current) {
               const html = `
@@ -1731,7 +1754,16 @@ export default function EnhancedMap({
             
             // Harrison County parcel successfully clicked
             onParcelClick(parcel);
-            
+
+            if (portfolioSelectModeRef.current) {
+              const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
+                .setLngLat(e.lngLat)
+                .setHTML('<div style="padding:4px 8px;font-size:13px;font-weight:500;">Added to portfolio</div>')
+                .addTo(map.current!);
+              setTimeout(() => popup.remove(), 1500);
+              return;
+            }
+
             // Only show popup if not in drawing mode
             if (!drawModeEnabledRef.current) {
               const html = `
@@ -1751,7 +1783,7 @@ export default function EnhancedMap({
             // Fallback if no parcel number
             const parcel = {
               owner_name: props.owner || props.owner2 || props.owner3 || 'Unknown',
-              address: props.address || props.parcelid || 'N/A', 
+              address: props.address || props.parcelid || 'N/A',
               acres: Math.round(acres * 100) / 100, // Round to 2 decimal places
               coordinates: [e.lngLat.lng, e.lngLat.lat],
               parcel_number: props.parcelnumb || props.parcelnu_1 || 'N/A',
@@ -1759,9 +1791,18 @@ export default function EnhancedMap({
               county: 'Harrison County',
               geometry: clickedFeature.geometry // Include actual polygon geometry
             };
-            
+
             onParcelClick(parcel);
-            
+
+            if (portfolioSelectModeRef.current) {
+              const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
+                .setLngLat(e.lngLat)
+                .setHTML('<div style="padding:4px 8px;font-size:13px;font-weight:500;">Added to portfolio</div>')
+                .addTo(map.current!);
+              setTimeout(() => popup.remove(), 1500);
+              return;
+            }
+
             // Only show popup if not in drawing mode
             if (!drawModeEnabledRef.current) {
               const html = `
@@ -1966,7 +2007,17 @@ export default function EnhancedMap({
           };
           
           onParcelClick(parcel);
-          
+
+          // Portfolio select mode: show brief confirmation popup and return
+          if (portfolioSelectModeRef.current) {
+            const popup = new maplibregl.Popup({ closeOnClick: true, closeButton: false })
+              .setLngLat(e.lngLat)
+              .setHTML('<div style="padding:4px 8px;font-size:13px;font-weight:500;">Added to portfolio</div>')
+              .addTo(map.current!);
+            setTimeout(() => popup.remove(), 1500);
+            return;
+          }
+
           // Only show popup if not in drawing mode
           if (!drawModeEnabledRef.current) {
             const html = `
@@ -2093,11 +2144,42 @@ export default function EnhancedMap({
         data: pinsGeoJSON || { type: 'FeatureCollection', features: [] }
       });
 
-      // Background circle for pins
+      // Portfolio polygon fill layer (for parcel/drawn items)
+      map.current!.addLayer({
+        id: 'portfolio-parcels-fill',
+        type: 'fill',
+        source: 'portfolio-pins',
+        filter: ['!=', ['geometry-type'], 'Point'],
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.25
+        },
+        layout: {
+          'visibility': showPortfolioPins ? 'visible' : 'none'
+        }
+      });
+
+      // Portfolio polygon outline layer
+      map.current!.addLayer({
+        id: 'portfolio-parcels-outline',
+        type: 'line',
+        source: 'portfolio-pins',
+        filter: ['!=', ['geometry-type'], 'Point'],
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2.5
+        },
+        layout: {
+          'visibility': showPortfolioPins ? 'visible' : 'none'
+        }
+      });
+
+      // Background circle for point pins only
       map.current!.addLayer({
         id: 'portfolio-pins-bg',
         type: 'circle',
         source: 'portfolio-pins',
+        filter: ['==', ['geometry-type'], 'Point'],
         paint: {
           'circle-radius': 10,
           'circle-color': ['get', 'color'],
@@ -2132,7 +2214,7 @@ export default function EnhancedMap({
         }
       });
 
-      // Portfolio pin click handler
+      // Portfolio pin click handler (point pins)
       const handlePinClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         e.originalEvent.stopPropagation();
         featureClickedRef.current = true;
@@ -2140,18 +2222,37 @@ export default function EnhancedMap({
 
         if (e.features && e.features.length > 0) {
           const pinId = e.features[0].properties?.id;
-          // Look up the full pin from the pins array via a custom event
           window.dispatchEvent(new CustomEvent('farmscope-pin-clicked', { detail: { pinId } }));
         }
       };
       map.current!.on('click', 'portfolio-pins-bg', handlePinClick);
+
+      // Portfolio polygon click handler (parcel/drawn items)
+      const handlePortfolioPolygonClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        e.originalEvent.stopPropagation();
+        featureClickedRef.current = true;
+        setTimeout(() => { featureClickedRef.current = false; }, 100);
+
+        if (e.features && e.features.length > 0) {
+          const pinId = e.features[0].properties?.id;
+          window.dispatchEvent(new CustomEvent('farmscope-pin-clicked', { detail: { pinId } }));
+        }
+      };
+      map.current!.on('click', 'portfolio-parcels-fill', handlePortfolioPolygonClick);
 
       // Pin hover
       map.current!.on('mouseenter', 'portfolio-pins-bg', () => {
         if (map.current) map.current.getCanvas().style.cursor = 'pointer';
       });
       map.current!.on('mouseleave', 'portfolio-pins-bg', () => {
-        if (map.current && !pinDropModeRef.current) map.current.getCanvas().style.cursor = '';
+        if (map.current && !pinDropModeRef.current && !portfolioSelectModeRef.current) map.current.getCanvas().style.cursor = '';
+      });
+      // Portfolio polygon hover
+      map.current!.on('mouseenter', 'portfolio-parcels-fill', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.current!.on('mouseleave', 'portfolio-parcels-fill', () => {
+        if (map.current && !pinDropModeRef.current && !portfolioSelectModeRef.current) map.current.getCanvas().style.cursor = '';
       });
 
       // Pin drop handler - listen for map clicks when in pin drop mode
@@ -2161,7 +2262,7 @@ export default function EnhancedMap({
         if (drawModeEnabledRef.current) return;
 
         // Check if clicking on an existing feature
-        const existingLayers = ['portfolio-pins-bg'];
+        const existingLayers = ['portfolio-pins-bg', 'portfolio-parcels-fill'];
         // Only check auction layers if they exist
         if (map.current?.getLayer('auction-markers')) existingLayers.push('auction-markers');
         if (map.current?.getLayer('auction-markers-bg')) existingLayers.push('auction-markers-bg');
@@ -2941,12 +3042,12 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!draw.current || !map.current) return;
 
-    if (drawModeEnabled) {
+    if (drawModeEnabled || portfolioDrawMode) {
       draw.current.changeMode('draw_polygon');
     } else {
       draw.current.changeMode('simple_select');
     }
-  }, [drawModeEnabled]);
+  }, [drawModeEnabled, portfolioDrawMode]);
 
   // NOTE: Owner label visibility is now handled by useParcelDisplay hook
 
@@ -3323,7 +3424,7 @@ export default function EnhancedMap({
   useEffect(() => {
     if (!map.current) return;
 
-    const layers = ['portfolio-pins-bg', 'portfolio-pins-label'];
+    const layers = ['portfolio-pins-bg', 'portfolio-pins-label', 'portfolio-parcels-fill', 'portfolio-parcels-outline'];
     layers.forEach(layerId => {
       const layer = map.current?.getLayer(layerId);
       if (layer) {
@@ -3364,16 +3465,16 @@ export default function EnhancedMap({
     return () => window.removeEventListener('farmscope-pin-clicked', handlePinClicked);
   }, [pins]);
 
-  // Crosshair cursor in pin drop mode
+  // Crosshair cursor in pin drop or select mode
   useEffect(() => {
     if (!map.current) return;
 
-    if (pinDropMode) {
+    if (pinDropMode || portfolioSelectMode) {
       map.current.getCanvas().style.cursor = 'crosshair';
     } else {
       map.current.getCanvas().style.cursor = '';
     }
-  }, [pinDropMode]);
+  }, [pinDropMode, portfolioSelectMode]);
 
   // Pin placed toast
   useEffect(() => {

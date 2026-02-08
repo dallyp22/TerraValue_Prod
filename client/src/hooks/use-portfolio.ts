@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FarmPin, PinCategory, PortfolioData } from '@/types/portfolio';
 import { PIN_CATEGORIES } from '@/types/portfolio';
+import * as turf from '@turf/turf';
 
 const STORAGE_KEY = 'farmscope-portfolio';
 const EVENT_KEY = 'farmscope-portfolio-changed';
@@ -10,6 +11,18 @@ function loadPortfolio(): FarmPin[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const data: PortfolioData = JSON.parse(raw);
+
+    // v1 → v2 migration: add type: 'pin' to existing items
+    if (!data.version || data.version === 1) {
+      const migrated = (data.pins || []).map(p => ({
+        ...p,
+        type: p.type || 'pin' as const,
+      }));
+      const v2Data: PortfolioData = { pins: migrated, version: 2 };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(v2Data));
+      return migrated;
+    }
+
     return data.pins || [];
   } catch {
     return [];
@@ -17,7 +30,7 @@ function loadPortfolio(): FarmPin[] {
 }
 
 function savePortfolio(pins: FarmPin[]) {
-  const data: PortfolioData = { pins, version: 1 };
+  const data: PortfolioData = { pins, version: 2 };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   window.dispatchEvent(new CustomEvent(EVENT_KEY));
 }
@@ -59,6 +72,67 @@ export function usePortfolio() {
       notes: '',
       createdAt: now,
       updatedAt: now,
+      type: 'pin',
+    };
+    const current = loadPortfolio();
+    const updated = [...current, pin];
+    savePortfolio(updated);
+    setPins(updated);
+    return pin;
+  }, []);
+
+  const addParcel = useCallback((parcelData: {
+    lng: number;
+    lat: number;
+    geometry: GeoJSON.Polygon;
+    acres: number;
+    parcelNumber: string;
+    county: string;
+    ownerName: string;
+  }, category: PinCategory) => {
+    const now = new Date().toISOString();
+    const pin: FarmPin = {
+      id: generateId(),
+      lng: parcelData.lng,
+      lat: parcelData.lat,
+      category,
+      name: parcelData.ownerName !== 'Unknown' ? parcelData.ownerName : `Parcel ${parcelData.parcelNumber}`,
+      notes: '',
+      createdAt: now,
+      updatedAt: now,
+      type: 'parcel',
+      geometry: parcelData.geometry,
+      acres: parcelData.acres,
+      parcelNumber: parcelData.parcelNumber,
+      county: parcelData.county,
+      ownerName: parcelData.ownerName,
+    };
+    const current = loadPortfolio();
+    const updated = [...current, pin];
+    savePortfolio(updated);
+    setPins(updated);
+    return pin;
+  }, []);
+
+  const addDrawnPolygon = useCallback((polygonData: {
+    geometry: GeoJSON.Polygon;
+    acres: number;
+  }, category: PinCategory) => {
+    const now = new Date().toISOString();
+    const centroid = turf.centroid({ type: 'Feature', geometry: polygonData.geometry, properties: {} });
+    const [lng, lat] = centroid.geometry.coordinates;
+    const pin: FarmPin = {
+      id: generateId(),
+      lng,
+      lat,
+      category,
+      name: `Drawn area (${polygonData.acres.toFixed(1)} ac)`,
+      notes: '',
+      createdAt: now,
+      updatedAt: now,
+      type: 'drawn',
+      geometry: polygonData.geometry,
+      acres: polygonData.acres,
     };
     const current = loadPortfolio();
     const updated = [...current, pin];
@@ -88,18 +162,24 @@ export function usePortfolio() {
       type: 'FeatureCollection' as const,
       features: pins.map(pin => {
         const catConfig = PIN_CATEGORIES.find(c => c.id === pin.category);
+        const isPolygon = (pin.type === 'parcel' || pin.type === 'drawn') && pin.geometry;
+
         return {
           type: 'Feature' as const,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [pin.lng, pin.lat],
-          },
+          geometry: isPolygon
+            ? pin.geometry!
+            : {
+                type: 'Point' as const,
+                coordinates: [pin.lng, pin.lat],
+              },
           properties: {
             id: pin.id,
             name: pin.name,
             category: pin.category,
             color: catConfig?.color || '#3b82f6',
             notes: pin.notes,
+            itemType: pin.type || 'pin',
+            acres: pin.acres,
           },
         };
       }),
@@ -123,6 +203,8 @@ export function usePortfolio() {
   return {
     pins,
     addPin,
+    addParcel,
+    addDrawnPolygon,
     updatePin,
     deletePin,
     pinsGeoJSON,

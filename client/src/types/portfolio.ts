@@ -1,5 +1,7 @@
 export type PinCategory = 'high-priority' | 'interested' | 'watching' | 'purchased' | 'passed';
 
+export type PortfolioItemType = 'pin' | 'parcel' | 'drawn';
+
 export interface PinCategoryConfig {
   id: PinCategory;
   label: string;
@@ -23,9 +25,15 @@ export interface FarmPin {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  type: PortfolioItemType;
+  geometry?: GeoJSON.Polygon;
+  acres?: number;
+  parcelNumber?: string;
+  county?: string;
+  ownerName?: string;
 }
 
 export interface PortfolioData {
   pins: FarmPin[];
-  version: 1;
+  version: 1 | 2;
 }

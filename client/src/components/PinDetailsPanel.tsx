@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { X, MapPin, Trash2, Check } from 'lucide-react';
+import { X, MapPin, Trash2, Check, Square, Pentagon, Ruler, User, Hash, MapPinned } from 'lucide-react';
 import type { FarmPin, PinCategory } from '@/types/portfolio';
 import { PIN_CATEGORIES } from '@/types/portfolio';
 
@@ -55,7 +55,42 @@ export function PinDetailsPanel({ pin, onClose, onUpdate, onDelete }: PinDetails
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Coordinates */}
+        {/* Type-specific metadata */}
+        {pin.type === 'parcel' && (
+          <div className="space-y-1.5 text-sm text-muted-foreground">
+            {pin.acres != null && (
+              <div className="flex items-center gap-2">
+                <Ruler className="h-4 w-4" />
+                <span>{pin.acres.toFixed(2)} acres</span>
+              </div>
+            )}
+            {pin.ownerName && (
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span>{pin.ownerName}</span>
+              </div>
+            )}
+            {pin.parcelNumber && (
+              <div className="flex items-center gap-2">
+                <Hash className="h-4 w-4" />
+                <span>{pin.parcelNumber}</span>
+              </div>
+            )}
+            {pin.county && (
+              <div className="flex items-center gap-2">
+                <MapPinned className="h-4 w-4" />
+                <span>{pin.county}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {pin.type === 'drawn' && pin.acres != null && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Ruler className="h-4 w-4" />
+            <span>{pin.acres.toFixed(2)} acres</span>
+          </div>
+        )}
+        {/* Coordinates (always shown) */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4" />
           <span>{pin.lat.toFixed(5)}, {pin.lng.toFixed(5)}</span>
