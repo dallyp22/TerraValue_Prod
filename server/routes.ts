@@ -1840,7 +1840,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
             // Get CSR2 data for matched parcel
             if (matchedParcel.geometry) {
               try {
-                const csr2Result = await csr2Service.getCSR2ForGeometry(matchedParcel.geometry);
+                const csr2Result = await csr2Service.calculateAverageCSR2(matchedParcel.geometry);
                 if (csr2Result) {
                   csr2Data = csr2Result;
                   console.log(`✅ CSR2 data: mean=${csr2Data.mean}, min=${csr2Data.min}, max=${csr2Data.max}`);
