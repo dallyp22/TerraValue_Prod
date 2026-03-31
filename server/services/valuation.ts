@@ -1,4 +1,4 @@
-import { openaiService } from "./openai.js";
+import { openaiService, type MarketResearchResult } from "./openai.js";
 import { csr2Service } from "./csr2.js";
 import { cornPriceService } from "./cornPrice.js";
 import { countyCsr2RateService } from "./countyCsr2Rates.js";
@@ -32,7 +32,7 @@ export class ValuationService {
       // Update status to processing immediately
       await storage.updateValuation(valuationId, { status: "processing" });
 
-      // Start ALL async operations in parallel for maximum speed
+      const pipelineStart = Date.now();
       console.log(`🚀 Starting parallel valuation operations for ID ${valuationId}...`);
       console.log(`📍 Property: ${propertyData.county} County, ${propertyData.state}, ${propertyData.landType}`);
 
@@ -46,49 +46,74 @@ export class ValuationService {
         ]);
       };
 
+      // Helper to time and log each operation
+      const timed = async <T>(label: string, promise: Promise<T>): Promise<T> => {
+        const start = Date.now();
+        try {
+          const result = await promise;
+          console.log(`⏱️ ${label}: ${((Date.now() - start) / 1000).toFixed(1)}s`);
+          return result;
+        } catch (e) {
+          console.log(`⏱️ ${label}: FAILED after ${((Date.now() - start) / 1000).toFixed(1)}s`);
+          throw e;
+        }
+      };
+
+      // For Iowa: call getIowaMarketAnalysis ONCE, then derive marketResult from it
+      // This eliminates the duplicate Assistants API call that was doubling execution time
+      const isIowa = propertyData.state === "Iowa";
+
       // Launch all data fetching operations simultaneously with error handling
       const parallelPromises = {
         // Core valuation data - with timeout and error handling
-        vectorResult: withTimeout(
-          openaiService.getCountyBaseValue(
-            propertyData.county,
-            propertyData.state,
-            propertyData.landType
-          ),
-          60000, // 60 second timeout
-          "Vector store query"
+        vectorResult: timed("Vector store query",
+          withTimeout(
+            openaiService.getCountyBaseValue(
+              propertyData.county,
+              propertyData.state,
+              propertyData.landType
+            ),
+            60000,
+            "Vector store query"
+          )
         ).catch(error => {
           console.error("❌ Vector store query failed:", error.message || error);
-          // Return fallback value based on state averages
           return { baseValue: 8500, description: "Fallback value due to API error" };
         }),
 
-        // Market research (runs in parallel from the start)
-        marketResult: withTimeout(
-          openaiService.performMarketResearch(
-            propertyData.county,
-            propertyData.state,
-            propertyData.landType
-          ),
-          60000, // 60 second timeout
-          "Market research"
-        ).catch(error => {
-          console.error("❌ Market research failed:", error.message || error);
-          return { marketAdjustment: 0, insight: "Market data unavailable", trends: [] };
-        }),
-
-        // Iowa-specific market analysis (if applicable)
-        iowaMarketAnalysis: propertyData.state === "Iowa"
-          ? withTimeout(
-              openaiService.getIowaMarketAnalysis(
-                propertyData.county,
-                propertyData.landType
-              ),
-              60000,
-              "Iowa market analysis"
+        // Iowa market analysis (single call - used for both comps AND market research)
+        // Non-Iowa: standard market research
+        iowaMarketAnalysis: isIowa
+          ? timed("Iowa market analysis",
+              withTimeout(
+                openaiService.getIowaMarketAnalysis(
+                  propertyData.county,
+                  propertyData.landType
+                ),
+                60000,
+                "Iowa market analysis"
+              )
             ).catch(error => {
               console.error("❌ Iowa market analysis failed:", error.message || error);
               return null;
+            })
+          : Promise.resolve(null),
+
+        // Non-Iowa market research (only for non-Iowa states)
+        nonIowaMarketResult: !isIowa
+          ? timed("Market research",
+              withTimeout(
+                openaiService.performMarketResearch(
+                  propertyData.county,
+                  propertyData.state,
+                  propertyData.landType
+                ),
+                60000,
+                "Market research"
+              )
+            ).catch(error => {
+              console.error("❌ Market research failed:", error.message || error);
+              return { marketAdjustment: 0, insight: "Market data unavailable", trends: [] as string[] };
             })
           : Promise.resolve(null),
 
@@ -104,19 +129,35 @@ export class ValuationService {
       console.log("⏳ Waiting for parallel API calls...");
 
       // Wait for all parallel operations to complete
-      const results = await Promise.all([
+      const [vectorResult, iowaMarketAnalysis, nonIowaMarketResult, cornFuturesPrice] = await Promise.all([
         parallelPromises.vectorResult,
-        parallelPromises.marketResult,
         parallelPromises.iowaMarketAnalysis,
+        parallelPromises.nonIowaMarketResult,
         parallelPromises.cornFuturesPrice
       ]);
 
-      const vectorResult = results[0];
-      const marketResult = results[1];
-      const iowaMarketAnalysis = results[2];
-      const cornFuturesPrice = results[3];
+      // Derive marketResult from Iowa analysis (no second API call) or use non-Iowa result
+      let marketResult: MarketResearchResult;
+      if (isIowa && iowaMarketAnalysis) {
+        const avgPricePerAcre = iowaMarketAnalysis.comps.length > 0
+          ? iowaMarketAnalysis.comps.reduce((sum: number, comp: any) => sum + comp.price_per_acre, 0) / iowaMarketAnalysis.comps.length
+          : 0;
+        marketResult = {
+          marketAdjustment: (typeof iowaMarketAnalysis.trends.yoy_change === 'number' && !isNaN(iowaMarketAnalysis.trends.yoy_change))
+            ? iowaMarketAnalysis.trends.yoy_change
+            : 0.02,
+          insight: iowaMarketAnalysis.summary,
+          trends: iowaMarketAnalysis.trends.factors.length > 0
+            ? iowaMarketAnalysis.trends.factors
+            : ["Iowa market analysis", "Recent sales data", "Current market conditions"]
+        };
+      } else if (nonIowaMarketResult) {
+        marketResult = nonIowaMarketResult;
+      } else {
+        marketResult = { marketAdjustment: 0.02, insight: "Market data unavailable", trends: [] };
+      }
 
-      console.log("✅ All parallel operations completed successfully");
+      console.log(`✅ All parallel operations completed in ${((Date.now() - pipelineStart) / 1000).toFixed(1)}s`);
       console.log(`📊 Vector result: baseValue=$${vectorResult.baseValue}`);
       console.log(`📈 Market result: adjustment=${marketResult.marketAdjustment}, trends=${marketResult.trends.length}`);
 
@@ -201,38 +242,45 @@ export class ValuationService {
         aiReasoning: `The analyzed parcel in ${propertyData.county} County, Iowa, has several significant characteristics that influence its value beyond the county's established base value for ${propertyData.landType} land. The parcel boasts an excellent Iowa CSR2 rating of ${propertyData.csr2Mean || 'pending'}, indicating high productivity potential, which is notably above average for the region. The CSR2-based calculated value of $${Math.round(csr2Value).toLocaleString()}/acre highlights the parcel's high productivity, which warrants upward adjustment from the base value.${csr2Context}${incomeContext} This valuation accounts for the excellent soil productivity, balanced against the income-based valuation, without substantial specific property disadvantages (such as poor drainage, extreme topography, or location issues) identified. The lack of specific infrastructural improvements or maintenance issues implies no additional value adjustments are necessary for those factors.`
       });
 
-      // Step 3: Process Property Improvements
+      // Step 3: Process Property Improvements (parallelized)
       let improvementDetails: any[] = [];
       let totalImprovementsValue = 0;
 
       if (propertyData.includeImprovements && propertyData.improvements?.length) {
-        console.log(`Processing ${propertyData.improvements.length} property improvements`);
-        
-        for (const improvement of propertyData.improvements) {
+        console.log(`Processing ${propertyData.improvements.length} property improvements in parallel`);
+
+        const improvementPromises = propertyData.improvements.map(async (improvement) => {
           let improvementValue = 0;
-          
+
           if (improvement.valuationMethod === "manual" && improvement.manualValue) {
             improvementValue = improvement.manualValue;
           } else if (improvement.valuationMethod === "ai") {
-            // Use AI to estimate improvement value
-            improvementValue = await openaiService.estimateImprovementValue(
-              improvement.type,
-              improvement.description,
-              improvement.condition || "Good",
-              propertyData.county,
-              propertyData.state
-            );
+            improvementValue = await withTimeout(
+              openaiService.estimateImprovementValue(
+                improvement.type,
+                improvement.description,
+                improvement.condition || "Good",
+                propertyData.county,
+                propertyData.state
+              ),
+              30000,
+              `Improvement estimation (${improvement.type})`
+            ).catch(error => {
+              console.error(`❌ Improvement estimation failed for ${improvement.type}:`, error.message);
+              return 0;
+            });
           }
-          
-          improvementDetails.push({
+
+          return {
             type: improvement.type,
             description: improvement.description,
             value: improvementValue,
             method: improvement.valuationMethod
-          });
-          
-          totalImprovementsValue += improvementValue;
-        }
+          };
+        });
+
+        improvementDetails = await Promise.all(improvementPromises);
+        totalImprovementsValue = improvementDetails.reduce((sum, d) => sum + d.value, 0);
       }
 
       // Step 4: Process market research results (already fetched in parallel)
@@ -308,41 +356,53 @@ export class ValuationService {
 - Recent Sales Comps: ${marketCompsUsed.length} comparable sales (${marketCompsExcludedCount} excluded as outliers below $${COMPS_MIN_PRICE_PER_ACRE}/acre)
 - Average Comp Price: $${Math.round(avgCompPrice).toLocaleString()}/acre
 - Market Summary: ${iowaMarketAnalysis?.summary}
-- Sales Data: ${marketCompsUsed.slice(0, 3).map((comp: any) => 
+- Sales Data: ${marketCompsUsed.slice(0, 3).map((comp: any) =>
   `${comp.date}: $${comp.price_per_acre.toLocaleString()}/acre (${comp.details})`
 ).join('; ')}
 - This authentic Iowa market data should be considered for valuation validation and adjustment.`;
 
-        const reasoningResult = await openaiService.performReasonedValuation(
-          vectorResult.baseValue,
-          propertyData.acreage,
-          propertyData.landType,
-          propertyData.county,
-          propertyData.state,
-          (propertyData.additionalDetails || "") + csr2Context + incomeContext + marketCompsContext,
-          incomeCapValue,
-          csr2Value
+        const reasoningResult = await timed("AI reasoned valuation",
+          withTimeout(
+            openaiService.performReasonedValuation(
+              vectorResult.baseValue,
+              propertyData.acreage,
+              propertyData.landType,
+              propertyData.county,
+              propertyData.state,
+              (propertyData.additionalDetails || "") + csr2Context + incomeContext + marketCompsContext,
+              incomeCapValue,
+              csr2Value
+            ),
+            45000,
+            "AI reasoned valuation"
+          )
         );
-        
+
         console.log(`AI Market-Adjusted calculation:
           Base Value: $${vectorResult.baseValue}/acre
           CSR2 Value: $${csr2Value}/acre
           Average Comp Price: $${Math.round(avgCompPrice)}/acre
           AI Result: $${reasoningResult.adjustedValue}/acre`);
-        
+
         finalAdjustedValue = reasoningResult.adjustedValue;
         finalAiReasoning = reasoningResult.reasoning;
       } else if (!marketCompsAllFiltered) {
         // Fallback for non-Iowa or when comps fail (but not when all were filtered)
-        const reasoningResult = await openaiService.performReasonedValuation(
-          vectorResult.baseValue,
-          propertyData.acreage,
-          propertyData.landType,
-          propertyData.county,
-          propertyData.state,
-          (propertyData.additionalDetails || "") + csr2Context + incomeContext,
-          incomeCapValue,
-          csr2Value
+        const reasoningResult = await timed("AI reasoned valuation (fallback)",
+          withTimeout(
+            openaiService.performReasonedValuation(
+              vectorResult.baseValue,
+              propertyData.acreage,
+              propertyData.landType,
+              propertyData.county,
+              propertyData.state,
+              (propertyData.additionalDetails || "") + csr2Context + incomeContext,
+              incomeCapValue,
+              csr2Value
+            ),
+            45000,
+            "AI reasoned valuation"
+          )
         );
         finalAdjustedValue = reasoningResult.adjustedValue;
         finalAiReasoning = reasoningResult.reasoning;
@@ -354,14 +414,20 @@ export class ValuationService {
       });
 
       // Step 5: Final Synthesis
-      const finalResult = await openaiService.synthesizeFinalValuation(
-        vectorResult.baseValue,
-        finalAdjustedValue, // Use the AI-adjusted value from market analysis
-        0, // No separate improvements adjustment in synthesis
-        marketResult.marketAdjustment,
-        finalAiReasoning, // Use the enhanced market reasoning
-        propertyData.acreage,
-        totalImprovementsValue // Pass total improvement value separately
+      const finalResult = await timed("Final synthesis",
+        withTimeout(
+          openaiService.synthesizeFinalValuation(
+            vectorResult.baseValue,
+            finalAdjustedValue,
+            0,
+            marketResult.marketAdjustment,
+            finalAiReasoning,
+            propertyData.acreage,
+            totalImprovementsValue
+          ),
+          45000,
+          "Final synthesis"
+        )
       );
 
       // Update with final results including improvement, income, CSR2, and Iowa market details
@@ -410,13 +476,15 @@ export class ValuationService {
       };
 
       await storage.updateValuation(valuationId, {
-        adjustedValue: finalAdjustedValue, // Keep consistent AI adjusted value from market analysis
+        adjustedValue: finalAdjustedValue,
         totalValue: finalResult.totalValue,
         confidenceScore: finalResult.confidenceScore,
         marketInsight: finalResult.commentary,
         breakdown: enhancedBreakdown,
         status: "completed"
       });
+
+      console.log(`🏁 Valuation #${valuationId} completed in ${((Date.now() - pipelineStart) / 1000).toFixed(1)}s`);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

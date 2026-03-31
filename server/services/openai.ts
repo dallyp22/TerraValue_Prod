@@ -65,7 +65,24 @@ const IOWA_VECTOR_STORE_ID = "vs_68755fcbdfc081918788b7ce0db68682";
 export class OpenAIService {
   private openai = openai;
   private assistantId: string | null = AGRICULTURAL_ASSISTANT_ID;
-  
+
+  /**
+   * Pre-warm: ensure assistant exists and is retrievable.
+   * If AGRICULTURAL_ASSISTANT_ID is not set, creates one eagerly
+   * so the first valuation doesn't pay the creation cost.
+   */
+  async warmup(): Promise<void> {
+    const assistant = await this.getOrCreateAssistant();
+    // Verify the assistant is actually retrievable (catches stale IDs)
+    try {
+      await this.openai.beta.assistants.retrieve(assistant.id);
+    } catch {
+      console.warn("⚠️ Stored assistant ID invalid, creating new one");
+      this.assistantId = null;
+      await this.getOrCreateAssistant();
+    }
+  }
+
   private async getOrCreateAssistant() {
     // If we already have an assistant ID, just use it
     if (this.assistantId) {

@@ -2,9 +2,10 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { cleanupOpenAI } from "./services/openai";
+import { cleanupOpenAI, openaiService } from "./services/openai";
 import { AuctionArchiverService } from "./services/auctionArchiver";
 import { automaticScraperService } from "./services/automaticScraper";
+import { warmupServices } from "./warmup";
 
 const app = express();
 
@@ -118,6 +119,9 @@ app.use((req, res, next) => {
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
+
+  // Warm up database connections, caches, and AI services in background
+  warmupServices().catch(err => console.warn('⚠️ Warmup had errors:', err));
 
   // Start auction archiver service (runs daily to clean up past auctions)
   const archiverService = new AuctionArchiverService();
