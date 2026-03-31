@@ -113,15 +113,15 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
+  // Warm up DB connections, caches, and AI services BEFORE accepting requests
+  await warmupServices().catch(err => console.warn('⚠️ Warmup had errors:', err));
+
   // Serve the app on port 5001 (5000 is used by AirPlay on macOS)
   // this serves both the API and the client.
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5001;
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
-
-  // Warm up database connections, caches, and AI services in background
-  warmupServices().catch(err => console.warn('⚠️ Warmup had errors:', err));
 
   // Start auction archiver service (runs daily to clean up past auctions)
   const archiverService = new AuctionArchiverService();
