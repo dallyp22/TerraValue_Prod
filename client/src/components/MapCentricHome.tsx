@@ -138,7 +138,7 @@ export default function MapCentricHome() {
   // Map info state (UI controls visibility)
   const [mapInfo, setMapInfo] = useState<MapInfo>({
     showScrapingModule: true,
-    showLegend: true,
+    showLegend: false,
     showLayerSwitcher: true,
   });
 
