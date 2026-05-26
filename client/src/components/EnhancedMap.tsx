@@ -461,7 +461,7 @@ export default function EnhancedMap({
       console.log(`🔍 Fetching parcel data for auction: ${auction.title}`);
       
       // Use localhost in dev, production URL otherwise
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       
       // Call prepare-valuation endpoint to get parcel geometry
       const response = await fetch(
@@ -606,7 +606,7 @@ export default function EnhancedMap({
         }
       }
       
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/auctions?${params}`);
       
       if (!response.ok) {
@@ -726,7 +726,7 @@ export default function EnhancedMap({
     console.log(`🔵 Loading aggregated parcels from database (zoom: ${zoom.toFixed(1)})...`);
     
     try {
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       const url = `${apiUrl}/api/parcels/aggregated?${params}`;
       console.log(`🔵 Fetching: ${url}`);
       
@@ -1204,12 +1204,15 @@ export default function EnhancedMap({
       
       // Add BOTH parcel sources - toggle will control which layers are visible
       
-      // Self-hosted vector tiles source
+      // Self-hosted vector tiles source.
+      // MapLibre fetches tiles inside a Web Worker that can't resolve relative
+      // URLs, so we must hand it an absolute origin even when API_BASE_URL is
+      // "" (same-origin via the Pages Function proxy).
       if (!map.current!.getSource('parcels-vector')) {
-        const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+        const tileOrigin = API_BASE_URL || window.location.origin;
         map.current!.addSource('parcels-vector', {
           type: 'vector',
-          tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
+          tiles: [`${tileOrigin}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
           minzoom: 10,
           maxzoom: 18
         });

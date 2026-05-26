@@ -1,11 +1,13 @@
 import { Pool } from '@neondatabase/serverless';
 import NodeCache from 'node-cache';
 
-// Cache tiles for 2 hours with size limits for better performance
-const tileCache = new NodeCache({ 
-  stdTTL: 7200,  // 2 hours instead of 1
-  maxKeys: 10000,  // Limit number of cached tiles
-  checkperiod: 600  // Check for expired keys every 10 minutes
+// Cache tiles for 2 hours with size limits for better performance.
+// checkperiod: 0 disables NodeCache's internal setTimeout so this module
+// loads cleanly in Workers (lazy expiry on access).
+const tileCache = new NodeCache({
+  stdTTL: 7200,
+  maxKeys: 10000,
+  checkperiod: 0,
 });
 
 /**

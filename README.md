@@ -1,344 +1,186 @@
-# TerraValue - Agricultural Land Valuation Platform
+# TerraValue — Agricultural Land Valuation Platform
 
-![TerraValue](https://img.shields.io/badge/status-production-green)
-![License](https://img.shields.io/badge/license-MIT-blue)
+Iowa farmland valuation: CSR2 soil productivity, AI market analysis, income
+capitalization, and live auction comparables, served from a same-origin
+Cloudflare Pages + Worker stack backed by Neon Postgres.
 
-A sophisticated agricultural land valuation platform combining AI-powered analysis, CSR2 soil productivity data, market comparables, and income capitalization methods to provide comprehensive property valuations.
+## Architecture
 
-## 🌾 Features
+```
+┌────────────────────────────────────────┐
+│  Cloudflare Pages (terravalue)         │  ← Vite + React frontend
+│    functions/api/[[path]].ts           │  ← /api/* proxy via Service Binding
+└────────────────────────┬───────────────┘
+                         │
+┌────────────────────────▼───────────────┐
+│  Cloudflare Worker (terravalue-api)    │  ← Hono on Workers (nodejs_compat)
+│  - REST API                            │
+│  - Cron Triggers (archiver, scraper)   │
+└────────────────────────┬───────────────┘
+                         │
+┌────────────────────────▼───────────────┐
+│  Neon Postgres (Iowa data)             │  ← parcels, auctions, soil, csr2
+│  - Neon HTTP driver                    │
+└────────────────────────────────────────┘
+```
 
-### Core Valuation Methods
-- **CSR2 Soil Analysis**: Iowa Corn Suitability Rating using USDA Soil Data Access API
-- **AI Market Valuation**: OpenAI GPT-4o powered market analysis
-- **Income Capitalization**: Cash rent and cap rate calculations
-- **Market Comparables**: Real Iowa sales data integration
-- **Property Improvements**: AI or manual valuation of buildings, irrigation, etc.
+Two deployable units in this repo:
 
-### Interactive Mapping
-- MapLibre GL with Mapbox vector tiles
-- Iowa parcel boundaries
-- Custom polygon drawing
-- Multi-section parcel support
-- Real-time CSR2 sampling (grid-based)
+- **`functions/`** + **`dist/public/`** → Cloudflare Pages project `terravalue`
+  (config in `wrangler.jsonc`)
+- **`worker/`** → Cloudflare Worker `terravalue-api`
+  (config in `worker/wrangler.jsonc`)
 
-### Advanced Features
-- Blended tillable/non-tillable land valuations
-- Corn futures integration for rent estimates
-- County-specific base values
-- Weighted soil component analysis
-- Comprehensive PDF reports
-- **Optional local soil database for 10-100x faster CSR2 queries**
+The `server/` directory is the legacy Express implementation. It is kept as a
+local-dev option and as rollback insurance during the migration to Cloudflare.
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+ 
-- PostgreSQL database (Neon, Vercel Postgres, or local)
-- OpenAI API key
-- Mapbox access token (optional, included for demo)
-
-### Installation
+## Local development
 
 ```bash
-# Clone the repository
-git clone https://github.com/dallyp22/TerraValue_Prod.git
-cd TerraValue_Prod
-
-# Install dependencies
 npm install
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your credentials (see Environment Variables section)
-
-# Push database schema
-npm run db:push
-
-# Start development server
-npm run dev
+cp .env.example .env   # fill in DATABASE_URL, OPENAI_API_KEY, mapbox token
+npm run dev            # Express server (legacy local dev)
 ```
 
-The application will be available at `http://localhost:5001`
-
-### Optional: Iowa Soil Database Setup
-
-For **10-100x faster** CSR2 queries, set up a local soil database:
+For Workers-native local dev (matches production runtime):
 
 ```bash
-# Quick setup (see SOIL_DATABASE_QUICK_START.md for details)
-npm run db:soil:push     # Create tables
-npm run db:soil:load     # Load Iowa data (30-60 min)
+cd worker
+wrangler dev           # local API at http://localhost:8788
+
+# In another terminal, from repo root:
+npm run build
+wrangler pages dev dist/public  # local Pages + Function proxy
 ```
 
-This is **optional** - the app works with external APIs if not configured.
+## Deployment (Cloudflare)
 
-### Environment Variables
+Both projects deploy via `wrangler`. The first deployment of each was
+provisioned manually; subsequent deploys are one command each.
 
-Create a `.env` file with the following:
+### Worker (API)
 
-```env
-# Database Configuration (REQUIRED)
-DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
-
-# Soil Database (OPTIONAL - for 10-100x faster CSR2 queries)
-# See SOIL_DATABASE_QUICK_START.md for setup
-DATABASE_URL_SOIL=postgresql://user:password@host:port/soildb?sslmode=require
-
-# OpenAI API Key (REQUIRED for AI valuations)
-OPENAI_API_KEY=sk-your-openai-api-key-here
-
-# Mapbox Public Key (for maps)
-VITE_MAPBOX_PUBLIC_KEY=pk.your-mapbox-token-here
-
-# Optional: Reuse existing OpenAI assistants
-AGRICULTURAL_ASSISTANT_ID=asst_xxxxx
-IOWA_MARKET_ASSISTANT_ID=asst_xxxxx
-VECTOR_STORE_ID=vs_xxxxx
-IOWA_VECTOR_STORE_ID=vs_xxxxx
+```bash
+cd worker
+wrangler deploy
 ```
 
-## 📊 CSR2 Integration
+Secrets (set once per environment):
 
-TerraValue uses a multi-tier fallback system for CSR2 (Corn Suitability Rating) data:
-
-### Data Sources (in order of preference):
-
-**For Soil Properties (slope, drainage, texture, soil series):**
-1. **Local PostgreSQL Database** (optional, recommended)
-   - Instant access (50-200ms) to comprehensive soil data
-   - 125,960 soil horizons with texture, pH, organic matter
-   - 29,924 soil components with slope and drainage
-   - See `SOIL_DATABASE_QUICK_START.md` for setup
-   - **Performance: 50-200ms per query**
-
-**For CSR2 Ratings:**
-1. **Michigan State ImageServer** (external API)
-   - Endpoint: `https://enterprise.rsgis.msu.edu/imageserver/.../Iowa_Corn_Suitability_Rating`
-   - Direct raster value queries
-   - Fast when available
-   - **Performance: 2-5s per point**
-
-3. **USDA Soil Data Access API** (final fallback)
-   - Creates persistent Area of Interest (AOI)
-   - Runs Iowa CSR2 interpretation (attributekey: 189)
-   - Queries WFS thematic layer for rating values
-   - Fully functional and tested
-   - **Performance: 3-8s per point**
-
-### CSR2 Workflow
-```
-User clicks parcel → 
-Try local DB (if configured) → 
-Fallback to ImageServer → 
-Fallback to USDA SDA → 
-Calculate weighted average → 
-Display CSR2 rating
+```bash
+wrangler secret put DATABASE_URL
+wrangler secret put DATABASE_URL_SOIL
+wrangler secret put OPENAI_API_KEY
+wrangler secret put FIRECRAWL_API_KEY
 ```
 
-**Performance:**
-- **Soil properties** (local DB): 50-200ms ⚡
-- **CSR2 ratings** (external APIs): 2-60s (unchanged)
-- 1-hour caching per query
-- **Hybrid approach**: Fast soil data + external CSR2
+### Pages (frontend)
 
-## 🏗️ Architecture
-
-### Tech Stack
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Express.js + Node.js
-- **Database**: PostgreSQL with Drizzle ORM (dual database architecture)
-  - Primary DB: Application data (Neon)
-  - Soil DB: Iowa SSURGO soil properties (Railway) - slope, drainage, texture, soil series
-- **Maps**: MapLibre GL + Mapbox vector tiles
-- **AI**: OpenAI GPT-4o with vector stores
-- **Styling**: Tailwind CSS + shadcn/ui components
-
-### Project Structure
-```
-├── client/              # React frontend
-│   ├── src/
-│   │   ├── components/  # UI components
-│   │   ├── pages/       # Page components
-│   │   └── lib/         # Utilities
-├── server/              # Express backend
-│   ├── services/        # Business logic
-│   │   ├── csr2.ts      # CSR2 data retrieval (local DB + external APIs)
-│   │   ├── valuation.ts # Valuation pipeline
-│   │   ├── openai.ts    # AI services
-│   │   └── cornPrice.ts # Futures integration
-│   ├── routes.ts        # API endpoints
-│   ├── db.ts            # Main database connection
-│   └── soil-db.ts       # Soil database connection (optional)
-├── shared/              # Shared types/schemas
-│   ├── schema.ts        # Application schema
-│   └── soil-schema.ts   # Soil database schema
-├── scripts/             # Utility scripts
-│   ├── load-iowa-soil-data.ts  # Soil data loader
-│   └── refresh-materialized-view.ts
-├── migrations/          # Application database migrations
-├── migrations-soil/     # Soil database migrations
-└── docs/                # Documentation
-    ├── Soil_Database_Setup_Guide.md
-    └── ...
-```
-
-## 🔌 API Endpoints
-
-### Valuations
-- `POST /api/valuations` - Start new valuation
-- `GET /api/valuations/:id` - Get valuation status/results
-- `GET /api/valuations` - List all valuations
-
-### CSR2 Data
-- `POST /api/csr2/polygon` - Get CSR2 stats for WKT geometry
-- `POST /api/csr2/point` - Get CSR2 for coordinates
-- `POST /api/average-csr2` - Calculate average CSR2 for polygon
-
-### Geocoding
-- `POST /api/geocode` - Convert address to coordinates
-- `POST /api/geocode/reverse` - Get county/state from coordinates
-
-### Field Boundaries
-- `GET /api/fields/search` - Search fields in bounding box
-- `GET /api/fields/:fieldId` - Get specific field
-- `POST /api/fields/nearby` - Find fields near point
-- `GET /api/parcels` - Get parcel data for map
-
-### Health
-- `GET /api/health` - Application health check
-
-## 🗺️ External Services
-
-The application integrates with:
-
-1. **USDA Soil Data Access** ([docs](https://sdmdataaccess.nrcs.usda.gov/WebServiceHelp.aspx))
-   - CSR2 interpretations
-   - Soil property data
-   - No authentication required
-
-2. **OpenAI API**
-   - AI-powered valuations
-   - Market analysis
-   - Improvement valuations
-
-3. **OpenStreetMap Nominatim**
-   - Geocoding
-   - Reverse geocoding
-   - No authentication required
-
-4. **Yahoo Finance**
-   - Corn futures prices
-   - No authentication required
-
-## 🚢 Deployment
-
-### Production Build
 ```bash
 npm run build
-npm start
+wrangler pages deploy dist/public --project-name=terravalue
 ```
 
-### Vercel Deployment
-The application is optimized for Vercel:
-- Automatic PostgreSQL integration
-- Environment variable management
-- Zero-config deployment
+`VITE_MAPBOX_PUBLIC_KEY` lives in the Pages project's environment variables,
+not as a Worker secret (Vite inlines it at build time).
 
-### Environment Variables for Production
-Ensure all required environment variables are set in your deployment platform:
-- `DATABASE_URL`
-- `OPENAI_API_KEY`
-- `VITE_MAPBOX_PUBLIC_KEY`
+## Environment variables
 
-## 🧪 Testing
+```env
+# Required
+DATABASE_URL=postgresql://...neon.tech/neondb?sslmode=require
+OPENAI_API_KEY=sk-...
+VITE_MAPBOX_PUBLIC_KEY=pk....
 
-### Health Check
-```bash
-curl http://localhost:5001/api/health
+# Optional (same Neon database; keep parity with main DATABASE_URL)
+DATABASE_URL_SOIL=postgresql://...neon.tech/neondb?sslmode=require
+
+# Optional OpenAI reuse
+AGRICULTURAL_ASSISTANT_ID=
+IOWA_MARKET_ASSISTANT_ID=
+VECTOR_STORE_ID=
+IOWA_VECTOR_STORE_ID=
+
+# Optional
+FIRECRAWL_API_KEY=fc-...
 ```
 
-### CSR2 Test
-```bash
-curl -X POST http://localhost:5001/api/csr2/polygon \
-  -H "Content-Type: application/json" \
-  -d '{"wkt":"POINT(-95.743 41.689)"}'
+## API endpoints (Worker)
+
+Everything is mounted under `/api/*` on the same origin via the Pages Function
+proxy. Highlights:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | DB connectivity ping |
+| POST | `/api/valuations` | Kick off a valuation (returns id; pipeline runs in background via `ctx.waitUntil`) |
+| GET | `/api/valuations/:id` | Pipeline status / result |
+| GET | `/api/auctions` | Auctions in bbox |
+| GET | `/api/auctions/:id` | Single auction |
+| POST | `/api/auctions/:id/prepare-valuation` | AI-extract parcel + soil + CSR2 |
+| GET | `/api/parcels` | Parcels in bbox |
+| GET | `/api/parcels/aggregated` | Pre-dissolved ownership groups (PostGIS) |
+| GET | `/api/parcels/tiles/:z/:x/:y.mvt` | Self-hosted vector tiles |
+| GET | `/api/soil/mukey/:mukey` | Soil composition by map-unit key |
+| POST | `/api/csr2/polygon` | CSR2 stats for a WKT polygon |
+| POST | `/api/geocode` | Address → coords |
+| POST | `/api/geocode/reverse` | Coords → county/state |
+
+## Cron Triggers (Worker)
+
+```
+0 9 * * *   → daily 09:00 UTC (~03:00 CST) → auction archiver
+*/5 * * * * → every 5 minutes → scraper schedule check (reads scraperSettings row)
 ```
 
-Expected response:
-```json
-{
-  "success": true,
-  "mean": 78,
-  "min": 78,
-  "max": 78,
-  "count": 1
-}
+## Database
+
+Single Neon Postgres holds everything:
+
+- **Main app**: `auctions`, `archived_auctions`, `auctions_blocklist`,
+  `valuations`, `users`, `scraper_settings`, `county_csr2_rates`
+- **Parcels** (PostGIS): `parcels` (~2.4M), `parcel_aggregated` (~1.5M
+  dissolved ownership groups), `parcel_ownership_groups` (~310K)
+- **Soil reference** (SSURGO): `soil_legend`, `soil_mapunit`,
+  `soil_component`, `soil_chorizon`, `soil_csr2_ratings`,
+  `soil_mapunit_spatial`, `soil_sync_status`
+
+The Worker uses the Neon HTTP driver — stateless per query, no connection
+pools to manage across Worker isolates.
+
+## CSR2 lookup chain
+
+1. Local soil DB (`soil_csr2_ratings` + `soil_mapunit_spatial`) — currently
+   empty; backfill via `scripts/load-iowa-soil-data.ts`
+2. Michigan State ImageServer (external)
+3. USDA Soil Data Access (external, multi-step)
+
+For polygon queries the Worker samples a 3×3 grid and averages.
+
+## Project structure
+
+```
+.
+├── client/              # Vite + React frontend
+├── server/              # Legacy Express implementation (local dev + rollback)
+├── shared/              # Drizzle schemas shared by both
+├── worker/              # Cloudflare Worker (Hono) — production API
+│   ├── src/
+│   │   ├── index.ts     # fetch + scheduled handlers
+│   │   ├── env.ts       # Workers env binding types
+│   │   └── routes/
+│   │       └── api.ts   # All /api/* routes
+│   └── wrangler.jsonc
+├── functions/
+│   └── api/[[path]].ts  # Pages Function — proxies /api/* to the Worker
+├── scripts/             # Drizzle / data-load / one-off maintenance
+├── migrations/          # drizzle-kit output
+├── shared/
+│   ├── schema.ts        # Main app schema
+│   └── soil-schema.ts   # SSURGO + CSR2 schema
+└── wrangler.jsonc       # Pages project config (root)
 ```
 
-## 📝 Development
+## License
 
-### Database Schema Changes
-```bash
-npm run db:push
-```
-
-### Type Checking
-```bash
-npm run check
-```
-
-## 🎯 Key Improvements from Original
-
-1. **✅ CSR2 Data Working**
-   - Implemented USDA Soil Data Access fallback
-   - 4-step interpretation workflow
-   - WFS thematic layer queries
-   - Graceful degradation if unavailable
-
-2. **✅ Environment Configuration**
-   - Added dotenv support
-   - Proper .env file loading
-   - Secure credential management
-
-3. **✅ macOS Compatibility**
-   - Changed port 5000 → 5001 (AirPlay conflict)
-   - Removed `reusePort` option
-   - Universal macOS/Linux support
-
-4. **✅ Production Ready**
-   - Rate limiting on all endpoints
-   - Comprehensive error handling
-   - Database connection pooling
-   - Graceful shutdown handling
-
-## 📖 Usage
-
-1. **Open the application** at http://localhost:5001
-2. **Navigate the map** to an Iowa property
-3. **Click a parcel** or draw a custom polygon
-4. **Fill in property details** (acreage, land type, improvements)
-5. **Run valuation** - Get comprehensive report with:
-   - CSR2-based valuation
-   - Income capitalization
-   - AI market analysis
-   - Final blended value
-
-## 🤝 Contributing
-
-This is a production application. For contributions or issues, please contact the repository owner.
-
-## 📄 License
-
-MIT License - See LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- **USDA NRCS** - Soil Data Access API
-- **Iowa State University** - CSR2 methodology
-- **OpenAI** - AI valuation services
-- **Mapbox** - Vector tile infrastructure
-
----
-
-**Built with ❤️ for agricultural professionals**
-
+MIT

@@ -431,7 +431,7 @@ export default function MapCentricHome() {
         if (filters.minValue) params.append('minValue', filters.minValue.toString());
         if (filters.maxValue) params.append('maxValue', filters.maxValue.toString());
         
-        const response = await fetch(`https://web-production-51e54.up.railway.app/api/auctions/count?${params}`);
+        const response = await fetch(`/api/auctions/count?${params}`);
         const data = await response.json();
         if (data.success) {
           setAuctionCount(data.count || 0);

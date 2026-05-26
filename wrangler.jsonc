@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "terravalue",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./dist/public",
+  "services": [
+    {
+      "binding": "API",
+      "service": "terravalue-api"
+    }
+  ]
+}
