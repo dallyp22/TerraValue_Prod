@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
+  // Load .env from the repo root (not from `root` which is client/).
+  envDir: path.resolve(import.meta.dirname),
   plugins: [react()],
   resolve: {
     alias: {
