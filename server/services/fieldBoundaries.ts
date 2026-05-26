@@ -1,8 +1,10 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 
-// Cache for 24 hours (86400 seconds) - field boundaries change infrequently
-const cache = new NodeCache({ stdTTL: 86400 });
+// Cache for 24 hours - field boundaries change infrequently.
+// checkperiod: 0 disables internal setTimeout so this module loads cleanly
+// in Workers (lazy expiry on access).
+const cache = new NodeCache({ stdTTL: 86400, checkperiod: 0 });
 
 export interface FieldBoundary {
   fieldId: string;        // FBndID from shapefile

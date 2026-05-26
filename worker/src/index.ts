@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env } from "./env";
-import { health } from "./routes/health";
+import { api } from "./routes/api";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -22,14 +22,17 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.route("/api/health", health);
+app.route("/api", api);
 
 app.notFound((c) => c.json({ success: false, message: "Not found" }, 404));
 
 app.onError((err, c) => {
   console.error(`[ERROR] ${c.req.method} ${c.req.path}:`, err);
   return c.json(
-    { success: false, message: err.message || "Internal Server Error" },
+    {
+      success: false,
+      message: err.message || "Internal Server Error",
+    },
     500,
   );
 });

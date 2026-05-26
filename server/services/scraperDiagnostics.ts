@@ -4,7 +4,7 @@ import type { ScraperStats } from './auctionScraper.js';
 
 /**
  * Scraper Diagnostics Service
- * 
+ *
  * Manages logging and analysis of scraper statistics to track:
  * - Coverage metrics per source
  * - Missing Iowa auctions
@@ -12,14 +12,22 @@ import type { ScraperStats } from './auctionScraper.js';
  * - Anomaly detection
  */
 
-const LOGS_DIR = path.join(process.cwd(), 'logs');
-const DIAGNOSTICS_LOG = path.join(LOGS_DIR, 'scraper-diagnostics.jsonl');
-const MISSING_AUCTIONS_LOG = path.join(LOGS_DIR, 'missing-auctions.jsonl');
+// Detect environment with a writable filesystem (skip on Cloudflare Workers etc.)
+const HAS_FS = typeof (fs as any).writeFileSync === 'function' && !(globalThis as any).WorkerGlobalScope;
 
-// Ensure logs directory exists
+const LOGS_DIR = HAS_FS ? path.join(process.cwd(), 'logs') : '';
+const DIAGNOSTICS_LOG = HAS_FS ? path.join(LOGS_DIR, 'scraper-diagnostics.jsonl') : '';
+const MISSING_AUCTIONS_LOG = HAS_FS ? path.join(LOGS_DIR, 'missing-auctions.jsonl') : '';
+
+// Ensure logs directory exists (no-op when filesystem is unavailable)
 function ensureLogsDir() {
-  if (!fs.existsSync(LOGS_DIR)) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
+  if (!HAS_FS) return;
+  try {
+    if (!fs.existsSync(LOGS_DIR)) {
+      fs.mkdirSync(LOGS_DIR, { recursive: true });
+    }
+  } catch {
+    // Swallow filesystem errors silently — diagnostics are non-critical
   }
 }
 
@@ -51,11 +59,16 @@ export class ScraperDiagnosticsService {
    * Log scraper stats to JSONL file
    */
   logStats(stats: ScraperStats[]): void {
+    if (!HAS_FS) return;
     ensureLogsDir();
-    
-    for (const stat of stats) {
-      const logLine = JSON.stringify(stat) + '\n';
-      fs.appendFileSync(DIAGNOSTICS_LOG, logLine);
+
+    try {
+      for (const stat of stats) {
+        const logLine = JSON.stringify(stat) + '\n';
+        fs.appendFileSync(DIAGNOSTICS_LOG, logLine);
+      }
+    } catch {
+      // Filesystem write failed — diagnostics are non-critical, swallow
     }
   }
 
@@ -63,24 +76,29 @@ export class ScraperDiagnosticsService {
    * Log missing auctions
    */
   logMissingAuctions(stats: ScraperStats[]): void {
+    if (!HAS_FS) return;
     ensureLogsDir();
-    
-    for (const stat of stats) {
-      // Log URLs that weren't processed (not_processed)
-      for (const url of stat.missingUrls) {
-        const isIowa = this.isIowaUrl(url);
-        const missing: MissingAuction = {
-          timestamp: new Date().toISOString(),
-          source: stat.sourceName,
-          url,
-          reason: 'not_processed',
-          is_iowa: isIowa,
-          discovered_in_scrape_id: stat.scrapeId
-        };
-        
-        const logLine = JSON.stringify(missing) + '\n';
-        fs.appendFileSync(MISSING_AUCTIONS_LOG, logLine);
+
+    try {
+      for (const stat of stats) {
+        // Log URLs that weren't processed (not_processed)
+        for (const url of stat.missingUrls) {
+          const isIowa = this.isIowaUrl(url);
+          const missing: MissingAuction = {
+            timestamp: new Date().toISOString(),
+            source: stat.sourceName,
+            url,
+            reason: 'not_processed',
+            is_iowa: isIowa,
+            discovered_in_scrape_id: stat.scrapeId
+          };
+
+          const logLine = JSON.stringify(missing) + '\n';
+          fs.appendFileSync(MISSING_AUCTIONS_LOG, logLine);
+        }
       }
+    } catch {
+      // Filesystem write failed — diagnostics are non-critical, swallow
     }
   }
 
@@ -117,8 +135,9 @@ export class ScraperDiagnosticsService {
    * Get latest scrape stats from log
    */
   getLatestScrapeStats(limit: number = 24): ScraperStats[] {
+    if (!HAS_FS) return [];
     ensureLogsDir();
-    
+
     if (!fs.existsSync(DIAGNOSTICS_LOG)) {
       return [];
     }
@@ -155,8 +174,9 @@ export class ScraperDiagnosticsService {
    * Get historical stats for trend analysis
    */
   getHistoricalStats(days: number = 7): ScraperStats[] {
+    if (!HAS_FS) return [];
     ensureLogsDir();
-    
+
     if (!fs.existsSync(DIAGNOSTICS_LOG)) {
       return [];
     }
@@ -187,8 +207,9 @@ export class ScraperDiagnosticsService {
    * Get missing Iowa auctions
    */
   getMissingIowaAuctions(limit: number = 100): MissingAuction[] {
+    if (!HAS_FS) return [];
     ensureLogsDir();
-    
+
     if (!fs.existsSync(MISSING_AUCTIONS_LOG)) {
       return [];
     }
@@ -272,8 +293,9 @@ export class ScraperDiagnosticsService {
    * Clear old logs (keep last N days)
    */
   cleanupOldLogs(daysToKeep: number = 30): void {
+    if (!HAS_FS) return;
     ensureLogsDir();
-    
+
     if (!fs.existsSync(DIAGNOSTICS_LOG)) {
       return;
     }

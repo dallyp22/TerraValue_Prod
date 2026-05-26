@@ -7,8 +7,10 @@
 
 import NodeCache from 'node-cache';
 
-// Cache mukeys for 24 hours (soil mapping doesn't change)
-const mukeyCache = new NodeCache({ stdTTL: 86400 });
+// Cache mukeys for 24 hours (soil mapping doesn't change).
+// checkperiod: 0 disables internal setTimeout so this module loads cleanly
+// in Workers (lazy expiry on access).
+const mukeyCache = new NodeCache({ stdTTL: 86400, checkperiod: 0 });
 
 const SDA_ENDPOINT = 'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest';
 

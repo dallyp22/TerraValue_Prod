@@ -3,8 +3,9 @@ import { countyCsr2Rates } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import NodeCache from 'node-cache';
 
-// Cache county rates for 1 hour
-const rateCache = new NodeCache({ stdTTL: 3600 });
+// Cache county rates for 1 hour. checkperiod: 0 disables internal setTimeout
+// so this module loads cleanly in Workers (lazy expiry on access).
+const rateCache = new NodeCache({ stdTTL: 3600, checkperiod: 0 });
 const CACHE_KEY = 'all_county_rates';
 const DEFAULT_RATE = 174; // Fallback rate if county not found
 

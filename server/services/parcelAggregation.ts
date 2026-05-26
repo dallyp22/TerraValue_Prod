@@ -1,8 +1,10 @@
 import * as turf from '@turf/turf';
 import NodeCache from 'node-cache';
 
-// Cache for 1 hour - parcels don't change frequently
-const cache = new NodeCache({ stdTTL: 3600 });
+// Cache for 1 hour - parcels don't change frequently.
+// checkperiod: 0 disables internal setTimeout so this module loads cleanly
+// in Workers (lazy expiry on access).
+const cache = new NodeCache({ stdTTL: 3600, checkperiod: 0 });
 
 interface ParcelFeature {
   type: 'Feature';

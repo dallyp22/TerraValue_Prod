@@ -3,8 +3,9 @@ import NodeCache from 'node-cache';
 import pLimit from 'p-limit';
 import { isSoilDbAvailable, executeSoilQuery } from '../soil-db';
 
-// Cache for 1 hour (3600 seconds)
-const cache = new NodeCache({ stdTTL: 3600 });
+// Cache for 1 hour (3600 seconds). checkperiod: 0 disables internal setTimeout
+// so this module loads cleanly in Workers (lazy expiry on access).
+const cache = new NodeCache({ stdTTL: 3600, checkperiod: 0 });
 
 // Rate limiting - be courteous to the public server
 const limit = pLimit(3);
