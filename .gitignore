@@ -9,6 +9,11 @@ vite.config.ts.*
 .env
 .env.local
 .env.*.local
+.dev.vars
+.dev.vars.*
+
+# Wrangler
+.wrangler/
 
 # Local config and cache
 .config/
