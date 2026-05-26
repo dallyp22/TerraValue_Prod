@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env } from "./env";
 import { api } from "./routes/api";
+import { AuctionArchiverService } from "../../server/services/auctionArchiver";
+import { automaticScraperService } from "../../server/services/automaticScraper";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -37,4 +39,27 @@ app.onError((err, c) => {
   );
 });
 
-export default app;
+// Cron handlers — registered in wrangler.jsonc via triggers.crons:
+//   "0 9 * * *"   → daily 09:00 UTC (~03:00 CST) → auction archiver
+//   "*/5 * * * *" → every 5 minutes → scraper schedule check
+async function handleScheduled(
+  event: ScheduledEvent,
+  _env: Env,
+  ctx: ExecutionContext,
+) {
+  if (event.cron === "0 9 * * *") {
+    console.log("⏰ Cron: running daily auction archiver");
+    const archiver = new AuctionArchiverService();
+    ctx.waitUntil(archiver.archivePastAuctions());
+  } else if (event.cron === "*/5 * * * *") {
+    console.log("⏰ Cron: scraper schedule check");
+    ctx.waitUntil(automaticScraperService.checkAndRun());
+  } else {
+    console.warn(`⏰ Cron: unrecognized schedule "${event.cron}"`);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled: handleScheduled,
+} satisfies ExportedHandler<Env>;
