@@ -11,8 +11,7 @@ export default function TestParcels() {
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    const apiUrl = 'http://localhost:5001';
-    const tileTemplate = `${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`;
+    const tileTemplate = `/api/parcels/tiles/{z}/{x}/{y}.mvt`;
     setTileUrl(tileTemplate);
 
     map.current = new maplibregl.Map({
@@ -96,7 +95,7 @@ export default function TestParcels() {
   }, []);
 
   const testTileUrl = () => {
-    const testUrl = 'http://localhost:5001/api/parcels/tiles/14/3932/6106.mvt';
+    const testUrl = '/api/parcels/tiles/14/3932/6106.mvt';
     fetch(testUrl)
       .then(r => {
         setStatus(`Test tile response: ${r.status} (${r.headers.get('content-length')} bytes)`);

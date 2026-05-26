@@ -461,7 +461,7 @@ export default function EnhancedMap({
       console.log(`🔍 Fetching parcel data for auction: ${auction.title}`);
       
       // Use localhost in dev, production URL otherwise
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       
       // Call prepare-valuation endpoint to get parcel geometry
       const response = await fetch(
@@ -606,7 +606,7 @@ export default function EnhancedMap({
         }
       }
       
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/auctions?${params}`);
       
       if (!response.ok) {
@@ -726,7 +726,7 @@ export default function EnhancedMap({
     console.log(`🔵 Loading aggregated parcels from database (zoom: ${zoom.toFixed(1)})...`);
     
     try {
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+      const apiUrl = API_BASE_URL;
       const url = `${apiUrl}/api/parcels/aggregated?${params}`;
       console.log(`🔵 Fetching: ${url}`);
       
@@ -1206,7 +1206,7 @@ export default function EnhancedMap({
       
       // Self-hosted vector tiles source
       if (!map.current!.getSource('parcels-vector')) {
-        const apiUrl = import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL;
+        const apiUrl = API_BASE_URL;
         map.current!.addSource('parcels-vector', {
           type: 'vector',
           tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
