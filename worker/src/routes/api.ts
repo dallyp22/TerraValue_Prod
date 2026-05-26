@@ -104,11 +104,27 @@ const valuationHandler = async (c: any) => {
   try {
     const body = await c.req.json();
     const validatedData = propertyFormSchema.parse(body);
-    const valuationId = await valuationService.performValuation(validatedData);
+
+    // Create the row synchronously so we can return its id.
+    const valuation = await storage.createValuation(validatedData);
+
+    // The heavy pipeline (OpenAI vector lookup, market analysis, multiple
+    // DB writes) ran fire-and-forget on Railway because the Express process
+    // lived forever. In Workers, the runtime kills the isolate as soon as
+    // the response is sent, so we have to keep it alive with waitUntil.
+    // processValuationPipeline is marked private; we call through the
+    // bracket accessor to bypass the TS visibility check.
+    c.executionCtx.waitUntil(
+      (valuationService as any).processValuationPipeline(
+        valuation.id,
+        validatedData,
+      ),
+    );
+
     return c.json({
       success: true,
-      valuationId,
-      sessionId: valuationId,
+      valuationId: valuation.id,
+      sessionId: valuation.id,
       message: "Valuation process started",
     });
   } catch (error) {
@@ -531,6 +547,10 @@ api.post("/auctions/schedule/recalculate", async (c) => {
 // Parcel aggregation
 // ============================================================================
 api.get("/parcels/aggregated", async (c) => {
+  // Reads from the precomputed parcel_aggregated table (~1.5M rows, ownership
+  // groups already dissolved). Replaces the legacy live-ArcGIS+turf adjacency
+  // pipeline which exceeded the Workers CPU budget on busy bboxes (855
+  // parcels → CPU limit).
   try {
     const minLon = c.req.query("minLon");
     const minLat = c.req.query("minLat");
@@ -545,18 +565,54 @@ api.get("/parcels/aggregated", async (c) => {
         400,
       );
     }
-    const bbox: [number, number, number, number] = [
-      parseFloat(minLon),
-      parseFloat(minLat),
-      parseFloat(maxLon),
-      parseFloat(maxLat),
-    ];
-    const aggregated = await parcelAggregationService.aggregateParcels(bbox);
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          normalized_owner,
+          county,
+          parcel_count,
+          total_acres,
+          parcel_ids,
+          ST_AsGeoJSON(geom) AS geometry_json
+        FROM parcel_aggregated
+        WHERE ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))
+        LIMIT 5000
+      `,
+      [
+        parseFloat(minLon),
+        parseFloat(minLat),
+        parseFloat(maxLon),
+        parseFloat(maxLat),
+      ],
+    );
+
+    const features = result.rows
+      .map((row: any) => {
+        try {
+          return {
+            type: "Feature",
+            geometry: JSON.parse(row.geometry_json),
+            properties: {
+              id: row.id,
+              owner: row.normalized_owner,
+              county: row.county,
+              parcelCount: row.parcel_count,
+              totalAcres: row.total_acres,
+              parcelIds: row.parcel_ids,
+            },
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
     return c.json({
       success: true,
-      count: aggregated.length,
+      count: features.length,
       type: "FeatureCollection",
-      features: aggregated,
+      features,
     });
   } catch (error) {
     console.error("Parcel aggregation error:", error);
@@ -564,7 +620,9 @@ api.get("/parcels/aggregated", async (c) => {
       {
         success: false,
         message:
-          error instanceof Error ? error.message : "Failed to aggregate parcels",
+          error instanceof Error
+            ? error.message
+            : "Failed to aggregate parcels",
       },
       500,
     );
@@ -2051,11 +2109,12 @@ api.post("/auctions/update-coordinates", async (c) => {
 // ============================================================================
 // Parcel tiles + ownership
 // ============================================================================
-api.get("/parcels/tiles/:z/:x/:y.mvt", async (c) => {
+api.get("/parcels/tiles/:z/:x/:y", async (c) => {
   try {
     const z = parseInt(c.req.param("z"));
     const x = parseInt(c.req.param("x"));
-    const y = parseInt(c.req.param("y"));
+    // Hono captures `:y` as e.g. "383.mvt"; strip the extension before parseInt
+    const y = parseInt((c.req.param("y") || "").replace(/\.mvt$/, ""));
     if (isNaN(z) || isNaN(x) || isNaN(y)) {
       return c.json({ success: false, message: "Invalid tile coordinates" }, 400);
     }
@@ -2079,11 +2138,11 @@ api.get("/parcels/tiles/:z/:x/:y.mvt", async (c) => {
   }
 });
 
-api.get("/parcels/tiles/hybrid/:z/:x/:y.mvt", async (c) => {
+api.get("/parcels/tiles/hybrid/:z/:x/:y", async (c) => {
   try {
     const z = parseInt(c.req.param("z"));
     const x = parseInt(c.req.param("x"));
-    const y = parseInt(c.req.param("y"));
+    const y = parseInt((c.req.param("y") || "").replace(/\.mvt$/, ""));
     if (isNaN(z) || isNaN(x) || isNaN(y)) {
       return c.json({ success: false, message: "Invalid tile coordinates" }, 400);
     }
