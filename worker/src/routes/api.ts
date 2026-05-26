@@ -1378,17 +1378,27 @@ api.post("/auctions/:id/prepare-valuation", async (c) => {
     const extractedInfo = await auctionParcelExtractor.extractParcelInfo(auction);
 
     if (extractedInfo.csr2Data?.mean && !auction.csr2Mean) {
+      // csr2Min/Max are integer columns; the AI sometimes returns decimals
+      // like 84.1, so coerce before writing.
+      const csr2MinInt =
+        extractedInfo.csr2Data.min != null
+          ? Math.round(extractedInfo.csr2Data.min)
+          : null;
+      const csr2MaxInt =
+        extractedInfo.csr2Data.max != null
+          ? Math.round(extractedInfo.csr2Data.max)
+          : null;
       await db
         .update(auctions)
         .set({
           csr2Mean: extractedInfo.csr2Data.mean,
-          csr2Min: extractedInfo.csr2Data.min,
-          csr2Max: extractedInfo.csr2Data.max,
+          csr2Min: csr2MinInt,
+          csr2Max: csr2MaxInt,
         })
         .where(eq(auctions.id, auctionId));
       auction.csr2Mean = extractedInfo.csr2Data.mean;
-      auction.csr2Min = extractedInfo.csr2Data.min;
-      auction.csr2Max = extractedInfo.csr2Data.max;
+      auction.csr2Min = csr2MinInt;
+      auction.csr2Max = csr2MaxInt;
     }
 
     const valuationLandType =
