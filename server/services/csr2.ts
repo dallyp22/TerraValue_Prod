@@ -159,7 +159,9 @@ export async function csr2PointValue(longitude: number, latitude: number): Promi
           sr: 4326,
           returnGeometry: false
         },
-        timeout: 10000
+        // 4s instead of 10s: on Workers, slow points blow the budget for the
+        // whole polygon. Better to drop a few samples than wait 10s for each.
+        timeout: 4000
       });
 
       const value = response.data?.value;
@@ -391,10 +393,15 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
       const minY = Math.min(...ys);
       const maxY = Math.max(...ys);
 
-      // Generate sample points within the polygon bounds
+      // Generate sample points within the polygon bounds.
+      // 3x3 grid (9 points) instead of 5x5 (25). Each point can fan out to
+      // 4+ external sub-requests (MSU → USDA fallback chain); 25 points was
+      // exceeding the Workers subrequest budget on big bboxes (aggregated
+      // ownership groups with 100+ parcels). 9 points is plenty for an
+      // average-of-samples estimate.
       const samplePoints: [number, number][] = [];
-      const gridSize = 5; // 5x5 grid of sample points
-      
+      const gridSize = 3;
+
       for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
           const x = minX + (maxX - minX) * (i + 0.5) / gridSize;
@@ -403,14 +410,18 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         }
       }
 
-      // Sample CSR2 values at multiple points (PARALLELIZED for speed)
+      // Sample CSR2 values in parallel. allSettled instead of all so that
+      // one slow/failed point doesn't doom the whole polygon average.
       console.log(`⚡ Querying ${samplePoints.length} points in parallel...`);
-      const samplePromises = samplePoints.map(([x, y]) => csr2PointValue(x, y));
-      const sampleValues = await Promise.all(samplePromises);
+      const sampleResults = await Promise.allSettled(
+        samplePoints.map(([x, y]) => csr2PointValue(x, y)),
+      );
       console.log(`✅ Parallel queries complete`);
-      
-      // Filter out null values
-      const validValues = sampleValues.filter((v): v is number => v !== null);
+
+      // Filter out null/rejected values
+      const validValues = sampleResults
+        .map((r) => (r.status === "fulfilled" ? r.value : null))
+        .filter((v): v is number => v !== null);
       
       if (!validValues.length) {
         return {
