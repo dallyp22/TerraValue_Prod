@@ -43,19 +43,19 @@ app.onError((err, c) => {
 //   "0 9 * * *"   → daily 09:00 UTC (~03:00 CST) → auction archiver
 //   "*/5 * * * *" → every 5 minutes → scraper schedule check
 async function handleScheduled(
-  event: ScheduledEvent,
+  controller: ScheduledController,
   _env: Env,
   ctx: ExecutionContext,
 ) {
-  if (event.cron === "0 9 * * *") {
+  if (controller.cron === "0 9 * * *") {
     console.log("⏰ Cron: running daily auction archiver");
     const archiver = new AuctionArchiverService();
     ctx.waitUntil(archiver.archivePastAuctions());
-  } else if (event.cron === "*/5 * * * *") {
+  } else if (controller.cron === "*/5 * * * *") {
     console.log("⏰ Cron: scraper schedule check");
     ctx.waitUntil(automaticScraperService.checkAndRun());
   } else {
-    console.warn(`⏰ Cron: unrecognized schedule "${event.cron}"`);
+    console.warn(`⏰ Cron: unrecognized schedule "${controller.cron}"`);
   }
 }
 
