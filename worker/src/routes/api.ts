@@ -587,6 +587,9 @@ api.get("/parcels/aggregated", async (c) => {
       ],
     );
 
+    // Use the same property names the ArcGIS-shaped legacy response used —
+    // MapLibre style expressions (['get', 'DEEDHOLDER'] etc.) and several
+    // labels/popups in EnhancedMap.tsx read these exact field names.
     const features = result.rows
       .map((row: any) => {
         try {
@@ -595,11 +598,11 @@ api.get("/parcels/aggregated", async (c) => {
             geometry: JSON.parse(row.geometry_json),
             properties: {
               id: row.id,
-              owner: row.normalized_owner,
-              county: row.county,
-              parcelCount: row.parcel_count,
-              totalAcres: row.total_acres,
-              parcelIds: row.parcel_ids,
+              DEEDHOLDER: row.normalized_owner,
+              COUNTYNAME: row.county,
+              PARCEL_COUNT: row.parcel_count,
+              TOTAL_ACRES: row.total_acres,
+              PARCEL_IDS: row.parcel_ids,
             },
           };
         } catch {

@@ -1204,12 +1204,15 @@ export default function EnhancedMap({
       
       // Add BOTH parcel sources - toggle will control which layers are visible
       
-      // Self-hosted vector tiles source
+      // Self-hosted vector tiles source.
+      // MapLibre fetches tiles inside a Web Worker that can't resolve relative
+      // URLs, so we must hand it an absolute origin even when API_BASE_URL is
+      // "" (same-origin via the Pages Function proxy).
       if (!map.current!.getSource('parcels-vector')) {
-        const apiUrl = API_BASE_URL;
+        const tileOrigin = API_BASE_URL || window.location.origin;
         map.current!.addSource('parcels-vector', {
           type: 'vector',
-          tiles: [`${apiUrl}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
+          tiles: [`${tileOrigin}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
           minzoom: 10,
           maxzoom: 18
         });
