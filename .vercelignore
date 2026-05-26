@@ -1,8 +1,0 @@
-# Ignore API directory - Railway handles the backend
-api/
-server/
-
-# Ignore server build artifacts
-dist/index.js
-
-# Vercel will ONLY serve the static frontend from dist/public/
