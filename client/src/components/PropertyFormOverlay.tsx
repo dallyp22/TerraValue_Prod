@@ -193,19 +193,26 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
     setIsLoadingCSR2(true);
     try {
       // Collect all polygon geometries (either from allGeometries or single geometry)
+      // Flatten any geometry (Polygon or MultiPolygon) into individual turf
+      // polygons. Aggregated parcels from MVT tiles come through as
+      // MultiPolygon, and the previous code silently dropped them — leaving
+      // us with one sample point at the clicked coord, which often missed.
+      const toPolygons = (geom: any): any[] => {
+        if (!geom || !geom.coordinates) return [];
+        if (geom.type === 'Polygon') return [turf.polygon(geom.coordinates)];
+        if (geom.type === 'MultiPolygon') {
+          return geom.coordinates.map((rings: number[][][]) =>
+            turf.polygon(rings),
+          );
+        }
+        return [];
+      };
+
       let polygons: any[] = [];
-      
       if (parcelData.allGeometries && parcelData.allGeometries.length > 0) {
-        // Use all sections if available
-        polygons = parcelData.allGeometries.map((geom: any) => {
-          if (geom.type === 'Polygon' && geom.coordinates) {
-            return turf.polygon(geom.coordinates);
-          }
-          return null;
-        }).filter(p => p !== null);
-      } else if (parcelData.geometry && parcelData.geometry.type === 'Polygon' && parcelData.geometry.coordinates) {
-        // Single geometry available
-        polygons = [turf.polygon(parcelData.geometry.coordinates)];
+        polygons = parcelData.allGeometries.flatMap(toPolygons);
+      } else if (parcelData.geometry) {
+        polygons = toPolygons(parcelData.geometry);
       }
       
       // Generate sample points within the parcel boundaries
