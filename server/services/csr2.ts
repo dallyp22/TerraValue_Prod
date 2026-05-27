@@ -400,7 +400,13 @@ export async function csr2PolygonMean(wkt: string): Promise<number | null> {
  * Handles both POINT and POLYGON formats
  */
 export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
-  return limit(async () => {
+  // Was wrapped in pLimit(3) for Express + Railway courtesy; in Workers
+  // the limit is a module-level singleton shared across the isolate, so a
+  // single hung external call (USDA SDA spike) wedged the queue and every
+  // subsequent /api/csr2/polygon hung until Workers killed it at 30s. The
+  // frontend already controls concurrency by sampling N points and
+  // Promise.all-ing them across N Worker invocations.
+  return await (async () => {
     try {
       // Check if WKT is a POINT
       const pointMatch = /POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt);
@@ -514,7 +520,7 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         count: 0
       };
     }
-  });
+  })();
 }
 
 /**
