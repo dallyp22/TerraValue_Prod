@@ -130,26 +130,87 @@ export interface FieldData {
 }
 
 /**
+ * Look up CSR2 by asking USDA which mukey covers a point, then joining
+ * locally to soil_csr2_ratings (populated by scripts/backfill-soil-csr2.ts).
+ *
+ * One external HTTP call (USDA SDA mukey lookup, ~0.5-1s) instead of MSU's
+ * 2-4s value query or the 4-step AOI interpretation chain. The CSR2 join
+ * itself is fully local (~50ms).
+ *
+ * TODO (option A): once soil_mapunit_spatial is populated with the actual
+ * SSURGO polygon geometries, csr2PointValueFromLocalDb() above will succeed
+ * and this tier becomes redundant — drop it.
+ */
+async function csr2PointValueByMukeyExternal(
+  longitude: number,
+  latitude: number,
+): Promise<number | null> {
+  if (!isSoilDbAvailable()) return null;
+  try {
+    const wkt = `point(${longitude} ${latitude})`;
+    const sdaResp = await fetch(
+      'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          query: `SELECT TOP 1 mukey FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('${wkt}')`,
+          format: 'JSON',
+        }).toString(),
+        signal: AbortSignal.timeout(3000),
+      },
+    );
+    const sdaJson = await sdaResp.json();
+    const mukey = sdaJson?.Table?.[0]?.[0];
+    if (!mukey) return null;
+
+    const rows = await executeSoilQuery<{ weighted_csr2: number | null }>(
+      `SELECT AVG(csr.csr2_value * COALESCE(c.comppct_r, 100) / 100.0) AS weighted_csr2
+         FROM soil_component c
+         JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
+        WHERE c.mukey = $1 AND c.majcompflag = 'Yes'`,
+      [String(mukey)],
+    );
+    const v = rows[0]?.weighted_csr2;
+    if (v == null) return null;
+    return Number(Number(v).toFixed(1));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get CSR2 value for a specific point using Michigan State ImageServer
  * This is the direct raster query approach that was working previously
  */
 export async function csr2PointValue(longitude: number, latitude: number): Promise<number | null> {
   const cacheKey = `point:${longitude},${latitude}`;
   const cached = cache.get<number | null>(cacheKey);
-  
+
   if (cached !== undefined) {
     return cached;
   }
 
   try {
-    // Try local database first (fastest)
+    // Tier 1: pure local (needs soil_mapunit_spatial — currently empty).
+    // When option A's spatial backfill lands, this becomes the only path.
     const localResult = await csr2PointValueFromLocalDb(longitude, latitude);
     if (localResult !== null) {
       cache.set(cacheKey, localResult);
       return localResult;
     }
 
-    // Fallback to Michigan State ImageServer
+    // Tier 2: USDA-mukey-lookup + local soil_csr2_ratings.
+    // Uses the 11K mukeys we backfilled — one external hop, no MSU/USDA
+    // value queries.
+    const mukeyLocal = await csr2PointValueByMukeyExternal(longitude, latitude);
+    if (mukeyLocal !== null) {
+      console.log(`✅ CSR2 from USDA-mukey→local DB for (${longitude}, ${latitude}): ${mukeyLocal}`);
+      cache.set(cacheKey, mukeyLocal);
+      return mukeyLocal;
+    }
+
+    // Tier 3: Michigan State ImageServer (legacy fast path).
     try {
       const response = await axios.get(`${CSR2_ENDPOINT}/identify`, {
         params: {
