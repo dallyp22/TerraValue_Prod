@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as turf from '@turf/turf';
 import type { PropertyForm as PropertyFormData } from '@shared/schema';
 import { SoilDataPanel } from './SoilDataPanel';
@@ -81,6 +81,10 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
   const [cornPrice, setCornPrice] = useState<number | null>(null);
   const [calculatedCashRent, setCalculatedCashRent] = useState<number | null>(null);
 
+  // Tracks the parcel currently being looked at, so in-flight CSR2 fetches
+  // for a previous parcel don't overwrite state when the user clicks rapidly.
+  const activeParcelRef = useRef<any>(null);
+
   // Fetch mukey and soil data when parcel is selected
   useEffect(() => {
     const fetchSoilData = async () => {
@@ -132,23 +136,30 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
 
 
 
-  // Fetch CSR2 data for parcel if needed
+  // Fetch CSR2 data for parcel — refire on every new parcel.
+  // The earlier `!parcelCSR2Data` guard meant rapid clicks (form already
+  // open) inherited the previous parcel's CSR2 — or none, if the first
+  // fetch failed.
   useEffect(() => {
-    if (parcelData && !parcelCSR2Data) {
-      // If CSR2 data is already provided (from auction preparation), use it
-      if (parcelData.csr2Mean !== undefined) {
-        console.log('✅ Using pre-fetched CSR2 data from auction preparation');
-        setParcelCSR2Data({
-          mean: parcelData.csr2Mean,
-          min: parcelData.csr2Min,
-          max: parcelData.csr2Max
-        });
-        return;
-      }
-      
-      // Otherwise fetch it
-      fetchParcelCSR2Data();
+    // Reset stale CSR2 from the previous parcel and mark the new one active.
+    activeParcelRef.current = parcelData;
+    setParcelCSR2Data(null);
+    setIsLoadingCSR2(false);
+
+    if (!parcelData) return;
+
+    // Pre-supplied (e.g., from auction prepare-valuation flow)
+    if (parcelData.csr2Mean !== undefined) {
+      console.log('✅ Using pre-fetched CSR2 data from auction preparation');
+      setParcelCSR2Data({
+        mean: parcelData.csr2Mean,
+        min: parcelData.csr2Min,
+        max: parcelData.csr2Max,
+      });
+      return;
     }
+
+    fetchParcelCSR2Data();
   }, [parcelData]);
 
   // Fetch corn price for cash rent calculation
@@ -181,15 +192,20 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
 
   const fetchParcelCSR2Data = async () => {
     if (!parcelData) return;
-    
-    // Check cache first
-    const cacheKey = parcelData.parcel_number;
+    // Capture the parcel we're fetching FOR so we can ignore stale results
+    // if the user clicks another parcel before this resolves.
+    const targetParcel = parcelData;
+
+    // Check cache first (only apply the cached result if still on this parcel)
+    const cacheKey = targetParcel.parcel_number;
     if (cacheKey && csr2Cache.has(cacheKey)) {
       const cachedData = csr2Cache.get(cacheKey);
-      setParcelCSR2Data(cachedData);
+      if (activeParcelRef.current === targetParcel) {
+        setParcelCSR2Data(cachedData);
+      }
       return;
     }
-    
+
     setIsLoadingCSR2(true);
     try {
       // Collect all polygon geometries (either from allGeometries or single geometry)
@@ -312,18 +328,23 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         };
         
         // Cache the result by parcel number
-        if (parcelData.parcel_number) {
-          csr2Cache.set(parcelData.parcel_number, resultData);
+        if (targetParcel.parcel_number) {
+          csr2Cache.set(targetParcel.parcel_number, resultData);
         }
-        
-        setParcelCSR2Data(resultData);
+
+        // Only commit to state if the user is still looking at this parcel.
+        if (activeParcelRef.current === targetParcel) {
+          setParcelCSR2Data(resultData);
+        }
       } else {
         throw new Error('Unable to calculate CSR2 values');
       }
     } catch (error) {
       console.error('CSR2 fetch error:', error);
     } finally {
-      setIsLoadingCSR2(false);
+      if (activeParcelRef.current === targetParcel) {
+        setIsLoadingCSR2(false);
+      }
     }
   };
 
