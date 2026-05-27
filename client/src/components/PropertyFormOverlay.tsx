@@ -451,14 +451,30 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
           {/* Soil Data Panel - Shows Iowa soil properties */}
           {mukey && parcelData && (
             <div className="mb-6">
-              <SoilDataPanel 
+              <SoilDataPanel
                 mukey={mukey}
                 parcelInfo={{
                   ownerName: parcelData.owner_name,
                   parcelNumber: parcelData.parcel_number,
                   county: parcelData.county,
-                  acres: parcelData.acres
+                  acres: parcelData.acres,
                 }}
+                csr2={{
+                  mean:
+                    parcelCSR2Data?.csr2?.mean ??
+                    parcelCSR2Data?.mean ??
+                    parcelData?.csr2Mean,
+                  min:
+                    parcelCSR2Data?.csr2?.min ??
+                    parcelCSR2Data?.min ??
+                    parcelData?.csr2Min,
+                  max:
+                    parcelCSR2Data?.csr2?.max ??
+                    parcelCSR2Data?.max ??
+                    parcelData?.csr2Max,
+                  count: parcelCSR2Data?.csr2?.count,
+                }}
+                isLoadingCsr2={isLoadingCSR2}
               />
             </div>
           )}
