@@ -18,9 +18,39 @@ interface SoilDataPanelProps {
     county?: string;
     acres?: number;
   };
+  csr2?: {
+    mean?: number;
+    min?: number;
+    max?: number;
+    count?: number;
+  };
+  isLoadingCsr2?: boolean;
 }
 
-export function SoilDataPanel({ mukey, parcelInfo }: SoilDataPanelProps) {
+// CSR2 colour bands per Iowa State's published interpretation:
+// 90+ = excellent, 75-89 = very good, 60-74 = good, 40-59 = fair, < 40 = marginal.
+const getCsr2Color = (value: number) => {
+  if (value >= 90) return "text-green-700";
+  if (value >= 75) return "text-green-600";
+  if (value >= 60) return "text-lime-600";
+  if (value >= 40) return "text-amber-600";
+  return "text-orange-700";
+};
+
+const getCsr2Label = (value: number) => {
+  if (value >= 90) return "Excellent";
+  if (value >= 75) return "Very Good";
+  if (value >= 60) return "Good";
+  if (value >= 40) return "Fair";
+  return "Marginal";
+};
+
+export function SoilDataPanel({
+  mukey,
+  parcelInfo,
+  csr2,
+  isLoadingCsr2,
+}: SoilDataPanelProps) {
   const { data: response, isLoading, error } = useSoilData(mukey);
   const soilData = response?.data;
   const [surfaceHorizonExpanded, setSurfaceHorizonExpanded] = useState(false);
@@ -301,6 +331,45 @@ export function SoilDataPanel({ mukey, parcelInfo }: SoilDataPanelProps) {
                   <Badge variant={soilData.farmlandClass.includes('Prime') ? 'default' : 'secondary'}>
                     {soilData.farmlandClass}
                   </Badge>
+                </div>
+              )}
+
+              {/* CSR2 Rating — Iowa Corn Suitability Rating */}
+              {(isLoadingCsr2 || csr2?.mean != null) && (
+                <div className="flex justify-between items-center">
+                  <Tooltip>
+                    <TooltipTrigger className="flex items-center gap-1 text-sm text-muted-foreground cursor-help">
+                      CSR2 Rating
+                      <Info className="h-3 w-3" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="text-xs">
+                        Iowa Corn Suitability Rating 2: a 5-100 productivity score
+                        for cropland. Higher is better. Computed as an
+                        area-weighted average of CSR2 values across the soil
+                        mapunits this parcel covers.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                  {isLoadingCsr2 ? (
+                    <Skeleton className="h-5 w-16" />
+                  ) : csr2?.mean != null ? (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-lg font-bold tabular-nums ${getCsr2Color(csr2.mean)}`}
+                      >
+                        {csr2.mean.toFixed(1)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({getCsr2Label(csr2.mean)})
+                      </span>
+                      {csr2.min != null && csr2.max != null && csr2.min !== csr2.max && (
+                        <span className="text-xs text-muted-foreground">
+                          {csr2.min}-{csr2.max}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
