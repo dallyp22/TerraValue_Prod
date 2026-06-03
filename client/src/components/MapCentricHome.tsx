@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Menu, Plus, Minus, Locate, Maximize2, Hexagon, User, Layers, MapPinPlus, MousePointer, PenTool } from 'lucide-react';
+import { Menu, Plus, Minus, Locate, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import * as turf from '@turf/turf';
 import EnhancedMap from './EnhancedMap';
 import LeftSidebar, { type AuctionFilters, type MapOverlays, type MapInfo } from './LeftSidebar';
@@ -10,7 +9,6 @@ import { useHiddenAuctions } from '@/hooks/use-hidden-auctions';
 import { HiddenAuctionsDialog } from './HiddenAuctionsDialog';
 import { usePortfolio } from '@/hooks/use-portfolio';
 import type { PinCategory } from '@/types/portfolio';
-import { PIN_CATEGORIES } from '@/types/portfolio';
 
 type PortfolioAddMode = 'none' | 'pin' | 'select' | 'draw';
 import MapControls from './MapControls';
@@ -478,6 +476,20 @@ export default function MapCentricHome() {
           }
         }}
         onDeletePin={deletePin}
+        drawModeEnabled={drawModeEnabled}
+        onDrawModeChange={setDrawModeEnabled}
+        portfolioAddMode={portfolioAddMode}
+        onPortfolioAddModeChange={setPortfolioAddMode}
+        selectedPinCategory={selectedPinCategory}
+        onSelectedPinCategoryChange={setSelectedPinCategory}
+        showOwnerLabels={showOwnerLabels}
+        onShowOwnerLabelsChange={setShowOwnerLabels}
+        onAggregatedZoom={() => {
+          // Aggregated parcels only render past zoom ~10.
+          if (mapRef && mapRef.getZoom() < 11) {
+            mapRef.easeTo({ zoom: 11, duration: 500 });
+          }
+        }}
       />
 
       {/* Map Container */}
@@ -552,158 +564,12 @@ export default function MapCentricHome() {
           <Menu className="h-6 w-6" />
         </Button>
 
-        {/* Unified Top-Left Control Panel - Desktop Only */}
+        {/* Zoom / Navigation Controls - Desktop Only */}
         {mapInfo.showScrapingModule && (
         <div className="hidden lg:block absolute top-4 left-4 z-50">
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl flex gap-3" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-            {/* Left side - Map Layer Controls */}
-            <div className="p-5 space-y-4">
-              {/* Header */}
-              <h3 className="text-sm font-medium text-slate-600 mb-4">Map Layers</h3>
-              
-              {/* Draw Polygon Toggle (Valuation) */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <Hexagon className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700">Draw Polygon</span>
-                </div>
-                <Switch
-                  checked={drawModeEnabled}
-                  onCheckedChange={(checked) => {
-                    console.log('Draw polygon toggle:', checked);
-                    setDrawModeEnabled(checked);
-                    if (checked) setPortfolioAddMode('none'); // Mutually exclusive
-                  }}
-                />
-              </div>
-
-              {/* Portfolio Add Mode */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <MapPinPlus className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700 font-medium">Portfolio</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant={portfolioAddMode === 'pin' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      const next = portfolioAddMode === 'pin' ? 'none' : 'pin';
-                      setPortfolioAddMode(next);
-                      if (next !== 'none') setDrawModeEnabled(false);
-                    }}
-                    className="flex-1 h-8 text-xs gap-1"
-                    title="Drop a pin anywhere on the map"
-                  >
-                    <MapPinPlus className="h-3.5 w-3.5" />
-                    Pin
-                  </Button>
-                  <Button
-                    variant={portfolioAddMode === 'select' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      const next = portfolioAddMode === 'select' ? 'none' : 'select';
-                      setPortfolioAddMode(next);
-                      if (next !== 'none') setDrawModeEnabled(false);
-                    }}
-                    className="flex-1 h-8 text-xs gap-1"
-                    title="Click an existing parcel to save it"
-                  >
-                    <MousePointer className="h-3.5 w-3.5" />
-                    Select
-                  </Button>
-                  <Button
-                    variant={portfolioAddMode === 'draw' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      const next = portfolioAddMode === 'draw' ? 'none' : 'draw';
-                      setPortfolioAddMode(next);
-                      if (next !== 'none') setDrawModeEnabled(false);
-                    }}
-                    className="flex-1 h-8 text-xs gap-1"
-                    title="Draw a custom polygon"
-                  >
-                    <PenTool className="h-3.5 w-3.5" />
-                    Draw
-                  </Button>
-                </div>
-              </div>
-
-              {/* Pin Category Selector - visible when any portfolio mode is active */}
-              {portfolioAddMode !== 'none' && (
-                <div className="flex gap-1 pl-7">
-                  {PIN_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.id}
-                      className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                        selectedPinCategory === cat.id ? 'scale-125 border-white shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                      style={{ backgroundColor: cat.color }}
-                      onClick={() => setSelectedPinCategory(cat.id)}
-                      title={cat.label}
-                    />
-                  ))}
-                </div>
-              )}
-              
-              {/* Owner Names Toggle */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <User className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700">Owner Names</span>
-                </div>
-                <Switch
-                  checked={showOwnerLabels}
-                  onCheckedChange={(checked) => {
-                    console.log('Owner labels toggle:', checked);
-                    setShowOwnerLabels(checked);
-                  }}
-                />
-              </div>
-              
-              {/* Parcel Display Mode - Three State Toggle */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <Layers className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-700 font-medium">Parcel Display</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant={mapOverlays.parcelDisplayMode === 'off' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'off' })}
-                    className="flex-1 h-8 text-xs"
-                  >
-                    Off
-                  </Button>
-                  <Button
-                    variant={mapOverlays.parcelDisplayMode === 'arcgis' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'arcgis' })}
-                    className="flex-1 h-8 text-xs"
-                  >
-                    ArcGIS
-                  </Button>
-                  <Button
-                    variant={mapOverlays.parcelDisplayMode === 'self-hosted' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setMapOverlays({ ...mapOverlays, parcelDisplayMode: 'self-hosted' });
-                      // Auto-zoom to level where aggregated parcels are visible (need zoom > 10)
-                      if (mapRef && mapRef.getZoom() < 11) {
-                        mapRef.easeTo({ zoom: 11, duration: 500 });
-                      }
-                    }}
-                    className="flex-1 h-8 text-xs"
-                  >
-                    Aggregated
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Right side - Zoom Controls */}
-            <div className="flex flex-col gap-2 border-l border-slate-200 pl-3 pr-3 py-3">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+            {/* Zoom Controls */}
+            <div className="flex flex-col gap-2 p-3">
               <Button
                 onClick={handleZoomIn}
                 size="icon"
