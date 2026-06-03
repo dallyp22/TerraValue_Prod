@@ -451,3 +451,68 @@ export interface ValuationResponse {
   aiReasoning?: string;
   breakdown?: ValuationBreakdown;
 }
+
+// ============================================================================
+// Land Talk Monthly — Iowa Appraisal land-sales comps
+// Replaces the OpenAI vector store as the source of Iowa market comparables.
+// `land_talk_pdfs` tracks which monthly newsletters we've ingested;
+// `land_sales_comps` holds the structured sale rows parsed from each PDF.
+// ============================================================================
+
+export const landTalkPdfs = pgTable("land_talk_pdfs", {
+  id: serial("id").primaryKey(),
+  url: text("url").notNull().unique(),     // squarespace CDN PDF URL (per-file UUID path)
+  title: text("title"),                    // link text, e.g. "April 2026 Land Talk Monthly"
+  month: text("month"),                    // normalized YYYY-MM, e.g. "2026-04"
+  status: text("status").notNull().default("pending"), // pending | parsed | failed | skipped
+  salesCount: integer("sales_count").default(0),
+  error: text("error"),
+  scrapedAt: timestamp("scraped_at"),
+  ingestedAt: timestamp("ingested_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const landSalesComps = pgTable("land_sales_comps", {
+  id: serial("id").primaryKey(),
+
+  // Core sale facts (from the "Iowa Land Auction Results" table)
+  saleDate: timestamp("sale_date"),
+  county: text("county").notNull(),
+  landTypeRaw: text("land_type_raw"),        // verbatim, e.g. "Tillable-Expired CRP"
+  landCategory: text("land_category"),       // normalized primary, e.g. "tillable" | "pasture" | "crp" | "recreational" | "development" | "woods" | "mixed"
+  soldAcres: real("sold_acres"),
+
+  // Price — pricePerAcre is null when not a clean numeric sale
+  pricePerAcre: real("price_per_acre"),
+  saleStatus: text("sale_status").notNull().default("sold"), // sold | undisclosed | no_sale | undetermined
+  totalPrice: real("total_price"),           // soldAcres * pricePerAcre when both known
+
+  // Soil / tillable productivity
+  tillableCsr2: real("tillable_csr2"),
+  tillableAcres: real("tillable_acres"),
+  dollarPerTillableCsr2: real("dollar_per_tillable_csr2"), // reported only when tillable >= 80%; else null
+
+  // Provenance
+  saleMonth: text("sale_month"),             // YYYY-MM of the source newsletter
+  sourcePdfUrl: text("source_pdf_url").notNull(),
+  sourceName: text("source_name").notNull().default("Iowa Appraisal — Land Talk Monthly"),
+  extractionConfidence: real("extraction_confidence"), // 0-1, from the parser
+
+  // Idempotency: stable hash of (sourcePdfUrl + saleDate + county + soldAcres + raw price)
+  rowHash: text("row_hash").notNull().unique(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  countyDateIdx: index("land_sales_comps_county_date_idx").on(table.county, table.saleDate),
+  categoryIdx: index("land_sales_comps_category_idx").on(table.landCategory),
+  monthIdx: index("land_sales_comps_month_idx").on(table.saleMonth),
+}));
+
+export const insertLandTalkPdfSchema = createInsertSchema(landTalkPdfs);
+export const insertLandSalesCompSchema = createInsertSchema(landSalesComps);
+export type LandTalkPdf = typeof landTalkPdfs.$inferSelect;
+export type InsertLandTalkPdf = typeof landTalkPdfs.$inferInsert;
+export type LandSalesComp = typeof landSalesComps.$inferSelect;
+export type InsertLandSalesComp = typeof landSalesComps.$inferInsert;
