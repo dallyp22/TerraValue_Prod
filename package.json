@@ -34,6 +34,7 @@
     "auctions:enrich:status": "tsx scripts/check-enrichment-status.ts",
     "auctions:recent": "tsx scripts/view-recent-auctions.ts",
     "auctions:backfill-csr2": "tsx scripts/backfill-auction-csr2.ts",
+    "landtalk:create-tables": "tsx scripts/create-landtalk-tables.ts",
     "landtalk:ingest": "tsx scripts/ingest-land-talk.ts",
     "landtalk:backfill": "tsx scripts/ingest-land-talk.ts --backfill"
   },
