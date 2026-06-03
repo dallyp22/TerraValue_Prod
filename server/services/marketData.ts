@@ -1,4 +1,5 @@
 import { pool } from "../db";
+import { getCountyCentroid } from "./iowaCountyCentroids";
 
 /**
  * Market Data aggregations over land_sales_comps (Land Talk Monthly comps).
@@ -80,8 +81,13 @@ function buildFilters(
   return { clause: conds.length ? " AND " + conds.join(" AND ") : "", params, next: i };
 }
 
-/** Base predicate for $ aggregations: real, priced, dated sales. */
-const PRICED = `sale_status = 'sold' AND price_per_acre IS NOT NULL AND sale_date IS NOT NULL`;
+/**
+ * Base predicate for $ analytics: real, priced, dated sales — and a high cap
+ * to exclude non-farmland outliers (development/commercial tracts that sell for
+ * $50k–$100k+/acre and skew averages). The raw sales table is NOT capped.
+ */
+const OUTLIER_CAP = 40000;
+const PRICED = `sale_status = 'sold' AND price_per_acre IS NOT NULL AND price_per_acre <= ${OUTLIER_CAP} AND sale_date IS NOT NULL`;
 
 export async function getTimeseries(f: MarketFilters): Promise<TimeseriesPoint[]> {
   const { clause, params } = buildFilters(f);
@@ -201,4 +207,93 @@ export async function getRecentSales(q: SalesQuery) {
   return { total, rows: rowsRes.rows, limit, offset };
 }
 
-export const marketDataService = { getSummary, getTimeseries, getRecentSales };
+export interface CountyStat {
+  county: string;
+  sales: number;
+  medianPerAcre: number | null;
+  avgPerCsr2: number | null;
+  lat: number;
+  lng: number;
+}
+
+/** Per-county medians + centroid coords (for the bubble map and leaderboard). */
+export async function getByCounty(f: MarketFilters): Promise<CountyStat[]> {
+  const { clause, params } = buildFilters(f);
+  // split_part attributes multi-county tracts ("Polk-Jasper") to the first county.
+  const sql = `
+    SELECT split_part(county, '-', 1) AS county,
+      count(*)::int AS sales,
+      round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price_per_acre))::int AS median_per_acre,
+      round(avg(dollar_per_tillable_csr2))::int AS avg_per_csr2
+    FROM land_sales_comps
+    WHERE ${PRICED}${clause}
+    GROUP BY 1
+    ORDER BY 2 DESC`;
+  const { rows } = await pool.query(sql, params);
+  const out: CountyStat[] = [];
+  for (const r of rows as any[]) {
+    const c = getCountyCentroid(r.county);
+    if (!c) continue; // skip anything we can't place (rare odd values)
+    out.push({
+      county: r.county,
+      sales: r.sales,
+      medianPerAcre: r.median_per_acre,
+      avgPerCsr2: r.avg_per_csr2,
+      lat: c.latitude,
+      lng: c.longitude,
+    });
+  }
+  return out;
+}
+
+export interface ScatterPoint {
+  csr2: number;
+  pricePerAcre: number;
+  county: string;
+  year: number;
+  acres: number | null;
+}
+
+/** Points for the price-vs-CSR2 scatter (sold, priced, capped, with a CSR2). */
+export async function getScatter(f: MarketFilters): Promise<ScatterPoint[]> {
+  const { clause, params } = buildFilters(f);
+  const sql = `
+    SELECT tillable_csr2 AS csr2, price_per_acre AS price, county,
+           extract(year FROM sale_date)::int AS year, sold_acres AS acres
+    FROM land_sales_comps
+    WHERE ${PRICED} AND tillable_csr2 IS NOT NULL${clause}
+    ORDER BY sale_date DESC
+    LIMIT 2000`;
+  const { rows } = await pool.query(sql, params);
+  return (rows as any[]).map((r) => ({
+    csr2: r.csr2,
+    pricePerAcre: r.price,
+    county: r.county,
+    year: r.year,
+    acres: r.acres,
+  }));
+}
+
+export interface SeasonalityPoint {
+  month: number;        // 1-12
+  sales: number;
+  avgPerAcre: number | null;
+}
+
+/** Sales activity by calendar month (seasonality). */
+export async function getSeasonality(f: MarketFilters): Promise<SeasonalityPoint[]> {
+  const { clause, params } = buildFilters(f);
+  const sql = `
+    SELECT extract(month FROM sale_date)::int AS m,
+      count(*)::int AS sales,
+      round(avg(price_per_acre))::int AS avg_per_acre
+    FROM land_sales_comps
+    WHERE ${PRICED}${clause}
+    GROUP BY 1 ORDER BY 1`;
+  const { rows } = await pool.query(sql, params);
+  return (rows as any[]).map((r) => ({ month: r.m, sales: r.sales, avgPerAcre: r.avg_per_acre }));
+}
+
+export const marketDataService = {
+  getSummary, getTimeseries, getRecentSales, getByCounty, getScatter, getSeasonality,
+};

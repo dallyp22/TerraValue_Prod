@@ -2530,3 +2530,30 @@ api.get("/market/sales", async (c) => {
     return c.json({ success: false, message: "Failed to load sales" }, 500);
   }
 });
+
+api.get("/market/by-county", async (c) => {
+  try {
+    return c.json({ success: true, counties: await marketDataService.getByCounty(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/by-county failed:", error);
+    return c.json({ success: false, message: "Failed to load county stats" }, 500);
+  }
+});
+
+api.get("/market/scatter", async (c) => {
+  try {
+    return c.json({ success: true, points: await marketDataService.getScatter(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/scatter failed:", error);
+    return c.json({ success: false, message: "Failed to load scatter" }, 500);
+  }
+});
+
+api.get("/market/seasonality", async (c) => {
+  try {
+    return c.json({ success: true, months: await marketDataService.getSeasonality(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/seasonality failed:", error);
+    return c.json({ success: false, message: "Failed to load seasonality" }, 500);
+  }
+});

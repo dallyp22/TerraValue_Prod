@@ -14,10 +14,13 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ScatterChart, Scatter, ZAxis, ReferenceLine, BarChart, Bar, Cell,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Landmark, Ruler, Layers, ArrowUpDown, ChevronLeft, ChevronRight,
+  Download, X, Trophy, CalendarDays, MapPinned,
 } from "lucide-react";
+import MarketCountyMap, { type CountyStat } from "@/components/MarketCountyMap";
 
 // ---------------------------------------------------------------------------
 // Types matching the /api/market/* responses
@@ -98,11 +101,14 @@ export default function MarketData() {
   const [sortBy, setSortBy] = useState("sale_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
+  const [county, setCounty] = useState<string | null>(null);
 
   const filterParams = {
     landCategory: landCategory === "all" ? undefined : landCategory,
     dateFrom: rangeToDateFrom(range),
+    counties: county || undefined,
   };
+  const selectCounty = (c: string | null) => { setCounty(c); setPage(0); };
 
   const summary = useQuery<MarketSummary>({
     queryKey: ["/api/market/summary", filterParams],
@@ -137,8 +143,52 @@ export default function MarketData() {
     },
   });
 
+  const byCounty = useQuery<CountyStat[]>({
+    queryKey: ["/api/market/by-county", { landCategory: filterParams.landCategory, dateFrom: filterParams.dateFrom }],
+    queryFn: async () => {
+      // county map/leaderboard ignore the county filter (so you can pick another)
+      const r = await fetch(`/api/market/by-county${buildQuery({ landCategory: filterParams.landCategory, dateFrom: filterParams.dateFrom })}`);
+      return (await r.json()).counties;
+    },
+  });
+
+  const scatter = useQuery<{ csr2: number; pricePerAcre: number; county: string; year: number }[]>({
+    queryKey: ["/api/market/scatter", filterParams],
+    queryFn: async () => {
+      const r = await fetch(`/api/market/scatter${buildQuery(filterParams)}`);
+      return (await r.json()).points;
+    },
+  });
+
+  const seasonality = useQuery<{ month: number; sales: number; avgPerAcre: number | null }[]>({
+    queryKey: ["/api/market/seasonality", filterParams],
+    queryFn: async () => {
+      const r = await fetch(`/api/market/seasonality${buildQuery(filterParams)}`);
+      return (await r.json()).months;
+    },
+  });
+
   const s = summary.data;
   const yoy = s?.yoyPct;
+
+  // Least-squares regression for the price-vs-CSR2 scatter.
+  const reg = (() => {
+    const pts = scatter.data || [];
+    if (pts.length < 2) return null;
+    const n = pts.length;
+    const sx = pts.reduce((a, p) => a + p.csr2, 0);
+    const sy = pts.reduce((a, p) => a + p.pricePerAcre, 0);
+    const sxy = pts.reduce((a, p) => a + p.csr2 * p.pricePerAcre, 0);
+    const sxx = pts.reduce((a, p) => a + p.csr2 * p.csr2, 0);
+    const denom = n * sxx - sx * sx;
+    if (denom === 0) return null;
+    const slope = (n * sxy - sx * sy) / denom;
+    const intercept = (sy - slope * sx) / n;
+    return { slope, intercept };
+  })();
+
+  const topByPrice = (byCounty.data || []).filter((c) => c.medianPerAcre != null)
+    .sort((a, b) => (b.medianPerAcre || 0) - (a.medianPerAcre || 0)).slice(0, 10);
 
   const toggleSort = (col: string) => {
     if (sortBy === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -147,6 +197,29 @@ export default function MarketData() {
   };
 
   const totalPages = sales.data ? Math.ceil(sales.data.total / pageSize) : 0;
+
+  const downloadCsv = async () => {
+    const r = await fetch(`/api/market/sales${buildQuery({ ...filterParams, limit: "5000", sortBy, sortDir })}`);
+    const data = await r.json();
+    const rows: SaleRow[] = data.rows || [];
+    const head = ["date", "county", "land_type", "acres", "price_per_acre", "status", "tillable_csr2", "dollar_per_tillable_csr2"];
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = [head.join(",")]
+      .concat(rows.map((r) => [
+        r.sale_date ? r.sale_date.slice(0, 10) : "",
+        esc(r.county), esc(r.land_type_raw), r.sold_acres ?? "", r.price_per_acre ?? "",
+        r.sale_status, r.tillable_csr2 ?? "", r.dollar_per_tillable_csr2 ?? "",
+      ].join(",")))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "iowa-land-sales.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const MONTH_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   return (
     <div className="min-h-screen bg-wheat-cream">
@@ -162,6 +235,14 @@ export default function MarketData() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {county && (
+              <button
+                onClick={() => selectCounty(null)}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-field text-wheat-cream text-sm font-medium"
+              >
+                <MapPinned className="h-3.5 w-3.5" /> {county} County <X className="h-3.5 w-3.5" />
+              </button>
+            )}
             <Select value={landCategory} onValueChange={(v) => { setLandCategory(v); setPage(0); }}>
               <SelectTrigger className="w-[150px] bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -236,10 +317,131 @@ export default function MarketData() {
           </CardContent>
         </Card>
 
+        {/* County map + Scatter */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold text-slate-700">Median $/acre by county</CardTitle>
+              <span className="text-xs text-slate-400">bubble = sales volume · click to filter</span>
+            </CardHeader>
+            <CardContent>
+              {byCounty.isLoading ? (
+                <Skeleton className="h-[360px] w-full" />
+              ) : (
+                <MarketCountyMap counties={byCounty.data || []} selectedCounty={county} onSelectCounty={selectCounty} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-slate-700">Price vs. soil productivity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {scatter.isLoading ? (
+                <Skeleton className="h-[360px] w-full" />
+              ) : (
+                <div className="h-[360px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e1d4" />
+                      <XAxis type="number" dataKey="csr2" name="CSR2" domain={[20, 100]}
+                        tick={{ fontSize: 11, fill: "#94918a" }}
+                        label={{ value: "Tillable CSR2", position: "insideBottom", offset: -2, fontSize: 11, fill: "#94918a" }} />
+                      <YAxis type="number" dataKey="pricePerAcre" name="$/acre"
+                        tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "#94918a" }} width={48} />
+                      <ZAxis range={[18, 18]} />
+                      <Tooltip
+                        cursor={{ strokeDasharray: "3 3" }}
+                        formatter={(v: any, n: any) => (n === "$/acre" ? fmtUsd(v) : v)}
+                        labelFormatter={() => ""}
+                        contentStyle={{ borderRadius: 8, border: "1px solid #e7e1d4", fontSize: 12 }}
+                      />
+                      <Scatter data={scatter.data || []} fill="hsl(94 40% 38%)" fillOpacity={0.45} />
+                      {reg && (
+                        <ReferenceLine
+                          ifOverflow="extendDomain"
+                          stroke="#b45309" strokeWidth={2}
+                          segment={[
+                            { x: 20, y: reg.intercept + reg.slope * 20 },
+                            { x: 100, y: reg.intercept + reg.slope * 100 },
+                          ]}
+                        />
+                      )}
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                  {reg && (
+                    <p className="text-xs text-slate-400 text-center mt-1">
+                      ≈ {fmtUsd(reg.slope)}/acre per CSR2 point
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Leaderboard + Seasonality */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              <CardTitle className="text-base font-semibold text-slate-700">Top counties · median $/acre</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {byCounty.isLoading ? (
+                <Skeleton className="h-72 w-full" />
+              ) : (
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topByPrice} layout="vertical" margin={{ left: 8, right: 16 }}>
+                      <XAxis type="number" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "#94918a" }} />
+                      <YAxis type="category" dataKey="county" width={72} tick={{ fontSize: 11, fill: "#475569" }} />
+                      <Tooltip formatter={(v: any) => [fmtUsd(v), "median $/acre"]} contentStyle={{ borderRadius: 8, border: "1px solid #e7e1d4", fontSize: 12 }} />
+                      <Bar dataKey="medianPerAcre" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => selectCounty(d?.county)}>
+                        {topByPrice.map((c) => (
+                          <Cell key={c.county} fill={c.county === county ? "#b45309" : "hsl(94 45% 34%)"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+              <CalendarDays className="h-4 w-4 text-field" />
+              <CardTitle className="text-base font-semibold text-slate-700">Sales by month (seasonality)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {seasonality.isLoading ? (
+                <Skeleton className="h-72 w-full" />
+              ) : (
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={(seasonality.data || []).map((m) => ({ ...m, label: MONTH_ABBR[m.month] }))} margin={{ top: 8, right: 8, left: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e1d4" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94918a" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#94918a" }} width={36} />
+                      <Tooltip formatter={(v: any) => [v, "sales"]} contentStyle={{ borderRadius: 8, border: "1px solid #e7e1d4", fontSize: 12 }} />
+                      <Bar dataKey="sales" fill="hsl(94 45% 38%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Recent sales */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base font-semibold text-slate-700">Recent sales</CardTitle>
+            <Button variant="outline" size="sm" onClick={downloadCsv} className="gap-1.5 text-xs">
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
