@@ -261,7 +261,7 @@ export async function getScatter(f: MarketFilters): Promise<ScatterPoint[]> {
     SELECT tillable_csr2 AS csr2, price_per_acre AS price, county,
            extract(year FROM sale_date)::int AS year, sold_acres AS acres
     FROM land_sales_comps
-    WHERE ${PRICED} AND tillable_csr2 IS NOT NULL${clause}
+    WHERE ${PRICED} AND tillable_csr2 IS NOT NULL AND tillable_csr2 <= 100${clause}
     ORDER BY sale_date DESC
     LIMIT 2000`;
   const { rows } = await pool.query(sql, params);

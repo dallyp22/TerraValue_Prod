@@ -225,7 +225,10 @@ function cleanRow(
   if (!county) return null;
 
   const { pricePerAcre, saleStatus } = parsePrice(row.price_per_acre);
-  const tillableCsr2 = toNumberOrNull(row.tillable_csr2);
+  // CSR2 is a 0-100 productivity index; reject impossible values (misparses
+  // like "86.4" read as "864") so they don't pollute charts/averages.
+  const rawCsr2 = toNumberOrNull(row.tillable_csr2);
+  const tillableCsr2 = rawCsr2 != null && rawCsr2 >= 0 && rawCsr2 <= 100 ? rawCsr2 : null;
   const tillableAcres = toNumberOrNull(row.tillable_acres);
   const dollarPerTillableCsr2 = parseDashNumber(row.dollar_per_tillable_csr2);
   const landTypeRaw = (row.land_type || "").trim() || null;

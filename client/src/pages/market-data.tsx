@@ -322,7 +322,7 @@ export default function MarketData() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base font-semibold text-slate-700">Median $/acre by county</CardTitle>
-              <span className="text-xs text-slate-400">bubble = sales volume · click to filter</span>
+              <span className="text-xs text-slate-400">darker = higher · click to filter</span>
             </CardHeader>
             <CardContent>
               {byCounty.isLoading ? (
@@ -345,7 +345,8 @@ export default function MarketData() {
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e7e1d4" />
-                      <XAxis type="number" dataKey="csr2" name="CSR2" domain={[20, 100]}
+                      <XAxis type="number" dataKey="csr2" name="CSR2" domain={[0, 100]} allowDataOverflow
+                        ticks={[0, 20, 40, 60, 80, 100]}
                         tick={{ fontSize: 11, fill: "#94918a" }}
                         label={{ value: "Tillable CSR2", position: "insideBottom", offset: -2, fontSize: 11, fill: "#94918a" }} />
                       <YAxis type="number" dataKey="pricePerAcre" name="$/acre"
