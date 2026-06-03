@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import MapCentricHome from "@/components/MapCentricHome";
 import AuctionDiagnosticsTerra from "@/pages/AuctionDiagnosticsTerra";
+import MarketData from "@/pages/market-data";
 import TestParcels from "@/pages/test-parcels";
 import TestHarrisonTileset from "@/pages/test-harrison-tileset";
 
@@ -15,6 +16,7 @@ function App() {
         <Toaster />
         <Route path="/" component={MapCentricHome} />
         <Route path="/auction-diagnostics" component={AuctionDiagnosticsTerra} />
+        <Route path="/market-data" component={MarketData} />
         <Route path="/test-parcels" component={TestParcels} />
         <Route path="/test-harrison" component={TestHarrisonTileset} />
       </TooltipProvider>

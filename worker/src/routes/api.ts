@@ -18,6 +18,7 @@ import { fieldBoundaryService } from "../../../server/services/fieldBoundaries";
 import { auctionScraperService } from "../../../server/services/auctionScraper";
 import { automaticScraperService } from "../../../server/services/automaticScraper";
 import { AuctionArchiverService } from "../../../server/services/auctionArchiver";
+import { marketDataService, type MarketFilters } from "../../../server/services/marketData";
 import { cornPriceService } from "../../../server/services/cornPrice";
 import { soilPropertiesService } from "../../../server/services/soilProperties";
 import { mukeyLookupService } from "../../../server/services/mukeyLookup";
@@ -2475,5 +2476,57 @@ api.post("/admin/csr2-rates/cache/clear", async (c) => {
   } catch (error) {
     console.error("Failed to clear cache:", error);
     return c.json({ success: false, message: "Failed to clear cache" }, 500);
+  }
+});
+
+// ============================================================================
+// Market Data — aggregations over land_sales_comps (Land Talk Monthly)
+// ============================================================================
+function parseMarketFilters(c: any): MarketFilters {
+  const q = c.req.query.bind(c.req);
+  const counties = q("counties");
+  const num = (v: string | undefined) => (v != null && v !== "" ? parseFloat(v) : undefined);
+  return {
+    dateFrom: q("dateFrom") || undefined,
+    dateTo: q("dateTo") || undefined,
+    counties: counties ? counties.split(",").map((s: string) => s.trim()).filter(Boolean) : undefined,
+    landCategory: q("landCategory") || undefined,
+    csr2Min: num(q("csr2Min")),
+    csr2Max: num(q("csr2Max")),
+  };
+}
+
+api.get("/market/summary", async (c) => {
+  try {
+    return c.json({ success: true, summary: await marketDataService.getSummary(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/summary failed:", error);
+    return c.json({ success: false, message: "Failed to load market summary" }, 500);
+  }
+});
+
+api.get("/market/timeseries", async (c) => {
+  try {
+    return c.json({ success: true, series: await marketDataService.getTimeseries(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/timeseries failed:", error);
+    return c.json({ success: false, message: "Failed to load market timeseries" }, 500);
+  }
+});
+
+api.get("/market/sales", async (c) => {
+  try {
+    const f = parseMarketFilters(c);
+    const result = await marketDataService.getRecentSales({
+      ...f,
+      limit: c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined,
+      offset: c.req.query("offset") ? parseInt(c.req.query("offset")!, 10) : undefined,
+      sortBy: c.req.query("sortBy") || undefined,
+      sortDir: (c.req.query("sortDir") as "asc" | "desc") || undefined,
+    });
+    return c.json({ success: true, ...result });
+  } catch (error) {
+    console.error("market/sales failed:", error);
+    return c.json({ success: false, message: "Failed to load sales" }, 500);
   }
 });
