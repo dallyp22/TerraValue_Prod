@@ -51,11 +51,15 @@ async function upsertComps(
   comps: Awaited<ReturnType<typeof parseLandTalkPdf>>["comps"],
 ): Promise<{ inserted: number }> {
   if (comps.length === 0) return { inserted: 0 };
+  // Safety net: collapse any duplicate rowHashes within this batch — Postgres
+  // rejects an ON CONFLICT batch that would update the same row twice.
+  const byHash = new Map(comps.map((c) => [c.rowHash, c]));
+  const unique = Array.from(byHash.values());
   // Idempotent: rowHash is unique, so re-ingesting the same PDF is a no-op
   // for unchanged rows and an update for changed ones.
   await db
     .insert(landSalesComps)
-    .values(comps)
+    .values(unique)
     .onConflictDoUpdate({
       target: landSalesComps.rowHash,
       set: {
@@ -69,7 +73,7 @@ async function upsertComps(
         updatedAt: new Date(),
       },
     });
-  return { inserted: comps.length };
+  return { inserted: unique.length };
 }
 
 async function recordPdf(

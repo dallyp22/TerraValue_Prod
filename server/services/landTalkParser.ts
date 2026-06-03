@@ -183,14 +183,14 @@ export async function parseSalesFromText(
   const comps: InsertLandSalesComp[] = [];
   let lowConfidenceRows = 0;
 
-  for (const row of rows) {
-    const cleaned = cleanRow(row, sourcePdfUrl, saleMonth);
+  rows.forEach((row, index) => {
+    const cleaned = cleanRow(row, sourcePdfUrl, saleMonth, index);
     if (!cleaned) {
       lowConfidenceRows++;
-      continue;
+      return;
     }
     comps.push(cleaned);
-  }
+  });
 
   // Crude confidence: fraction of returned rows we could fully clean.
   const confidence = rows.length > 0 ? (rows.length - lowConfidenceRows) / rows.length : 0;
@@ -215,6 +215,7 @@ function cleanRow(
   row: RawSaleRow,
   sourcePdfUrl: string,
   saleMonth: string | null,
+  index: number,
 ): InsertLandSalesComp | null {
   const county = cleanCounty(row.county);
   const saleDate = parseSaleDate(row.sale_date);
@@ -234,10 +235,15 @@ function cleanRow(
       ? Math.round(pricePerAcre * soldAcres)
       : null;
 
+  // Include the row's position in the PDF so two genuinely-identical-looking
+  // sales (same date/county/acres/price) get distinct hashes instead of
+  // colliding (which breaks the batch upsert). The PDF table order is stable
+  // across re-extractions of the same published document.
   const rowHash = createHash("sha1")
     .update(
       [
         sourcePdfUrl,
+        index,
         row.sale_date || "",
         county,
         row.sold_acres ?? "",
