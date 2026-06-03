@@ -40,8 +40,11 @@ app.onError((err, c) => {
 });
 
 // Cron handlers — registered in wrangler.jsonc via triggers.crons:
-//   "0 9 * * *"   → daily 09:00 UTC (~03:00 CST) → auction archiver
-//   "*/5 * * * *" → every 5 minutes → scraper schedule check
+//   "0 9 * * *" → daily 09:00 UTC (~03:00 CST) → auction archiver
+//   "0 * * * *" → hourly → scraper schedule check
+// The scraper check is hourly (not every 5 min) so the Neon compute can
+// auto-suspend between ticks. checkAndRun() is nextRun-based, so an hourly
+// cadence still triggers the scrape at (or just after) its scheduled time.
 async function handleScheduled(
   controller: ScheduledController,
   _env: Env,
@@ -51,7 +54,7 @@ async function handleScheduled(
     console.log("⏰ Cron: running daily auction archiver");
     const archiver = new AuctionArchiverService();
     ctx.waitUntil(archiver.archivePastAuctions());
-  } else if (controller.cron === "*/5 * * * *") {
+  } else if (controller.cron === "0 * * * *") {
     console.log("⏰ Cron: scraper schedule check");
     ctx.waitUntil(automaticScraperService.checkAndRun());
   } else {

@@ -188,8 +188,16 @@ export default function MapCentricHome() {
   const { data: currentValuation } = useQuery<{ success: boolean; valuation: Valuation }>({
     queryKey: [`/api/valuations/${currentValuationId}`],
     enabled: !!currentValuationId,
-    refetchInterval: currentValuationId ? 2000 : false,
-    refetchIntervalInBackground: true,
+    refetchInterval: (query) => {
+      // Only poll while a valuation is actively processing. Once it's
+      // completed/failed, stop — otherwise a left-open tab hammers the API
+      // (and keeps Neon awake) every 2s indefinitely.
+      if (!currentValuationId) return false;
+      const status = query.state.data?.valuation?.status;
+      if (status === "completed" || status === "failed") return false;
+      return 2000;
+    },
+    refetchIntervalInBackground: false,
   });
 
   const valuation = currentValuation?.valuation;

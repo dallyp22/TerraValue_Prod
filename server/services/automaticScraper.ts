@@ -5,7 +5,10 @@ import { eq } from 'drizzle-orm';
 
 export class AutomaticScraperService {
   private intervalId: NodeJS.Timeout | null = null;
-  private checkInterval = 60000; // Check every minute
+  // Check hourly. The trigger is nextRun-based (see checkAndRun), so a coarse
+  // cadence still fires the scrape on time while letting the DB compute
+  // auto-suspend between checks instead of being pinned awake every minute.
+  private checkInterval = 60 * 60 * 1000; // 1 hour
   private isRunning = false;
   
   /**
@@ -33,35 +36,42 @@ export class AutomaticScraperService {
     if (this.isRunning) {
       return; // Already running, skip
     }
-    
+
     try {
       const settings = await this.getSettings();
-      
+
       if (!settings.enabled) {
         return; // Automatic scraping disabled
       }
-      
-      // Get current time in CST (UTC-6)
+
       const now = new Date();
-      const cstOffset = -6 * 60; // CST is UTC-6 hours
-      const localOffset = now.getTimezoneOffset(); // Current timezone offset in minutes
-      const cstTime = new Date(now.getTime() + (cstOffset + localOffset) * 60 * 1000);
-      
-      const [scheduleHours, scheduleMinutes] = settings.scheduleTime.split(':').map(Number);
-      
-      // Check if it's the scheduled time in CST (within current minute)
-      if (cstTime.getHours() === scheduleHours && cstTime.getMinutes() === scheduleMinutes) {
-        // Check if we already ran in the last 2 hours (prevent duplicate runs)
-        if (settings.lastRun) {
-          const hoursSinceLastRun = (now.getTime() - new Date(settings.lastRun).getTime()) / (1000 * 60 * 60);
-          if (hoursSinceLastRun < 2) {
-            return; // Already ran recently
-          }
-        }
-        
-        console.log(`\n🚀 Scheduled scrape triggered (${settings.cadence} at ${settings.scheduleTime} CST)`);
-        await this.runScraper();
+
+      // nextRun is the source of truth for *when* to run. This makes the
+      // trigger tolerant of a coarse cron cadence (e.g. hourly): we run on
+      // the first tick at/after nextRun instead of requiring an exact-minute
+      // match. Lazily initialize nextRun if it was never computed.
+      if (!settings.nextRun) {
+        const nextRun = this.calculateNextRun(now, settings.cadence, settings.scheduleTime);
+        await this.updateSettings({ nextRun });
+        return;
       }
+
+      // Not time yet.
+      if (now < new Date(settings.nextRun)) {
+        return;
+      }
+
+      // Guard against duplicate runs (e.g. overlapping ticks or a missed
+      // nextRun update).
+      if (settings.lastRun) {
+        const hoursSinceLastRun = (now.getTime() - new Date(settings.lastRun).getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastRun < 2) {
+          return; // Already ran recently
+        }
+      }
+
+      console.log(`\n🚀 Scheduled scrape triggered (${settings.cadence}, scheduled for ${new Date(settings.nextRun).toLocaleString()})`);
+      await this.runScraper();
     } catch (error) {
       console.error('Error checking scraper schedule:', error);
     }
