@@ -218,7 +218,7 @@ function cleanRow(
   index: number,
 ): InsertLandSalesComp | null {
   const county = cleanCounty(row.county);
-  const saleDate = parseSaleDate(row.sale_date);
+  const saleDate = reconcileDate(parseSaleDate(row.sale_date), saleMonth);
   const soldAcres = toNumber(row.sold_acres);
 
   // A row without a county is unusable.
@@ -274,6 +274,25 @@ function cleanCounty(raw?: string): string | null {
   if (!raw) return null;
   const c = raw.replace(/[^A-Za-z\s'.-]/g, "").trim(); // drop leading backticks/quotes etc.
   return c.length >= 2 ? c : null;
+}
+
+/**
+ * Reconcile a parsed sale date against the newsletter month. Sales reported in
+ * a given month's newsletter occur in the months leading up to it, so a date
+ * outside [newsletterMonth - 12mo, newsletterMonth + 1mo] is a misparse (e.g.
+ * a "02" year read as 2002 when the newsletter is 2025). In that case — or when
+ * no date parsed — attribute the sale to the start of the newsletter month.
+ */
+function reconcileDate(saleDate: Date | null, saleMonth: string | null): Date | null {
+  if (!saleMonth) return saleDate;
+  const [y, m] = saleMonth.split("-").map(Number);
+  if (!y || !m) return saleDate;
+  const monthStart = new Date(Date.UTC(y, m - 1, 1));
+  if (!saleDate) return monthStart;
+  const lower = new Date(Date.UTC(y - 1, m - 1, 1));
+  const upper = new Date(Date.UTC(y, m, 1)); // newsletter month + 1
+  if (saleDate < lower || saleDate > upper) return monthStart;
+  return saleDate;
 }
 
 function parseSaleDate(raw?: string): Date | null {
