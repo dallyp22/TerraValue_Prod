@@ -1,4 +1,5 @@
 import { openaiService, type MarketResearchResult } from "./openai.js";
+import { landCompsService } from "./landComps.js";
 import { csr2Service } from "./csr2.js";
 import { cornPriceService } from "./cornPrice.js";
 import { countyCsr2RateService } from "./countyCsr2Rates.js";
@@ -82,14 +83,28 @@ export class ValuationService {
         }),
 
         // Iowa market analysis (single call - used for both comps AND market research)
-        // Non-Iowa: standard market research
+        // Primary source: local land_sales_comps (Land Talk Monthly) — a fast
+        // SQL query. Falls back to the OpenAI Assistants + vector store only
+        // when we have no usable comps for this county/land type yet.
+        // Non-Iowa: standard market research.
         iowaMarketAnalysis: isIowa
           ? timed("Iowa market analysis",
               withTimeout(
-                openaiService.getIowaMarketAnalysis(
-                  propertyData.county,
-                  propertyData.landType
-                ),
+                (async () => {
+                  const fromComps = await landCompsService.getIowaMarketAnalysisFromComps(
+                    propertyData.county,
+                    propertyData.landType
+                  );
+                  if (fromComps) {
+                    console.log(`📚 Iowa market analysis from local comps: ${fromComps.comps.length} sales`);
+                    return fromComps;
+                  }
+                  console.log("📚 No local comps; falling back to vector store");
+                  return openaiService.getIowaMarketAnalysis(
+                    propertyData.county,
+                    propertyData.landType
+                  );
+                })(),
                 60000,
                 "Iowa market analysis"
               )
