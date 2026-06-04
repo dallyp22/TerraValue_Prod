@@ -1,5 +1,6 @@
 import { openaiService, type MarketResearchResult } from "./openai.js";
 import { landCompsService } from "./landComps.js";
+import { comparablesService } from "./comparables.js";
 import { csr2Service } from "./csr2.js";
 import { cornPriceService } from "./cornPrice.js";
 import { countyCsr2RateService } from "./countyCsr2Rates.js";
@@ -66,21 +67,52 @@ export class ValuationService {
 
       // Launch all data fetching operations simultaneously with error handling
       const parallelPromises = {
-        // Core valuation data - with timeout and error handling
-        vectorResult: timed("Vector store query",
+        // County base value — prefer the median of recent local comps (fast SQL).
+        // Fall back to the OpenAI vector-store lookup only when we have no comps.
+        vectorResult: timed("County base value",
           withTimeout(
-            openaiService.getCountyBaseValue(
-              propertyData.county,
-              propertyData.state,
-              propertyData.landType
-            ),
+            (async () => {
+              const compsBase = await comparablesService.getCompsBaseValue(
+                propertyData.county,
+                propertyData.landType
+              );
+              if (compsBase != null) {
+                console.log(`📚 County base from local comps: $${compsBase}/acre`);
+                return { baseValue: compsBase, description: `Median of recent ${propertyData.county} County comparable sales` };
+              }
+              console.log("📚 No comps for base value; falling back to vector store");
+              return openaiService.getCountyBaseValue(
+                propertyData.county,
+                propertyData.state,
+                propertyData.landType
+              );
+            })(),
             60000,
-            "Vector store query"
+            "County base value"
           )
         ).catch(error => {
-          console.error("❌ Vector store query failed:", error.message || error);
+          console.error("❌ County base value failed:", error.message || error);
           return { baseValue: 8500, description: "Fallback value due to API error" };
         }),
+
+        // Comparable-sales engine — CSR2-matched comps + empirical $/CSR2-point
+        // valuation. When strong, this drives the number and lets us skip the LLM.
+        comparables: (propertyData.csr2Mean && propertyData.csr2Mean > 0)
+          ? timed("Comparable sales",
+              comparablesService.findComparables({
+                county: propertyData.county,
+                landType: propertyData.landType,
+                csr2Mean: propertyData.csr2Mean,
+                acreage: propertyData.acreage,
+                tillableAcres: propertyData.tillableAcres,
+                latitude: propertyData.latitude,
+                longitude: propertyData.longitude,
+              }).catch(error => {
+                console.error("❌ Comparables failed:", error.message || error);
+                return null;
+              })
+            )
+          : Promise.resolve(null),
 
         // Iowa market analysis (single call - used for both comps AND market research)
         // Primary source: local land_sales_comps (Land Talk Monthly) — a fast
@@ -144,12 +176,17 @@ export class ValuationService {
       console.log("⏳ Waiting for parallel API calls...");
 
       // Wait for all parallel operations to complete
-      const [vectorResult, iowaMarketAnalysis, nonIowaMarketResult, cornFuturesPrice] = await Promise.all([
+      const [vectorResult, iowaMarketAnalysis, nonIowaMarketResult, cornFuturesPrice, comparables] = await Promise.all([
         parallelPromises.vectorResult,
         parallelPromises.iowaMarketAnalysis,
         parallelPromises.nonIowaMarketResult,
-        parallelPromises.cornFuturesPrice
+        parallelPromises.cornFuturesPrice,
+        parallelPromises.comparables
       ]);
+
+      if (comparables?.strong) {
+        console.log(`🎯 Strong comps (${comparables.count}, conf ${comparables.confidence}) → comps-driven valuation $${comparables.valuePerAcre}/acre (skipping LLM)`);
+      }
 
       // Derive marketResult from Iowa analysis (no second API call) or use non-Iowa result
       let marketResult: MarketResearchResult;
@@ -342,10 +379,26 @@ export class ValuationService {
         }
       }
 
-      // Step 4.6: Perform AI reasoning with filtered Iowa market comps
+      // Step 4.6: Determine the AI Market-Adjusted per-acre value.
       let finalAdjustedValue = vectorResult.baseValue; // Default fallback
       let finalAiReasoning = "";
-      
+      let compsDriven = false;
+
+      if (comparables?.strong && comparables.valuePerAcre) {
+        // Comps-driven: the number comes straight from the CSR2-matched comp set,
+        // no LLM round-trip. (Falls through to the AI path when comps are thin.)
+        compsDriven = true;
+        finalAdjustedValue = comparables.valuePerAcre;
+        const ptLine = comparables.dollarPerCsr2Point
+          ? ` at ~$${comparables.dollarPerCsr2Point}/CSR2 point (subject CSR2 ${propertyData.csr2Mean})`
+          : "";
+        finalAiReasoning =
+          `Valued at $${comparables.valuePerAcre.toLocaleString()}/acre from ${comparables.count} comparable Iowa land sales` +
+          (comparables.scope === "regional" ? " in the county and nearby counties" : ` in ${propertyData.county} County`) +
+          `${ptLine}. Comparable values ranged $${(comparables.low || 0).toLocaleString()}–$${(comparables.high || 0).toLocaleString()}/acre ` +
+          `(confidence ${Math.round(comparables.confidence * 100)}%). Based on recent Land Talk Monthly auction results.`;
+        console.log(`✅ Comps-driven value: $${finalAdjustedValue}/acre`);
+      } else {
       // 🔄 Check for cached AI-adjusted value from recent valuation of THE EXACT SAME PARCEL
       console.log(`🔍 Cache lookup params: parcelNumber="${propertyData.parcelNumber}", lat=${propertyData.latitude}, lng=${propertyData.longitude}`);
       
@@ -422,28 +475,53 @@ export class ValuationService {
         finalAdjustedValue = reasoningResult.adjustedValue;
         finalAiReasoning = reasoningResult.reasoning;
       }
+      } // end AI-reasoning path (comps not strong)
 
       await storage.updateValuation(valuationId, {
         adjustedValue: finalAdjustedValue,
         marketInsight: finalAiReasoning
       });
 
-      // Step 5: Final Synthesis
-      const finalResult = await timed("Final synthesis",
-        withTimeout(
-          openaiService.synthesizeFinalValuation(
-            vectorResult.baseValue,
-            finalAdjustedValue,
-            0,
-            marketResult.marketAdjustment,
-            finalAiReasoning,
-            propertyData.acreage,
-            totalImprovementsValue
-          ),
-          45000,
-          "Final synthesis"
-        )
-      );
+      // Step 5: Final Synthesis. Comps-driven valuations are deterministic, so
+      // compute the totals in JS and skip the LLM; otherwise synthesize via gpt-4o.
+      const computeFinalDeterministic = () => {
+        const perAcre = Math.round(finalAdjustedValue * 100) / 100;
+        const totalLandValue = Math.round(perAcre * propertyData.acreage * 100) / 100;
+        const totalPropertyValue = Math.round((totalLandValue + totalImprovementsValue) * 100) / 100;
+        const confidenceScore = comparables
+          ? Math.round((5.5 + comparables.confidence * 4.5) * 10) / 10
+          : 8;
+        return {
+          perAcreValue: perAcre,
+          totalValue: totalPropertyValue,
+          confidenceScore,
+          commentary: finalAiReasoning,
+          breakdown: {
+            baseValue: vectorResult.baseValue,
+            improvements: totalImprovementsValue,
+            marketAdjustment: 0,
+            finalValue: perAcre,
+          },
+        };
+      };
+
+      const finalResult = compsDriven
+        ? computeFinalDeterministic()
+        : await timed("Final synthesis",
+            withTimeout(
+              openaiService.synthesizeFinalValuation(
+                vectorResult.baseValue,
+                finalAdjustedValue,
+                0,
+                marketResult.marketAdjustment,
+                finalAiReasoning,
+                propertyData.acreage,
+                totalImprovementsValue
+              ),
+              45000,
+              "Final synthesis"
+            )
+          );
 
       // Update with final results including improvement, income, CSR2, and Iowa market details
       const enhancedBreakdown = {
@@ -487,7 +565,17 @@ export class ValuationService {
         iowaMarketTrends: iowaMarketAnalysis?.trends || undefined,
         // Suggested rent calculation
         suggestedRentPerAcre: suggestedRentPerAcre,
-        cornFuturesPrice: cornFuturesPrice
+        cornFuturesPrice: cornFuturesPrice,
+        // Comparable-sales engine (CSR2-matched comps from Land Talk data)
+        valuationMethod: compsDriven ? "comps" : "ai",
+        comparableSales: comparables?.comps?.length ? comparables.comps : undefined,
+        compsValuePerAcre: comparables?.valuePerAcre ?? undefined,
+        compsValueLow: comparables?.low ?? undefined,
+        compsValueHigh: comparables?.high ?? undefined,
+        compsDollarPerCsr2Point: comparables?.dollarPerCsr2Point ?? undefined,
+        compsConfidence: comparables?.confidence ?? undefined,
+        compsCount: comparables?.count ?? undefined,
+        compsScope: comparables?.scope ?? undefined,
       };
 
       await storage.updateValuation(valuationId, {
