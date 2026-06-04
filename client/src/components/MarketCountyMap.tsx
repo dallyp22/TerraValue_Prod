@@ -30,7 +30,7 @@ type FC = { type: "FeatureCollection"; features: any[] };
 export default function MarketCountyMap({ counties, selectedCounty, onSelectCounty }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const loadedRef = useRef(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const [geo, setGeo] = useState<FC | null>(null);
 
   const onSelectRef = useRef(onSelectCounty);
@@ -139,26 +139,26 @@ export default function MarketCountyMap({ counties, selectedCounty, onSelectCoun
         if (name) onSelectRef.current(name === selectedRef.current ? null : name);
       });
 
-      loadedRef.current = true;
-      (map.getSource("counties") as maplibregl.GeoJSONSource)?.setData(buildData() as any);
+      setMapLoaded(true);
     });
 
-    return () => { map.remove(); mapRef.current = null; loadedRef.current = false; };
+    return () => { map.remove(); mapRef.current = null; setMapLoaded(false); };
   }, []);
 
-  // Re-merge data when stats or polygons change.
+  // Single source of truth for the layer data — runs whenever the map is ready
+  // OR the polygons/stats arrive, always with a fresh merge (no stale closure).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loadedRef.current) return;
+    if (!map || !mapLoaded || !geo) return;
     (map.getSource("counties") as maplibregl.GeoJSONSource)?.setData(buildData() as any);
-  }, [counties, geo]);
+  }, [counties, geo, mapLoaded]);
 
   // Selection outline.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loadedRef.current || !map.getLayer("county-selected")) return;
+    if (!map || !mapLoaded || !map.getLayer("county-selected")) return;
     map.setFilter("county-selected", ["==", ["get", "name"], selectedCounty ?? "__none__"]);
-  }, [selectedCounty]);
+  }, [selectedCounty, mapLoaded]);
 
   return <div ref={containerRef} className="h-[360px] w-full rounded-lg overflow-hidden" />;
 }
