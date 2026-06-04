@@ -970,6 +970,9 @@ api.get("/auctions", async (c) => {
     }
 
     const conditions: any[] = [eq(auctions.status, "active")];
+    // Exclude non-land listings (equipment/personal-property/etc.); keep nulls
+    // (un-backfilled rows) visible.
+    conditions.push(sql`(${auctions.propertyCategory} IS NULL OR ${auctions.propertyCategory} <> 'non_land')`);
     if (minAcreage)
       conditions.push(gte(auctions.acreage, parseFloat(minAcreage)));
     if (maxAcreage)
@@ -1055,6 +1058,9 @@ api.get("/auctions/count", async (c) => {
     const counties = c.req.queries("counties[]");
 
     const conditions: any[] = [eq(auctions.status, "active")];
+    // Exclude non-land listings (equipment/personal-property/etc.); keep nulls
+    // (un-backfilled rows) visible.
+    conditions.push(sql`(${auctions.propertyCategory} IS NULL OR ${auctions.propertyCategory} <> 'non_land')`);
     if (minAcreage)
       conditions.push(gte(auctions.acreage, parseFloat(minAcreage)));
     if (maxAcreage)
@@ -1357,7 +1363,11 @@ api.delete("/auctions/blocklist/:id", async (c) => {
 api.get("/auctions/upcoming", async (c) => {
   try {
     const list = await db.query.auctions.findMany({
-      where: and(eq(auctions.status, "active"), sql`auction_date::date >= CURRENT_DATE`),
+      where: and(
+        eq(auctions.status, "active"),
+        sql`auction_date::date >= CURRENT_DATE`,
+        sql`(${auctions.propertyCategory} IS NULL OR ${auctions.propertyCategory} <> 'non_land')`,
+      ),
       orderBy: [asc(auctions.auctionDate)],
       limit: 500,
     });

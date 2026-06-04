@@ -97,6 +97,12 @@ export const auctions = pgTable("auctions", {
   needsDateReview: boolean("needs_date_review").default(false),
   dateExtractionAttempted: timestamp("date_extraction_attempted"),
   dateExtractionMethod: text("date_extraction_method"), // "ai", "regex", "manual"
+
+  // Property classification (farmland | recreational | residential | commercial | development | non_land | unknown)
+  propertyCategory: text("property_category"),
+  classificationConfidence: real("classification_confidence"),
+  classificationSource: text("classification_source"), // "keyword" | "ai" | "manual"
+  classificationReason: text("classification_reason"),
   
   // AI Enriched standardized fields
   enrichedTitle: text("enriched_title"),

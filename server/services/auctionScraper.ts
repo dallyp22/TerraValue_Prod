@@ -4,6 +4,7 @@ import { countyCsr2RateService } from './countyCsr2Rates.js';
 import { db } from '../db.js';
 import { auctions } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { classifyAuction } from './auctionClassifier.js';
 import { getCountyCentroid } from './iowaCountyCentroids.js';
 import { scraperDiagnosticsService } from './scraperDiagnostics.js';
 import { DateExtractorService } from './dateExtractor.js';
@@ -663,6 +664,14 @@ export class AuctionScraperService {
       }
     }
     
+    // Classify the property kind (so non-land listings can be filtered out).
+    const classification = classifyAuction({
+      title: auctionData.title,
+      description: auctionData.description,
+      landType: auctionData.land_type,
+      acreage: auctionData.acreage,
+    });
+
     // Insert or update auction
     try {
       const result = await db.insert(auctions).values({
@@ -682,6 +691,10 @@ export class AuctionScraperService {
         needsDateReview,
         dateExtractionMethod,
         dateExtractionAttempted: new Date(),
+        propertyCategory: classification.category,
+        classificationConfidence: classification.confidence,
+        classificationSource: 'keyword',
+        classificationReason: classification.reason,
         enrichmentStatus: 'pending', // Set initial enrichment status
         rawData: { 
           ...auctionData, 
@@ -702,6 +715,10 @@ export class AuctionScraperService {
           needsDateReview,
           dateExtractionMethod,
           dateExtractionAttempted: new Date(),
+          propertyCategory: classification.category,
+          classificationConfidence: classification.confidence,
+          classificationSource: 'keyword',
+          classificationReason: classification.reason,
           updatedAt: new Date()
         }
       }).returning();
