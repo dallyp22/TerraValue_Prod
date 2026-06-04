@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -694,8 +695,11 @@ export default function AuctionDiagnosticsTerra() {
         style={{ backgroundImage: 'url(/patterns/contour-lines.svg)', backgroundSize: '300px' }}
       />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-wheat-cream/95 backdrop-blur-sm border-b border-warm-200 shadow-sm">
+      {/* Global navigation (keeps Map / Auctions / Market Data tabs consistent) */}
+      <Header />
+
+      {/* Page toolbar — docks just beneath the global nav */}
+      <header className="sticky top-14 z-30 bg-wheat-cream/95 backdrop-blur-sm border-b border-warm-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -733,15 +737,6 @@ export default function AuctionDiagnosticsTerra() {
                   )}
                 </div>
               </button>
-
-              <Button
-                onClick={() => (window.location.href = '/')}
-                variant="outline"
-                className="btn-terra-outline"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Map
-              </Button>
             </div>
           </div>
         </div>
