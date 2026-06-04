@@ -576,8 +576,92 @@ export function ValuationReport({ valuation }: ValuationReportProps) {
           </div>
         </motion.div>
 
-        {/* Iowa Market Analysis & Sales Comps */}
-        {breakdown?.iowaMarketComps && breakdown.iowaMarketComps.length > 0 && (
+        {/* Comparable Sales — CSR2-matched comps that drove the value */}
+        {breakdown?.comparableSales && breakdown.comparableSales.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.45 }}
+            className="bg-slate-50 rounded-2xl p-6 border border-slate-200 print:break-inside-avoid"
+          >
+            <div className="mb-5">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2 flex items-center">
+                <Database className="h-5 w-5 mr-2 text-emerald-600" />
+                Comparable Sales
+                {breakdown.valuationMethod === "comps" && (
+                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                    Basis of value
+                  </span>
+                )}
+              </h3>
+              <p className="text-sm text-slate-500">
+                The {breakdown.compsCount ?? breakdown.comparableSales.length} most similar recent Iowa land sales
+                {breakdown.compsScope === "regional" ? " in this county and nearby counties" : ` in ${valuation.county} County`},
+                matched on soil productivity (CSR2), proximity, recency, and size.
+              </p>
+              <div className="h-px bg-slate-200 mt-3"></div>
+            </div>
+
+            {/* Derived-value summary tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <div className="bg-white rounded-xl p-3 ring-1 ring-slate-200/50">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">Comp value</div>
+                <div className="text-lg font-bold text-slate-900">${breakdown.compsValuePerAcre?.toLocaleString()}<span className="text-xs font-medium text-slate-500">/ac</span></div>
+                {breakdown.compsValueLow && breakdown.compsValueHigh && (
+                  <div className="text-[11px] text-slate-400">${breakdown.compsValueLow.toLocaleString()}–${breakdown.compsValueHigh.toLocaleString()}</div>
+                )}
+              </div>
+              {breakdown.compsDollarPerCsr2Point ? (
+                <div className="bg-white rounded-xl p-3 ring-1 ring-slate-200/50">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">$/CSR2 point</div>
+                  <div className="text-lg font-bold text-slate-900">${breakdown.compsDollarPerCsr2Point}</div>
+                  {breakdown.csr2Mean && <div className="text-[11px] text-slate-400">× {breakdown.csr2Mean.toFixed(1)} CSR2</div>}
+                </div>
+              ) : null}
+              <div className="bg-white rounded-xl p-3 ring-1 ring-slate-200/50">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">Confidence</div>
+                <div className="text-lg font-bold text-slate-900">{breakdown.compsConfidence != null ? `${Math.round(breakdown.compsConfidence * 100)}%` : "—"}</div>
+              </div>
+              <div className="bg-white rounded-xl p-3 ring-1 ring-slate-200/50">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">Comps used</div>
+                <div className="text-lg font-bold text-slate-900">{breakdown.compsCount ?? breakdown.comparableSales.length}</div>
+              </div>
+            </div>
+
+            {/* Matched comps */}
+            <div className="bg-white rounded-xl ring-1 ring-slate-200/50 overflow-hidden">
+              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                <div className="col-span-3">County · Date</div>
+                <div className="col-span-2 text-right">$/acre</div>
+                <div className="col-span-2 text-right">CSR2</div>
+                <div className="col-span-2 text-right">$/CSR2 pt</div>
+                <div className="col-span-2 text-right">Acres</div>
+                <div className="col-span-1 text-right">Match</div>
+              </div>
+              {breakdown.comparableSales.slice(0, 8).map((c, i) => (
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-2 px-4 py-2.5 text-sm border-b border-slate-50 last:border-b-0 items-center">
+                  <div className="sm:col-span-3">
+                    <div className="font-medium text-slate-800">{c.county} County</div>
+                    <div className="text-xs text-slate-400">{c.saleDate || "—"}{c.landType ? ` · ${c.landType}` : ""}</div>
+                  </div>
+                  <div className="sm:col-span-2 text-right font-medium tabular-nums text-slate-900">${c.pricePerAcre.toLocaleString()}</div>
+                  <div className="sm:col-span-2 text-right tabular-nums text-slate-600">{c.tillableCsr2}</div>
+                  <div className="sm:col-span-2 text-right tabular-nums text-slate-600">{c.dollarPerTillableCsr2 != null ? `$${c.dollarPerTillableCsr2}` : "—"}</div>
+                  <div className="sm:col-span-2 text-right tabular-nums text-slate-500">{c.soldAcres != null ? Math.round(c.soldAcres) : "—"}</div>
+                  <div className="sm:col-span-1 text-right">
+                    <span className="text-[11px] font-medium text-emerald-700">{Math.round(c.similarity * 100)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-3">
+              "Match" reflects similarity in CSR2, location, recency, and size.
+            </p>
+          </motion.div>
+        )}
+
+        {/* Iowa Market Analysis & Sales Comps (generic county context — shown only when no matched comps) */}
+        {!breakdown?.comparableSales?.length && breakdown?.iowaMarketComps && breakdown.iowaMarketComps.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}

@@ -438,6 +438,26 @@ export interface ValuationBreakdown {
   marketCompsAverage?: number;
   marketCompsAllFiltered?: boolean;
   marketCompsNote?: string;
+  // Comparable-sales engine (CSR2-matched comps that drove the value)
+  valuationMethod?: "comps" | "ai";
+  comparableSales?: {
+    county: string;
+    saleDate: string | null;
+    soldAcres: number | null;
+    pricePerAcre: number;
+    tillableCsr2: number;
+    dollarPerTillableCsr2: number | null;
+    landType: string | null;
+    similarity: number;
+    impliedValuePerAcre: number;
+  }[];
+  compsValuePerAcre?: number;
+  compsValueLow?: number;
+  compsValueHigh?: number;
+  compsDollarPerCsr2Point?: number;
+  compsConfidence?: number;
+  compsCount?: number;
+  compsScope?: "county" | "regional";
 }
 
 export interface ValuationResponse {
