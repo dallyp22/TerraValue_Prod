@@ -231,7 +231,7 @@ export default function MarketData() {
             <h1 className="text-3xl font-serif text-slate-800">Iowa Land Market</h1>
             <p className="text-sm text-slate-500 mt-1">
               {s ? `${fmtNum(s.totalSales)} comparable sales` : "Loading…"}
-              {s?.dateFrom && s?.dateTo ? ` · ${s.dateFrom} – ${s.dateTo}` : ""} · Source: Iowa Appraisal — Land Talk Monthly
+              {s?.dateFrom && s?.dateTo ? ` · ${s.dateFrom} – ${s.dateTo}` : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
