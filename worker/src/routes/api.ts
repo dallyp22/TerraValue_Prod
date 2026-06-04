@@ -45,6 +45,7 @@ import {
   auctions,
   parcels,
   propertyFormSchema,
+  valuations,
 } from "../../../shared/schema";
 
 export const api = new Hono<{ Bindings: Env }>();
@@ -143,6 +144,34 @@ const valuationHandler = async (c: any) => {
 
 api.post("/valuations", valuationHandler);
 api.post("/start-valuation", valuationHandler);
+
+// Slim valuation history (no breakdown) for the Valuations list view.
+// Registered before "/valuations/:id" so "history" isn't parsed as an id.
+api.get("/valuations/history", async (c) => {
+  try {
+    const rows = await db
+      .select({
+        id: valuations.id,
+        address: valuations.address,
+        county: valuations.county,
+        state: valuations.state,
+        landType: valuations.landType,
+        acreage: valuations.acreage,
+        adjustedValue: valuations.adjustedValue,
+        totalValue: valuations.totalValue,
+        confidenceScore: valuations.confidenceScore,
+        status: valuations.status,
+        createdAt: valuations.createdAt,
+      })
+      .from(valuations)
+      .orderBy(desc(valuations.createdAt))
+      .limit(200);
+    return c.json({ success: true, valuations: rows });
+  } catch (error) {
+    console.error("Failed to list valuation history:", error);
+    return c.json({ success: false, message: "Internal server error" }, 500);
+  }
+});
 
 api.get("/valuations/:id", async (c) => {
   try {

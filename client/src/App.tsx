@@ -7,6 +7,7 @@ import MapCentricHome from "@/components/MapCentricHome";
 import AuctionDiagnosticsTerra from "@/pages/AuctionDiagnosticsTerra";
 import AuctionsBrowser from "@/pages/auctions";
 import MarketData from "@/pages/market-data";
+import ValuationsHistory from "@/pages/valuations";
 import TestParcels from "@/pages/test-parcels";
 import TestHarrisonTileset from "@/pages/test-harrison-tileset";
 
@@ -21,6 +22,7 @@ function App() {
         {/* Legacy path → admin console (kept intact) */}
         <Route path="/auction-diagnostics" component={AuctionDiagnosticsTerra} />
         <Route path="/market-data" component={MarketData} />
+        <Route path="/valuations" component={ValuationsHistory} />
         <Route path="/test-parcels" component={TestParcels} />
         <Route path="/test-harrison" component={TestHarrisonTileset} />
       </TooltipProvider>

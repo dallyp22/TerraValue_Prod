@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MapPin, Bell, User, Gavel, Search, Command, TrendingUp } from "lucide-react";
+import { MapPin, Bell, User, Gavel, Search, Command, TrendingUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // FarmScope AI Logo - Stylized contour lines with scope/crosshair element
@@ -51,6 +51,7 @@ export function Header() {
     { href: "/", label: "Map", icon: MapPin },
     { href: "/auctions", label: "Auctions", icon: Gavel },
     { href: "/market-data", label: "Market Data", icon: TrendingUp },
+    { href: "/valuations", label: "Valuations", icon: FileText },
   ];
 
   return (

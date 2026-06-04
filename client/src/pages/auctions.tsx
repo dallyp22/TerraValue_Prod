@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +63,6 @@ function countdownLabel(days: number | null): { text: string; tone: string } {
 }
 
 export default function AuctionsBrowser() {
-  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("Iowa");
   const [county, setCounty] = useState("all");
@@ -247,7 +246,7 @@ export default function AuctionsBrowser() {
                       <Button
                         size="sm"
                         className="w-full bg-field hover:bg-field-spring text-wheat-cream gap-1.5"
-                        onClick={() => setLocation(`/?valuateAuction=${a.id}`)}
+                        onClick={() => { window.location.href = `/?valuateAuction=${a.id}`; }}
                       >
                         <Calculator className="h-3.5 w-3.5" /> Value this auction
                       </Button>
