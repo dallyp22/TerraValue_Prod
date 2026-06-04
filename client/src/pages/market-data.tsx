@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Slider } from "@/components/ui/slider";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -18,8 +19,9 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Landmark, Ruler, Layers, ArrowUpDown, ChevronLeft, ChevronRight,
-  Download, X, Trophy, CalendarDays, MapPinned,
+  Download, X, Trophy, CalendarDays, MapPinned, Play, Pause,
 } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import MarketCountyMap, { type CountyStat } from "@/components/MarketCountyMap";
 
 // ---------------------------------------------------------------------------
@@ -102,6 +104,9 @@ export default function MarketData() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
   const [county, setCounty] = useState<string | null>(null);
+  const [timelapse, setTimelapse] = useState(false);
+  const [tlIndex, setTlIndex] = useState(0);
+  const [tlPlaying, setTlPlaying] = useState(false);
 
   const filterParams = {
     landCategory: landCategory === "all" ? undefined : landCategory,
@@ -167,6 +172,66 @@ export default function MarketData() {
       return (await r.json()).months;
     },
   });
+
+  // Time-lapse: all sold sales (month/county/price) loaded once; frames computed client-side.
+  const salesLite = useQuery<{ month: string; county: string; price: number }[]>({
+    queryKey: ["/api/market/sales-lite", { landCategory: filterParams.landCategory }],
+    queryFn: async () => {
+      const r = await fetch(`/api/market/sales-lite${buildQuery({ landCategory: filterParams.landCategory })}`);
+      return (await r.json()).sales;
+    },
+  });
+
+  const TL_WINDOW = 12; // trailing months per frame
+  const tlMonths = useMemo(() => {
+    const data = salesLite.data || [];
+    if (!data.length) return [] as string[];
+    const sorted = Array.from(new Set(data.map((d) => d.month))).sort();
+    let [y, m] = sorted[0].split("-").map(Number);
+    const [maxY, maxM] = sorted[sorted.length - 1].split("-").map(Number);
+    const out: string[] = [];
+    while (y < maxY || (y === maxY && m <= maxM)) {
+      out.push(`${y}-${String(m).padStart(2, "0")}`);
+      if (++m > 12) { m = 1; y++; }
+    }
+    return out;
+  }, [salesLite.data]);
+
+  // Default the slider to the most recent month once data loads.
+  useEffect(() => { if (tlMonths.length) setTlIndex(tlMonths.length - 1); }, [tlMonths.length]);
+
+  const frameStartIdx = Math.max(0, Math.min(tlIndex, tlMonths.length - 1) - (TL_WINDOW - 1));
+  const frameCounties = useMemo<CountyStat[]>(() => {
+    if (!timelapse || !tlMonths.length) return [];
+    const endIdx = Math.min(tlIndex, tlMonths.length - 1);
+    const win = new Set(tlMonths.slice(frameStartIdx, endIdx + 1));
+    const byCty = new Map<string, number[]>();
+    for (const d of salesLite.data || []) {
+      if (!win.has(d.month)) continue;
+      if (!byCty.has(d.county)) byCty.set(d.county, []);
+      byCty.get(d.county)!.push(d.price);
+    }
+    const median = (a: number[]) => {
+      const srt = [...a].sort((x, y) => x - y);
+      const mid = Math.floor(srt.length / 2);
+      return srt.length % 2 ? srt[mid] : Math.round((srt[mid - 1] + srt[mid]) / 2);
+    };
+    const out: CountyStat[] = [];
+    byCty.forEach((prices, c) =>
+      out.push({ county: c, sales: prices.length, medianPerAcre: median(prices), avgPerCsr2: null, lat: 0, lng: 0 }));
+    return out;
+  }, [timelapse, tlIndex, tlMonths, frameStartIdx, salesLite.data]);
+
+  // Auto-advance while playing.
+  useEffect(() => {
+    if (!tlPlaying || !timelapse) return;
+    const id = setInterval(() => {
+      setTlIndex((i) => { if (i >= tlMonths.length - 1) { setTlPlaying(false); return i; } return i + 1; });
+    }, 650);
+    return () => clearInterval(id);
+  }, [tlPlaying, timelapse, tlMonths.length]);
+
+  const frameSales = frameCounties.reduce((a, c) => a + c.sales, 0);
 
   const s = summary.data;
   const yoy = s?.yoyPct;
@@ -322,13 +387,55 @@ export default function MarketData() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base font-semibold text-slate-700">Median $/acre by county</CardTitle>
-              <span className="text-xs text-slate-400">darker = higher · click to filter</span>
+              <ToggleGroup
+                type="single"
+                value={timelapse ? "tl" : "all"}
+                onValueChange={(v) => { if (v) { setTimelapse(v === "tl"); setTlPlaying(false); } }}
+                size="sm"
+              >
+                <ToggleGroupItem value="all" className="text-xs">All time</ToggleGroupItem>
+                <ToggleGroupItem value="tl" className="text-xs">Time-lapse</ToggleGroupItem>
+              </ToggleGroup>
             </CardHeader>
             <CardContent>
-              {byCounty.isLoading ? (
+              {(timelapse ? salesLite.isLoading : byCounty.isLoading) ? (
                 <Skeleton className="h-[360px] w-full" />
               ) : (
-                <MarketCountyMap counties={byCounty.data || []} selectedCounty={county} onSelectCounty={selectCounty} />
+                <MarketCountyMap
+                  counties={timelapse ? frameCounties : byCounty.data || []}
+                  selectedCounty={county}
+                  onSelectCounty={selectCounty}
+                />
+              )}
+              {timelapse && tlMonths.length > 0 && (
+                <div className="mt-4 flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => {
+                      if (tlIndex >= tlMonths.length - 1) setTlIndex(0);
+                      setTlPlaying((p) => !p);
+                    }}
+                  >
+                    {tlPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <Slider
+                    min={0}
+                    max={tlMonths.length - 1}
+                    step={1}
+                    value={[Math.min(tlIndex, tlMonths.length - 1)]}
+                    onValueChange={([v]) => { setTlPlaying(false); setTlIndex(v); }}
+                    className="flex-1"
+                  />
+                  <div className="text-xs text-slate-500 tabular-nums whitespace-nowrap min-w-[170px] text-right">
+                    {fmtMonth(tlMonths[frameStartIdx])} – {fmtMonth(tlMonths[Math.min(tlIndex, tlMonths.length - 1)])}
+                    <span className="text-slate-400"> · {frameSales} sales</span>
+                  </div>
+                </div>
+              )}
+              {timelapse && (
+                <p className="text-[11px] text-slate-400 mt-1">Trailing 12-month median through the selected month.</p>
               )}
             </CardContent>
           </Card>

@@ -294,6 +294,24 @@ export async function getSeasonality(f: MarketFilters): Promise<SeasonalityPoint
   return (rows as any[]).map((r) => ({ month: r.m, sales: r.sales, avgPerAcre: r.avg_per_acre }));
 }
 
+/**
+ * Minimal per-sale rows (month, county, price) for the client-side time-lapse
+ * choropleth. Ignores the date filter (the slider drives time); honors land
+ * category. Small payload (~3k rows) so the client can scrub instantly.
+ */
+export async function getSalesLite(f: MarketFilters): Promise<{ month: string; county: string; price: number }[]> {
+  const { clause, params } = buildFilters({ landCategory: f.landCategory, csr2Min: f.csr2Min, csr2Max: f.csr2Max });
+  const sql = `
+    SELECT to_char(date_trunc('month', sale_date), 'YYYY-MM') AS month,
+           split_part(county, '-', 1) AS county,
+           price_per_acre AS price
+    FROM land_sales_comps
+    WHERE ${PRICED}${clause}
+    ORDER BY sale_date`;
+  const { rows } = await pool.query(sql, params);
+  return (rows as any[]).map((r) => ({ month: r.month, county: r.county, price: r.price }));
+}
+
 export const marketDataService = {
-  getSummary, getTimeseries, getRecentSales, getByCounty, getScatter, getSeasonality,
+  getSummary, getTimeseries, getRecentSales, getByCounty, getScatter, getSeasonality, getSalesLite,
 };

@@ -2557,3 +2557,12 @@ api.get("/market/seasonality", async (c) => {
     return c.json({ success: false, message: "Failed to load seasonality" }, 500);
   }
 });
+
+api.get("/market/sales-lite", async (c) => {
+  try {
+    return c.json({ success: true, sales: await marketDataService.getSalesLite(parseMarketFilters(c)) });
+  } catch (error) {
+    console.error("market/sales-lite failed:", error);
+    return c.json({ success: false, message: "Failed to load sales-lite" }, 500);
+  }
+});
