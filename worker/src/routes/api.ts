@@ -19,6 +19,7 @@ import { auctionScraperService } from "../../../server/services/auctionScraper";
 import { automaticScraperService } from "../../../server/services/automaticScraper";
 import { AuctionArchiverService } from "../../../server/services/auctionArchiver";
 import { marketDataService, type MarketFilters } from "../../../server/services/marketData";
+import { comparablesService } from "../../../server/services/comparables";
 import { cornPriceService } from "../../../server/services/cornPrice";
 import { soilPropertiesService } from "../../../server/services/soilProperties";
 import { mukeyLookupService } from "../../../server/services/mukeyLookup";
@@ -1351,6 +1352,37 @@ api.delete("/auctions/blocklist/:id", async (c) => {
   }
 });
 
+// User-facing upcoming-auctions feed: active + dated today-or-later.
+// Registered BEFORE "/auctions/:id" so "upcoming" isn't parsed as an id.
+api.get("/auctions/upcoming", async (c) => {
+  try {
+    const list = await db.query.auctions.findMany({
+      where: and(eq(auctions.status, "active"), sql`auction_date::date >= CURRENT_DATE`),
+      orderBy: [asc(auctions.auctionDate)],
+      limit: 500,
+    });
+    // Attach a fast comps-based estimated value per auction (county factors).
+    const factors = await comparablesService.getCountyFactors();
+    const withEst = list.map((a) => {
+      const f = a.county ? factors[a.county.trim().toLowerCase()] : undefined;
+      let estValuePerAcre: number | null = null;
+      if (f) {
+        if (a.csr2Mean && a.csr2Mean > 0 && f.dollarPerCsr2Point) {
+          estValuePerAcre = Math.round(a.csr2Mean * f.dollarPerCsr2Point);
+        } else if (f.medianPerAcre) {
+          estValuePerAcre = f.medianPerAcre;
+        }
+      }
+      const estTotalValue = estValuePerAcre && a.acreage ? Math.round(estValuePerAcre * a.acreage) : null;
+      return { ...a, estValuePerAcre, estTotalValue };
+    });
+    return c.json({ success: true, auctions: withEst });
+  } catch (error) {
+    console.error("Upcoming auctions feed error:", error);
+    return c.json({ success: false, message: "Failed to get upcoming auctions" }, 500);
+  }
+});
+
 // ============================================================================
 // Auction details + valuation
 // ============================================================================
@@ -1959,21 +1991,6 @@ api.get("/auctions/diagnostics/recent-acquisitions", async (c) => {
       { success: false, message: "Failed to get recent acquisitions" },
       500,
     );
-  }
-});
-
-// User-facing upcoming-auctions feed: active + dated today-or-later.
-api.get("/auctions/upcoming", async (c) => {
-  try {
-    const list = await db.query.auctions.findMany({
-      where: and(eq(auctions.status, "active"), sql`auction_date::date >= CURRENT_DATE`),
-      orderBy: [asc(auctions.auctionDate)],
-      limit: 500,
-    });
-    return c.json({ success: true, auctions: list });
-  } catch (error) {
-    console.error("Upcoming auctions feed error:", error);
-    return c.json({ success: false, message: "Failed to get upcoming auctions" }, 500);
   }
 });
 

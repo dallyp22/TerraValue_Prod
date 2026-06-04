@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Gavel, Search, MapPin, Ruler, Sprout, ExternalLink, CalendarClock, Settings, Layers,
+  Gavel, Search, MapPin, Ruler, Sprout, ExternalLink, CalendarClock, Settings, Layers, Calculator,
 } from "lucide-react";
 
 interface Auction {
@@ -30,6 +30,8 @@ interface Auction {
   csr2Mean: number | null;
   estimatedValue: number | null;
   needsDateReview: boolean | null;
+  estValuePerAcre?: number | null;
+  estTotalValue?: number | null;
 }
 
 const RANGES = [
@@ -61,7 +63,9 @@ function countdownLabel(days: number | null): { text: string; tone: string } {
 }
 
 export default function AuctionsBrowser() {
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
+  const [stateFilter, setStateFilter] = useState("Iowa");
   const [county, setCounty] = useState("all");
   const [landType, setLandType] = useState("all");
   const [range, setRange] = useState("all");
@@ -74,9 +78,16 @@ export default function AuctionsBrowser() {
 
   const all = data?.auctions || [];
 
-  const counties = useMemo(
-    () => Array.from(new Set(all.map((a) => a.county).filter(Boolean) as string[])).sort(),
+  const states = useMemo(
+    () => Array.from(new Set(all.map((a) => a.state).filter(Boolean) as string[])).sort(),
     [all],
+  );
+  // Counties list reflects the active state filter.
+  const counties = useMemo(
+    () => Array.from(new Set(all
+      .filter((a) => stateFilter === "all" || a.state === stateFilter)
+      .map((a) => a.county).filter(Boolean) as string[])).sort(),
+    [all, stateFilter],
   );
   const landTypes = useMemo(
     () => Array.from(new Set(all.map((a) => a.landType).filter(Boolean) as string[])).sort(),
@@ -87,6 +98,7 @@ export default function AuctionsBrowser() {
     const q = search.trim().toLowerCase();
     let rows = all.filter((a) => {
       if (q && !(`${a.title} ${a.county ?? ""}`.toLowerCase().includes(q))) return false;
+      if (stateFilter !== "all" && a.state !== stateFilter) return false;
       if (county !== "all" && a.county !== county) return false;
       if (landType !== "all" && a.landType !== landType) return false;
       if (range !== "all") {
@@ -104,7 +116,10 @@ export default function AuctionsBrowser() {
       }
     });
     return rows;
-  }, [all, search, county, landType, range, sort]);
+  }, [all, search, stateFilter, county, landType, range, sort]);
+
+  // If the selected county isn't in the active state, reset it.
+  const countyValue = counties.includes(county) ? county : "all";
 
   return (
     <div className="min-h-screen bg-wheat-cream">
@@ -138,7 +153,14 @@ export default function AuctionsBrowser() {
               className="pl-9 bg-white"
             />
           </div>
-          <Select value={county} onValueChange={setCounty}>
+          <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCounty("all"); }}>
+            <SelectTrigger className="w-[130px] bg-white"><SelectValue placeholder="State" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All states</SelectItem>
+              {states.map((st) => <SelectItem key={st} value={st}>{st}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={countyValue} onValueChange={setCounty}>
             <SelectTrigger className="w-[150px] bg-white"><SelectValue placeholder="County" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All counties</SelectItem>
@@ -198,20 +220,39 @@ export default function AuctionsBrowser() {
                       {a.latitude && a.longitude ? <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />Mapped</span> : null}
                     </div>
 
-                    <div className="mt-auto flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div className="text-xs text-slate-500 inline-flex items-center gap-1.5">
-                        <CalendarClock className="h-3.5 w-3.5" />
-                        {a.auctionDate ? new Date(a.auctionDate).toLocaleDateString() : "Date TBD"}
-                        {a.needsDateReview ? <span className="text-amber-600">(unconfirmed)</span> : null}
+                    {a.estValuePerAcre ? (
+                      <div className="rounded-lg bg-field/5 border border-field/10 px-3 py-2 mb-3">
+                        <div className="text-[11px] uppercase tracking-wide text-field/80">Est. value</div>
+                        <div className="text-sm font-semibold text-slate-800">
+                          ${a.estValuePerAcre.toLocaleString()}<span className="text-xs font-normal text-slate-500">/ac</span>
+                          {a.estTotalValue ? <span className="text-slate-400 font-normal"> · ~${a.estTotalValue.toLocaleString()} total</span> : null}
+                        </div>
                       </div>
-                      <a
-                        href={a.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs font-medium text-field hover:underline inline-flex items-center gap-1"
+                    ) : null}
+
+                    <div className="mt-auto pt-3 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          {a.auctionDate ? new Date(a.auctionDate).toLocaleDateString() : "Date TBD"}
+                          {a.needsDateReview ? <span className="text-amber-600">(unconfirmed)</span> : null}
+                        </div>
+                        <a
+                          href={a.url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs font-medium text-field hover:underline inline-flex items-center gap-1"
+                        >
+                          Listing <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="w-full bg-field hover:bg-field-spring text-wheat-cream gap-1.5"
+                        onClick={() => setLocation(`/?valuateAuction=${a.id}`)}
                       >
-                        Listing <ExternalLink className="h-3 w-3" />
-                      </a>
+                        <Calculator className="h-3.5 w-3.5" /> Value this auction
+                      </Button>
+                      <div className="text-[11px] text-slate-400 truncate">{a.sourceWebsite}</div>
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-1 truncate">{a.sourceWebsite}</div>
                   </CardContent>
                 </Card>
               );

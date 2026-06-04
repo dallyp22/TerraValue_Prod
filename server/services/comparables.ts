@@ -230,4 +230,36 @@ export async function getCompsBaseValue(county: string, landType: string): Promi
   return all.length ? Math.round(median(all)!) : null;
 }
 
-export const comparablesService = { findComparables, getCompsBaseValue };
+/**
+ * Per-county valuation factors (median $/acre and median $/CSR2 point) for
+ * tillable cropland, keyed by lowercased county name. Used to attach a fast
+ * estimated value to each auction in the upcoming feed without running a full
+ * comp search per auction.
+ */
+export async function getCountyFactors(): Promise<
+  Record<string, { medianPerAcre: number | null; dollarPerCsr2Point: number | null }>
+> {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - LOOKBACK_MONTHS);
+  const { rows } = await pool.query(
+    `SELECT split_part(county,'-',1) AS county,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY price_per_acre) AS median_acre,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY dollar_per_tillable_csr2)
+         FILTER (WHERE dollar_per_tillable_csr2 IS NOT NULL) AS median_pt
+     FROM land_sales_comps
+     WHERE sale_status='sold' AND price_per_acre IS NOT NULL AND price_per_acre <= $1
+       AND sale_date >= $2 AND land_category='tillable'
+     GROUP BY 1`,
+    [OUTLIER_CAP, cutoff.toISOString()],
+  );
+  const map: Record<string, { medianPerAcre: number | null; dollarPerCsr2Point: number | null }> = {};
+  for (const r of rows as any[]) {
+    map[String(r.county).trim().toLowerCase()] = {
+      medianPerAcre: r.median_acre != null ? Math.round(r.median_acre) : null,
+      dollarPerCsr2Point: r.median_pt != null ? Math.round(r.median_pt) : null,
+    };
+  }
+  return map;
+}
+
+export const comparablesService = { findComparables, getCompsBaseValue, getCountyFactors };

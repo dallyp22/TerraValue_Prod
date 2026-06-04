@@ -380,6 +380,26 @@ export default function MapCentricHome() {
     }
   };
 
+  // Deep-link from the Auctions browser: /?valuateAuction=<id> auto-starts the
+  // auction valuation flow (prepare → pre-filled form → pipeline → report).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const auctionId = params.get('valuateAuction');
+    if (!auctionId) return;
+    // Clear the param so a refresh doesn't re-trigger.
+    window.history.replaceState({}, '', window.location.pathname);
+    (async () => {
+      try {
+        const res = await fetch(`/api/auctions/${auctionId}`);
+        const json = await res.json();
+        if (json?.auction) handleStartAuctionValuation(json.auction);
+      } catch (e) {
+        console.error('Failed to load auction for valuation deep-link:', e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handle valuation created
   const handleValuationCreated = (valuationId: number) => {
     setCurrentValuationId(valuationId);
