@@ -49,7 +49,7 @@ export function Header() {
 
   const navItems = [
     { href: "/", label: "Map", icon: MapPin },
-    { href: "/auction-diagnostics", label: "Auctions", icon: Gavel },
+    { href: "/auctions", label: "Auctions", icon: Gavel },
     { href: "/market-data", label: "Market Data", icon: TrendingUp },
   ];
 

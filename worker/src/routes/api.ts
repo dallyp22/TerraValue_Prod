@@ -1962,6 +1962,21 @@ api.get("/auctions/diagnostics/recent-acquisitions", async (c) => {
   }
 });
 
+// User-facing upcoming-auctions feed: active + dated today-or-later.
+api.get("/auctions/upcoming", async (c) => {
+  try {
+    const list = await db.query.auctions.findMany({
+      where: and(eq(auctions.status, "active"), sql`auction_date::date >= CURRENT_DATE`),
+      orderBy: [asc(auctions.auctionDate)],
+      limit: 500,
+    });
+    return c.json({ success: true, auctions: list });
+  } catch (error) {
+    console.error("Upcoming auctions feed error:", error);
+    return c.json({ success: false, message: "Failed to get upcoming auctions" }, 500);
+  }
+});
+
 api.get("/auctions/diagnostics/upcoming", async (c) => {
   try {
     const limit = parseInt(c.req.query("limit") || "15");
