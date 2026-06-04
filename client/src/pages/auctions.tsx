@@ -13,6 +13,7 @@ import {
 import {
   Gavel, Search, MapPin, Ruler, Sprout, ExternalLink, CalendarClock, Settings, Layers, Calculator,
 } from "lucide-react";
+import { useAuctionValuation } from "@/hooks/use-auction-valuation";
 
 interface Auction {
   id: number;
@@ -63,6 +64,7 @@ function countdownLabel(days: number | null): { text: string; tone: string } {
 }
 
 export default function AuctionsBrowser() {
+  const { startValuation, isPreparing, overlays } = useAuctionValuation();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("Iowa");
   const [county, setCounty] = useState("all");
@@ -245,10 +247,11 @@ export default function AuctionsBrowser() {
                       </div>
                       <Button
                         size="sm"
+                        disabled={isPreparing}
                         className="w-full bg-field hover:bg-field-spring text-wheat-cream gap-1.5"
-                        onClick={() => { window.location.href = `/?valuateAuction=${a.id}`; }}
+                        onClick={() => startValuation(a)}
                       >
-                        <Calculator className="h-3.5 w-3.5" /> Value this auction
+                        <Calculator className="h-3.5 w-3.5" /> {isPreparing ? "Preparing…" : "Value this auction"}
                       </Button>
                       <div className="text-[11px] text-slate-400 truncate">{a.sourceWebsite}</div>
                     </div>
@@ -259,6 +262,7 @@ export default function AuctionsBrowser() {
           </div>
         )}
       </main>
+      {overlays}
     </div>
   );
 }
