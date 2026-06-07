@@ -1212,7 +1212,9 @@ export default function EnhancedMap({
         const tileOrigin = API_BASE_URL || window.location.origin;
         map.current!.addSource('parcels-vector', {
           type: 'vector',
-          tiles: [`${tileOrigin}/api/parcels/tiles/{z}/{x}/{y}.mvt`],
+          // ?v=2 busts the Cloudflare edge cache after the geodesic-acreage
+          // migration (edge had cached tiles with the old inflated total_acres).
+          tiles: [`${tileOrigin}/api/parcels/tiles/{z}/{x}/{y}.mvt?v=2`],
           minzoom: 10,
           maxzoom: 18
         });

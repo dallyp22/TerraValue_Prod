@@ -20,7 +20,9 @@ export async function generateParcelTile(
   y: number,
   pool: Pool
 ): Promise<Buffer | null> {
-  const cacheKey = `parcel-tile-${z}-${x}-${y}`;
+  // v2: acreage corrected to geodesic (Mercator→geography migration); bump to
+  // invalidate tiles cached with the old inflated total_acres.
+  const cacheKey = `parcel-tile-v2-${z}-${x}-${y}`;
   
   // Check cache first
   const cached = tileCache.get<Buffer>(cacheKey);
@@ -136,7 +138,7 @@ export async function generateHybridTile(
   y: number,
   pool: Pool
 ): Promise<Buffer | null> {
-  const cacheKey = `hybrid-tile-${z}-${x}-${y}`;
+  const cacheKey = `hybrid-tile-v2-${z}-${x}-${y}`;
   
   // Check cache first
   const cached = tileCache.get<Buffer>(cacheKey);
@@ -173,6 +175,8 @@ export async function generateHybridTile(
             256,
             true
           ) AS geom,
+          id,
+          id as cluster_id,
           normalized_owner as owner,
           parcel_count,
           ROUND(total_acres::numeric, 1) as acres
