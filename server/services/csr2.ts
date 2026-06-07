@@ -71,6 +71,93 @@ async function csr2PointValueFromLocalDb(longitude: number, latitude: number): P
 }
 
 /**
+ * TRUE area-weighted CSR2 for a field polygon.
+ *
+ * SDA returns the SSURGO map-unit polygons intersecting the field (one fast
+ * spatial call — SDA's strength), then our PostGIS clips each to the actual
+ * field and computes per-map-unit acreage (PostGIS's strength — SQL Server
+ * geography area is finicky), and we weight the local CSR2 ratings by that
+ * acreage. This is the official "field CSR2" methodology (matches Surety/
+ * AcreValue) and replaces point-sampling, which over/under-shoots depending on
+ * where sample points land in the soil mosaic.
+ *
+ * Returns null on any failure so the caller can fall back to sampling.
+ */
+async function csr2AreaWeightedFromSDA(wkt: string): Promise<CSR2Stats | null> {
+  if (!isSoilDbAvailable()) return null;
+  if (!/POLYGON/i.test(wkt)) return null; // only for (MULTI)POLYGON fields
+  try {
+    // 1. Convex hull of the field → a simple, valid geometry for SDA's spatial
+    //    filter (SQL Server geography is picky about complex rings). We still
+    //    clip to the exact field in PostGIS below, so accuracy is preserved.
+    const hullRows = await executeSoilQuery<{ hull: string | null }>(
+      `SELECT ST_AsText(ST_ConvexHull(ST_MakeValid(ST_GeomFromText($1, 4326)))) AS hull`,
+      [wkt],
+    );
+    const hull = hullRows[0]?.hull;
+    if (!hull || !/^POLYGON/i.test(hull)) return null;
+
+    // 2. SDA: map-unit polygons intersecting the hull (mukey + geometry WKT).
+    const sdaResp = await fetch(
+      'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          query: `SELECT mukey, mupolygongeo.STAsText() AS g FROM mupolygon WHERE mupolygongeo.STIntersects(geometry::STGeomFromText('${hull.replace(/'/g, '')}',4326))=1`,
+          format: 'JSON',
+        }).toString(),
+        signal: AbortSignal.timeout(20000),
+      },
+    );
+    if (!sdaResp.ok) return null;
+    const sdaJson: any = await sdaResp.json();
+    const tbl: [string, string][] = sdaJson?.Table || [];
+    // Empty → SDA had nothing; too many → huge aggregated parcel, fall back to
+    // sampling rather than ship MBs of geometry through the Worker.
+    if (tbl.length === 0 || tbl.length > 400) return null;
+    const mukeys = tbl.map((r) => String(r[0]));
+    const geoms = tbl.map((r) => r[1]);
+
+    // 3. PostGIS: clip each map unit to the real field, area-weight local CSR2.
+    const rows = await executeSoilQuery<{
+      mean: number | null; lo: number | null; hi: number | null; n: number;
+    }>(
+      `WITH mp(mukey, g) AS (SELECT * FROM unnest($2::text[], $3::text[])),
+            field AS (SELECT ST_MakeValid(ST_GeomFromText($1, 4326)) f),
+            a AS (
+              SELECT mp.mukey,
+                     SUM(ST_Area(ST_Intersection(ST_MakeValid(ST_GeomFromText(mp.g, 4326)), field.f)::geography)) / 4046.86 AS ac
+              FROM mp, field GROUP BY mp.mukey
+            ),
+            k AS (
+              SELECT c.mukey,
+                     SUM(csr.csr2_value * c.comppct_r) / NULLIF(SUM(c.comppct_r), 0) AS csr2
+              FROM soil_component c JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
+              WHERE c.mukey = ANY($2::text[]) AND c.majcompflag = 'Yes'
+              GROUP BY c.mukey
+            )
+       SELECT SUM(a.ac * k.csr2) / NULLIF(SUM(a.ac), 0) AS mean,
+              MIN(k.csr2) AS lo, MAX(k.csr2) AS hi, COUNT(*) AS n
+       FROM a JOIN k USING (mukey) WHERE a.ac > 0.01`,
+      [wkt, mukeys, geoms],
+    );
+    const r = rows[0];
+    if (!r || r.mean == null) return null;
+    console.log(`✅ Area-weighted CSR2 from SDA: ${Number(r.mean).toFixed(1)} (${r.n} map units)`);
+    return {
+      mean: Number(Number(r.mean).toFixed(1)),
+      min: r.lo != null ? Math.round(r.lo) : null,
+      max: r.hi != null ? Math.round(r.hi) : null,
+      count: Number(r.n),
+    };
+  } catch (error) {
+    console.warn('Area-weighted CSR2 (SDA) failed:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/**
  * Query local soil database for CSR2 statistics for a polygon
  */
 async function csr2PolygonStatsFromLocalDb(wkt: string): Promise<CSR2Stats | null> {
@@ -458,12 +545,27 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         };
       }
       
-      // Try local database first for polygon queries
+      // Cache polygon results (keyed by the WKT) — area-weighting makes an
+      // external SDA call, so don't repeat it for the same field.
+      const polyKey = `poly:${wkt.length}:${wkt.slice(0, 40)}:${wkt.slice(-40)}`;
+      const cachedPoly = cache.get<CSR2Stats>(polyKey);
+      if (cachedPoly !== undefined) return cachedPoly;
+
+      // Primary: TRUE area-weighted CSR2 (SDA map-unit polygons + local ratings).
+      const areaWeighted = await csr2AreaWeightedFromSDA(wkt);
+      if (areaWeighted && areaWeighted.mean != null) {
+        cache.set(polyKey, areaWeighted);
+        return areaWeighted;
+      }
+
+      // Next: local PostGIS spatial table (populated only if Option A's SSURGO
+      // geometry is ever loaded — currently empty).
       const localStats = await csr2PolygonStatsFromLocalDb(wkt);
       if (localStats !== null) {
+        cache.set(polyKey, localStats);
         return localStats;
       }
-      
+
       // Parse POLYGON or MULTIPOLYGON into one or more coordinate rings. Real
       // parcel geometries are frequently MultiPolygons (split fields), which
       // the old POLYGON-only regex rejected — so this path silently failed for
