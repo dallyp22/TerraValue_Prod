@@ -25,8 +25,9 @@ async function csr2PointValueFromLocalDb(longitude: number, latitude: number): P
     // Query for CSR2 value using PostGIS point intersection
     // Uses weighted average if multiple components overlap
     const sql = `
-      SELECT 
-        AVG(csr.csr2_value * COALESCE(c.comppct_r, 100) / 100.0) as weighted_csr2
+      SELECT
+        SUM(csr.csr2_value * COALESCE(c.comppct_r, 100))
+          / NULLIF(SUM(COALESCE(c.comppct_r, 100)), 0) as weighted_csr2
       FROM soil_component c
       JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
       WHERE c.mukey IN (
@@ -164,8 +165,15 @@ async function csr2PointValueByMukeyExternal(
     const mukey = sdaJson?.Table?.[0]?.[0];
     if (!mukey) return null;
 
+    // Map-unit CSR2 = component-percent-weighted average of its major
+    // components: SUM(csr2 * comppct) / SUM(comppct). The old form,
+    // AVG(csr2 * comppct/100), multiplied each component's CSR2 by its OWN
+    // percentage and divided by the component count — under-reporting every
+    // map unit whose dominant component is < 100% (e.g. Monona 90%/CSR2 96
+    // reported as 86.4 instead of 96).
     const rows = await executeSoilQuery<{ weighted_csr2: number | null }>(
-      `SELECT AVG(csr.csr2_value * COALESCE(c.comppct_r, 100) / 100.0) AS weighted_csr2
+      `SELECT SUM(csr.csr2_value * COALESCE(c.comppct_r, 100))
+              / NULLIF(SUM(COALESCE(c.comppct_r, 100)), 0) AS weighted_csr2
          FROM soil_component c
          JOIN soil_csr2_ratings csr ON c.cokey = csr.cokey
         WHERE c.mukey = $1 AND c.majcompflag = 'Yes'`,
