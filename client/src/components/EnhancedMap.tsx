@@ -1851,16 +1851,17 @@ export default function EnhancedMap({
           const props = e.features[0].properties;
           const geometry = e.features[0].geometry;
           
-          // Calculate acres from geometry
+          // Prefer the authoritative server acreage (TOTAL_ACRES, now geodesic).
+          // Only fall back to turf.area of the tile geometry when it's absent —
+          // and note MVT geometry is clipped to tile edges + simplified, so that
+          // fallback UNDER-counts parcels spanning multiple tiles (e.g. 203ac
+          // field read as 182). The server value is the source of truth.
+          const serverAcres = props.TOTAL_ACRES != null ? parseFloat(props.TOTAL_ACRES) : null;
           let acres = 0;
           if (geometry.type === 'Polygon' && geometry.coordinates) {
-            const polygon = turf.polygon(geometry.coordinates);
-            const area = turf.area(polygon);
-            acres = area / 4046.86; // Convert to acres
+            acres = turf.area(turf.polygon(geometry.coordinates)) / 4046.86;
           }
-          
-          // Use aggregated acres if available
-          const totalAcres = props.TOTAL_ACRES || acres;
+          const totalAcres = (serverAcres != null && !isNaN(serverAcres)) ? serverAcres : acres;
           
           const parcel = {
             owner_name: props.DEEDHOLDER || 'Unknown',
