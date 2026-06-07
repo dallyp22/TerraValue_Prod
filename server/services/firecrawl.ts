@@ -96,10 +96,11 @@ export class FirecrawlService {
   }
 
   // Scrape single URL with JSON extraction
-  async scrapeWithJson(url: string) {
+  async scrapeWithJson(url: string, waitFor: number = 2500) {
     try {
       const response = await axios.post(`${FIRECRAWL_BASE_URL}/scrape`, {
         url,
+        waitFor, // let JS-rendered detail pages populate before extraction
         formats: [
           {
             type: "json",
@@ -138,9 +139,9 @@ export class FirecrawlService {
           'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        timeout: 30000
+        timeout: 45000
       });
-      
+
       // Return the extracted JSON data
       return response.data?.data?.json || response.data?.json || null;
     } catch (error: any) {
@@ -181,15 +182,20 @@ export class FirecrawlService {
     }
   }
 
-  // Scrape listing page to extract individual property URLs
-  async scrapeListingUrls(url: string) {
+  // Scrape listing page to extract individual property URLs.
+  // Render-aware: waitFor lets client-side-rendered auction cards (Lofty,
+  // HiBid embeds, JS carousels) load before we read the DOM — many auctioneer
+  // sites render their listing grid via JS, so without this we only see the
+  // empty page shell.
+  async scrapeListingUrls(url: string, waitFor: number = 4000) {
     try {
       const response = await axios.post(`${FIRECRAWL_BASE_URL}/scrape`, {
         url,
+        waitFor,
         formats: [
           {
             type: "json",
-            prompt: "Extract all individual land/property listing URLs from this page. Look for links to individual property details pages. Return an array of complete URLs.",
+            prompt: "Extract all individual land/property/auction listing URLs from this page, including ones rendered dynamically into cards, carousels, or grids. Look for links to individual auction or property detail pages. Return an array of complete absolute URLs.",
             schema: {
               type: "object",
               properties: {
@@ -208,9 +214,9 @@ export class FirecrawlService {
           'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        timeout: 45000 // Longer timeout for listing pages
+        timeout: 60000 // Longer timeout — render wait + extraction
       });
-      
+
       return response.data?.data?.json || response.data?.json || { listing_urls: [] };
     } catch (error: any) {
       console.error('Scrape Listing URLs Error:', error.message);

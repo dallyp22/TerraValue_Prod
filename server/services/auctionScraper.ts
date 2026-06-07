@@ -293,94 +293,89 @@ export class AuctionScraperService {
       missingUrls: []
     };
     
-    // Step 1: Try multiple strategies to find auction URLs
+    // Step 1: Discover auction URLs. Map (fast link discovery) is MERGED with a
+    // render-aware listing extraction, because many auctioneer sites render
+    // their listing grid via JS — Map only sees the page shell/nav, so the real
+    // auction detail links are invisible without rendering the page first.
     const searchUrl = source.searchPath ? `${source.url}${source.searchPath}` : source.url;
-    let auctionUrls: string[] = [];
-    
-    // Strategy 1: Try Map API
+    const candidates = new Set<string>();
+
+    // Strategy 1: Map API (static link discovery)
     try {
       console.log(`  Strategy 1: Map API...`);
       const mapResult = await firecrawlService.map(searchUrl, 'auction');
       const rawUrls = mapResult.links || mapResult.urls || [];
-      
+      let n = 0;
       for (const item of rawUrls) {
-        if (typeof item === 'string') {
-          auctionUrls.push(item);
-        } else if (item && typeof item === 'object' && item.url) {
-          auctionUrls.push(item.url);
-        }
+        const u = typeof item === 'string' ? item : (item && item.url);
+        if (u) { candidates.add(u); n++; }
       }
-      console.log(`    ✓ Map found ${auctionUrls.length} URLs`);
+      console.log(`    ✓ Map found ${n} URLs`);
     } catch (error) {
       console.log(`    ⚠️  Map failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
-    
-    // Strategy 2: Try direct listing extraction if map didn't work well
-    if (auctionUrls.length === 0) {
-      try {
-        console.log(`  Strategy 2: Direct listing extraction...`);
-        const listingResult = await firecrawlService.scrapeListingUrls(searchUrl);
-        if (listingResult.listing_urls && listingResult.listing_urls.length > 0) {
-          auctionUrls = listingResult.listing_urls;
-          console.log(`    ✓ Extraction found ${auctionUrls.length} URLs`);
-        }
-      } catch (extractError) {
-        console.log(`    ⚠️  Listing extraction failed`);
+
+    // Strategy 2: render-aware listing extraction — ALWAYS run and merge, so
+    // JS-rendered cards (Lofty/HiBid/carousels) surface even when Map returned
+    // some (shell/nav) links.
+    try {
+      console.log(`  Strategy 2: Render-aware listing extraction...`);
+      const listingResult = await firecrawlService.scrapeListingUrls(searchUrl);
+      const before = candidates.size;
+      for (const u of (listingResult.listing_urls || [])) {
+        if (typeof u === 'string' && u) candidates.add(u);
       }
+      console.log(`    ✓ Extraction added ${candidates.size - before} URLs`);
+    } catch (extractError) {
+      console.log(`    ⚠️  Listing extraction failed`);
     }
-    
-    // Strategy 3: Try web search as last resort
-    if (auctionUrls.length === 0) {
+
+    // Strategy 3: web search fallback only if we still found nothing
+    if (candidates.size === 0) {
       try {
         console.log(`  Strategy 3: Web search fallback...`);
         const searchResult = await firecrawlService.search(`${source.name} land auction Iowa`);
-        auctionUrls = searchResult.data?.map((r: any) => r.url) || [];
-        console.log(`    ✓ Search found ${auctionUrls.length} URLs`);
+        for (const r of (searchResult.data || [])) if (r?.url) candidates.add(r.url);
+        console.log(`    ✓ Search found ${candidates.size} URLs`);
       } catch (searchError) {
         console.log(`    ⚠️  Search also failed`);
       }
     }
-    
+
+    // Drop obvious non-listing junk (nav, social, assets) but DO NOT filter by
+    // "iowa" tokens — Iowa is determined later from the parsed listing state,
+    // not from guessing at the URL string.
+    const JUNK = /(facebook|twitter|instagram|linkedin|youtube|mailto:|tel:|\.(?:jpg|jpeg|png|gif|svg|pdf|css|js)(?:$|\?)|\/(?:about|contact|privacy|terms|login|cart|wp-admin|wp-login)\b)/i;
+    let auctionUrls = Array.from(candidates).filter(u => /^https?:\/\//i.test(u) && !JUNK.test(u));
+
     if (auctionUrls.length === 0) {
       console.log(`  ❌ No auction URLs found for ${source.name}`);
       stats.duration = Date.now() - startTime;
       this.lastScrapeStats.push(stats);
       return [];
     }
-    
-    // Update stats: discovered URLs
+
     stats.discoveredUrls = auctionUrls.length;
-    
-    // Filter for Iowa auctions first (prioritize Iowa)
-    const iowaUrls = auctionUrls.filter(url => 
-      url.toLowerCase().includes('-ia') || 
-      url.toLowerCase().includes('iowa') ||
-      url.toLowerCase().includes('_ia_')
-    );
-    const otherUrls = auctionUrls.filter(url => 
-      !url.toLowerCase().includes('-ia') && 
-      !url.toLowerCase().includes('iowa') &&
-      !url.toLowerCase().includes('_ia_')
-    );
-    
-    // Update stats: Iowa discovered
-    stats.iowaDiscovered = iowaUrls.length;
-    
-    // Prioritize Iowa, but include others if we have room
-    const prioritizedUrls = [...iowaUrls, ...otherUrls];
-    
-    // Increase limit to 20 URLs per source (from 10)
-    const limitedUrls = prioritizedUrls.slice(0, 20);
-    
-    // Track URLs that won't be processed (missing)
-    if (auctionUrls.length > limitedUrls.length) {
-      stats.missingUrls = prioritizedUrls.slice(20);
+
+    // Soft-prioritize URLs that LOOK Iowa-ish (cheap heuristic ordering only —
+    // it never drops a URL), then cap. Cap raised 20 → 60 so busy auctioneers
+    // aren't silently truncated.
+    const looksIowa = (url: string) => /(-ia\b|_ia_|\biowa\b)/i.test(url);
+    const prioritizedUrls = [
+      ...auctionUrls.filter(looksIowa),
+      ...auctionUrls.filter(u => !looksIowa(u)),
+    ];
+    stats.iowaDiscovered = auctionUrls.filter(looksIowa).length;
+
+    const MAX_URLS_PER_SOURCE = 60;
+    const limitedUrls = prioritizedUrls.slice(0, MAX_URLS_PER_SOURCE);
+    if (prioritizedUrls.length > limitedUrls.length) {
+      stats.missingUrls = prioritizedUrls.slice(MAX_URLS_PER_SOURCE);
+      console.log(`  ⚠️  ${stats.missingUrls.length} URLs over the ${MAX_URLS_PER_SOURCE}-cap were not processed`);
     }
-    
+
     console.log(`  ✅ Total URLs discovered: ${auctionUrls.length}`);
-    console.log(`  📍 Iowa URLs: ${iowaUrls.length}`);
-    console.log(`  🌍 Other URLs: ${otherUrls.length}`);
-    console.log(`  ✂️  Processing first ${limitedUrls.length} URLs (Iowa prioritized)`);
+    console.log(`  ✂️  Processing ${limitedUrls.length} URLs`);
     
     // Step 2: Scrape each URL individually with JSON extraction
     const savedAuctions = [];
@@ -391,8 +386,7 @@ export class AuctionScraperService {
     
     for (let i = 0; i < limitedUrls.length; i++) {
       const urlString = limitedUrls[i];
-      const isIowa = iowaUrls.includes(urlString);
-      
+
       try {
         console.log(`    [${i + 1}/${limitedUrls.length}] Processing...`);
         const scrapeResult = await firecrawlService.scrapeWithJson(urlString);
@@ -417,8 +411,8 @@ export class AuctionScraperService {
             successCount++;
             stats.successfulSaves++;
             
-            // Check if this is an Iowa auction
-            if (isIowa || auctionData.state?.toLowerCase() === 'iowa' || auctionData.state?.toLowerCase() === 'ia') {
+            // Iowa is determined from the parsed listing state, not the URL.
+            if (auctionData.state?.toLowerCase() === 'iowa' || auctionData.state?.toLowerCase() === 'ia') {
               stats.iowaSaved++;
             }
             
