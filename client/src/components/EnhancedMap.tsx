@@ -1421,17 +1421,23 @@ export default function EnhancedMap({
               county: props.county
             });
 
-            // Calculate acres from geometry using Turf.js
+            // Acreage: prefer the authoritative server value (props.acres =
+            // parcel_aggregated.total_acres, now true geodesic acres). turf.area
+            // on the MVT tile geometry UNDER-counts because the tile is clipped
+            // to tile edges + simplified (e.g. a 203ac field read as 182).
             let calculatedAcres = 0;
             try {
               if (feature.geometry) {
-                const area = turf.area(feature.geometry);  // Returns square meters
-                calculatedAcres = area / 4046.86;  // Convert to acres
-                console.log(`   Calculated acres from geometry: ${calculatedAcres.toFixed(1)}`);
+                calculatedAcres = turf.area(feature.geometry) / 4046.86;
               }
             } catch (error) {
               console.error('   Error calculating area:', error);
             }
+            const serverAcres = props.acres != null && !isNaN(parseFloat(props.acres))
+              ? parseFloat(props.acres)
+              : null;
+            const finalAcres = serverAcres != null ? serverAcres : Math.round(calculatedAcres * 100) / 100;
+            console.log(`   Acres → server(total_acres): ${serverAcres}, tile-geom: ${calculatedAcres.toFixed(1)} → using ${finalAcres}`);
 
             // Set selected parcel using cluster_id (not owner) to only highlight adjacent parcels
             setSelectedParcelId(clusterId ? String(clusterId) : owner);
@@ -1463,7 +1469,7 @@ export default function EnhancedMap({
             const parcel = {
               owner_name: owner || 'Unknown',
               address: owner || 'N/A',
-              acres: Math.round(calculatedAcres * 100) / 100, // Round to 2 decimals like Harrison
+              acres: finalAcres, // authoritative server acreage (geodesic)
               coordinates: [e.lngLat.lng, e.lngLat.lat],
               parcel_number: clusterId ? `${props.county}-CL${clusterId}` : `${props.county}-AGG-${props.parcel_count}`, // Use cluster ID if available
               parcel_class: 'Aggregated',
@@ -1489,7 +1495,7 @@ export default function EnhancedMap({
               const html = `
                 <strong>Owner:</strong> ${owner}<br>
                 <strong>Parcels:</strong> ${props.parcel_count}<br>
-                <strong>Acres:</strong> ${Math.round(calculatedAcres).toLocaleString()} acres<br>
+                <strong>Acres:</strong> ${Math.round(finalAcres).toLocaleString()} acres<br>
                 <strong>County:</strong> ${props.county}<br>
                 <small><em>Click to start valuation</em></small>
               `;
