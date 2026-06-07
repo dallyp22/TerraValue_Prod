@@ -231,51 +231,58 @@ export default function PropertyFormOverlay({ onClose, onValuationCreated, drawn
         polygons = toPolygons(parcelData.geometry);
       }
       
-      // Generate sample points within the parcel boundaries
-      // Using FEWER points (9 max) for faster queries
+      // Send the actual field polygon to the server, which computes an
+      // AREA-WEIGHTED CSR2 by densely sampling points clipped to the polygon
+      // (server: getCsr2PolygonStats). This replaces the old client-side 3x3
+      // grid + unweighted average, which sampled too sparsely and (for the
+      // bounding box) off-field — under-reporting CSR2.
       let samplePoints: [number, number][] = [];
-      
+
       if (polygons.length > 0) {
-        // Use 3x3 grid (9 points) for ALL parcels - much faster
-        const gridSize = 3; // Always use 3x3 for speed
-        
-        // Create a bounding box for all polygons
-        let minLng = Infinity, maxLng = -Infinity;
-        let minLat = Infinity, maxLat = -Infinity;
-        
-        polygons.forEach(polygon => {
-          const bbox = turf.bbox(polygon);
-          minLng = Math.min(minLng, bbox[0]);
-          minLat = Math.min(minLat, bbox[1]);
-          maxLng = Math.max(maxLng, bbox[2]);
-          maxLat = Math.max(maxLat, bbox[3]);
-        });
-        
-        // Generate grid points within bounding box
-        const lngStep = (maxLng - minLng) / (gridSize + 1);
-        const latStep = (maxLat - minLat) / (gridSize + 1);
-        
-        for (let i = 1; i <= gridSize; i++) {
-          for (let j = 1; j <= gridSize; j++) {
-            const lng = minLng + (lngStep * i);
-            const lat = minLat + (latStep * j);
-            const point = turf.point([lng, lat]);
-            
-            // Only add points inside polygons
-            const isInside = polygons.some(polygon => turf.booleanPointInPolygon(point, polygon));
-            if (isInside) {
-              samplePoints.push([lng, lat]);
-            }
+        // Build a MULTIPOLYGON WKT from the parcel's ring(s).
+        const ringToWkt = (coords: number[][]) =>
+          '((' + coords.map(c => `${c[0]} ${c[1]}`).join(', ') + '))';
+        const fieldWkt =
+          'MULTIPOLYGON(' +
+          polygons
+            .map(p => p.geometry?.coordinates?.[0])
+            .filter((r): r is number[][] => Array.isArray(r) && r.length >= 3)
+            .map(ringToWkt)
+            .join(', ') +
+          ')';
+
+        let csr2Data: any = {};
+        try {
+          const response = await apiRequest('POST', '/api/csr2/polygon', { wkt: fieldWkt });
+          const data = await response.json();
+          if (data.success && data.mean != null) {
+            csr2Data = {
+              success: true,
+              mean: Math.round(data.mean * 10) / 10,
+              min: Math.round(data.min),
+              max: Math.round(data.max),
+              count: data.count,
+            };
           }
+        } catch (error) {
+          console.error('Area-weighted CSR2 request failed:', error);
         }
-        
-        // Always include center point
-        const centerLng = (minLng + maxLng) / 2;
-        const centerLat = (minLat + maxLat) / 2;
-        const centerPoint = turf.point([centerLng, centerLat]);
-        if (polygons.some(p => turf.booleanPointInPolygon(centerPoint, p))) {
-          samplePoints.push([centerLng, centerLat]);
+
+        if (csr2Data.mean != null) {
+          const resultData = {
+            wkt: fieldWkt,
+            csr2: csr2Data,
+            acres: parcelData.acres,
+            originalAcres: parcelData.acres,
+          };
+          if (targetParcel.parcel_number) csr2Cache.set(targetParcel.parcel_number, resultData);
+          if (activeParcelRef.current === targetParcel) setParcelCSR2Data(resultData);
+          return;
         }
+        // If the polygon request failed, fall through to the point-sample path.
+
+        // Polygon area-weighted request failed — fall back to the clicked point.
+        if (parcelData.coordinates) samplePoints.push(parcelData.coordinates);
       } else {
         // Fallback: Use clicked point only (fastest!)
         samplePoints.push(parcelData.coordinates);

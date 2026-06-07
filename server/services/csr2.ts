@@ -14,6 +14,22 @@ const limit = pLimit(3);
 const CSR2_ENDPOINT = "https://enterprise.rsgis.msu.edu/imageserver/rest/services/Iowa_Corn_Suitability_Rating/ImageServer";
 
 /**
+ * Ray-casting point-in-polygon test (single ring, [x,y] vertices). Used to
+ * clip CSR2 sample points to the actual parcel so we don't sample off-field.
+ */
+function pointInPolygon(x: number, y: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
  * Query local soil database for CSR2 value at a point
  */
 async function csr2PointValueFromLocalDb(longitude: number, latitude: number): Promise<number | null> {
@@ -448,40 +464,74 @@ export async function getCsr2PolygonStats(wkt: string): Promise<CSR2Stats> {
         return localStats;
       }
       
-      // Handle POLYGON format with fallback to sampling (existing code)
-      const coordsMatch = /POLYGON\(\((.*)\)\)/.exec(wkt);
-      if (!coordsMatch) {
-        throw new Error('Invalid WKT format - must be POINT or POLYGON');
+      // Parse POLYGON or MULTIPOLYGON into one or more coordinate rings. Real
+      // parcel geometries are frequently MultiPolygons (split fields), which
+      // the old POLYGON-only regex rejected — so this path silently failed for
+      // parcels and the field never got an area-weighted value.
+      const ringMatches = wkt.match(/\(([-\d.,\s]+)\)/g);
+      if (!ringMatches || ringMatches.length === 0) {
+        throw new Error('Invalid WKT format - must be POINT or (MULTI)POLYGON');
       }
+      const rings: number[][][] = ringMatches.map((ring) =>
+        ring
+          .replace(/[()]/g, '')
+          .split(',')
+          .map((p) => {
+            const [x, y] = p.trim().split(/\s+/).map(Number);
+            return [x, y];
+          })
+          .filter((c) => Number.isFinite(c[0]) && Number.isFinite(c[1])),
+      ).filter((r) => r.length >= 3);
+      const inField = (x: number, y: number) => rings.some((r) => pointInPolygon(x, y, r));
 
-      const coords = coordsMatch[1];
-      const points = coords.split(",").map((p) => {
-        const [x, y] = p.trim().split(" ").map(Number);
-        return [x, y];
-      });
-      
-      // Calculate bounding box
-      const xs = points.map((p) => p[0]);
-      const ys = points.map((p) => p[1]);
+      // Bounding box across all rings.
+      const allPts = rings.flat();
+      const xs = allPts.map((p) => p[0]);
+      const ys = allPts.map((p) => p[1]);
       const minX = Math.min(...xs);
       const maxX = Math.max(...xs);
       const minY = Math.min(...ys);
       const maxY = Math.max(...ys);
 
-      // Generate sample points within the polygon bounds.
-      // 3x3 grid (9 points) instead of 5x5 (25). Each point can fan out to
-      // 4+ external sub-requests (MSU → USDA fallback chain); 25 points was
-      // exceeding the Workers subrequest budget on big bboxes (aggregated
-      // ownership groups with 100+ parcels). 9 points is plenty for an
-      // average-of-samples estimate.
-      const samplePoints: [number, number][] = [];
-      const gridSize = 3;
-
+      // Area-weighted estimate via a dense grid CLIPPED to the polygon. A
+      // uniform grid of in-polygon points is an unbiased estimator of the
+      // area-weighted mean (each kept point represents ~equal area), so the
+      // simple mean below = area-weighted CSR2. Clipping is what matters: the
+      // old 3x3 grid sampled the bounding BOX, so corner points fell outside
+      // the field into neighboring low ground and dragged the mean down.
+      //
+      // Budget: each point now resolves mostly at the USDA-mukey tier (1 call,
+      // cached), so we can afford a denser grid. Generate 7x7 candidates, keep
+      // in-polygon ones, and cap the sampled count to stay within the Workers
+      // subrequest budget on very large (aggregated multi-parcel) polygons.
+      const MAX_SAMPLES = 28;
+      const gridSize = 7;
+      const inPoly: [number, number][] = [];
       for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
           const x = minX + (maxX - minX) * (i + 0.5) / gridSize;
           const y = minY + (maxY - minY) * (j + 0.5) / gridSize;
-          samplePoints.push([x, y]);
+          if (inField(x, y)) inPoly.push([x, y]);
+        }
+      }
+
+      // Fall back to the bbox grid only if clipping left too few points
+      // (slivers / degenerate rings).
+      let samplePoints: [number, number][];
+      if (inPoly.length >= 6) {
+        // Evenly thin to the budget cap if needed.
+        const stride = Math.ceil(inPoly.length / MAX_SAMPLES);
+        samplePoints = inPoly.filter((_, idx) => idx % stride === 0);
+      } else {
+        samplePoints = [];
+        const g = 3;
+        for (let i = 0; i < g; i++) {
+          for (let j = 0; j < g; j++) {
+            samplePoints.push([
+              minX + (maxX - minX) * (i + 0.5) / g,
+              minY + (maxY - minY) * (j + 0.5) / g,
+            ]);
+          }
         }
       }
 
