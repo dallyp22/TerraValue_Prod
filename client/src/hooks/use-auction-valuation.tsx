@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Valuation } from "@shared/schema";
 
 const PropertyFormOverlay = lazy(() => import("@/components/PropertyFormOverlay"));
@@ -21,10 +22,14 @@ export interface ValuableAuction {
   csr2Max?: number | null;
 }
 
+const VALUATION_LAND_TYPES = ["Irrigated", "Dryland", "Pasture", "CRP"] as const;
+
 /**
- * Runs the full auction-valuation flow (prepare → pre-filled form → pipeline →
- * report) as overlays, in-place, without navigating away. Returns a trigger
- * and the overlay JSX to render. Mirrors MapCentricHome's auction flow.
+ * Runs the auction-valuation flow in-place as overlays. Clicking "Value this
+ * auction" prepares the data and creates the valuation directly (pipeline →
+ * report), with no intermediate form. The pre-filled form only appears as a
+ * fallback when the prepared data is missing required fields (county/acreage)
+ * or the direct valuation request fails.
  */
 export function useAuctionValuation() {
   const [parcelData, setParcelData] = useState<any>(null);
@@ -32,7 +37,7 @@ export function useAuctionValuation() {
   const [currentValuationId, setCurrentValuationId] = useState<number | null>(null);
   const [showPipeline, setShowPipeline] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [isPreparing, setIsPreparing] = useState(false);
+  const [preparingId, setPreparingId] = useState<number | null>(null);
   const hasAutoOpenedReport = useRef(false);
 
   const { data: currentValuation } = useQuery<{ success: boolean; valuation: Valuation }>({
@@ -63,63 +68,126 @@ export function useAuctionValuation() {
     hasAutoOpenedReport.current = false;
   };
 
-  const startValuation = async (auction: ValuableAuction) => {
-    setIsPreparing(true);
-    try {
-      const response = await fetch(`/api/auctions/${auction.id}/prepare-valuation`, { method: "POST" });
-      if (!response.ok) throw new Error("Failed to prepare valuation data");
-      const result = await response.json();
+  // Fallback path: open the pre-filled form so the user can supply whatever
+  // the prepared data is missing. `prepared` is the prepare-valuation payload
+  // when available.
+  const openPrefilledForm = (auction: ValuableAuction, prepared?: any) => {
+    setParcelData({
+      owner_name: prepared?.ownerName || "Unknown Owner",
+      address: prepared?.address || auction.address || "",
+      acres: prepared?.acreage || auction.acreage || 0,
+      coordinates: prepared?.coordinates || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
+      parcel_number: prepared?.parcelNumber || `AUCTION-${auction.id}`,
+      parcel_class: prepared?.landType || "Agricultural",
+      county: prepared?.county || auction.county || "",
+      landType: prepared?.landType || "Dryland",
+      sourceAuctionId: auction.id,
+      sourceAuctionTitle: auction.title,
+      auctionDate: auction.auctionDate,
+      auctioneer: auction.auctioneer,
+      csr2Mean: prepared?.csr2Mean ?? auction.csr2Mean,
+      csr2Min: prepared?.csr2Min ?? auction.csr2Min,
+      csr2Max: prepared?.csr2Max ?? auction.csr2Max,
+      ...(prepared ? {
+        extractedInfo: prepared.extractedInfo,
+        geometry: prepared.fieldWkt,
+        mukey: prepared.mukey,
+        soilData: prepared.soilData,
+        hasParcelMatch: prepared.hasParcelMatch,
+        hasCSR2: prepared.hasCSR2,
+        hasSoilData: prepared.hasSoilData,
+      } : {}),
+    });
+    setShowForm(true);
+  };
 
-      if (result.success && result.data) {
-        setParcelData({
-          owner_name: result.data.ownerName || "Unknown Owner",
-          address: result.data.address || auction.address || "",
-          acres: result.data.acreage || auction.acreage || 0,
-          coordinates: result.data.coordinates || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null),
-          parcel_number: result.data.parcelNumber || `AUCTION-${auction.id}`,
-          parcel_class: result.data.landType || "Agricultural",
-          county: result.data.county || auction.county || "",
-          landType: result.data.landType,
-          sourceAuctionId: auction.id,
-          sourceAuctionTitle: auction.title,
-          auctionDate: auction.auctionDate,
-          auctioneer: auction.auctioneer,
-          csr2Mean: result.data.csr2Mean,
-          csr2Min: result.data.csr2Min,
-          csr2Max: result.data.csr2Max,
-          extractedInfo: result.data.extractedInfo,
-          geometry: result.data.fieldWkt,
-          mukey: result.data.mukey,
-          soilData: result.data.soilData,
-          hasParcelMatch: result.data.hasParcelMatch,
-          hasCSR2: result.data.hasCSR2,
-          hasSoilData: result.data.hasSoilData,
-        });
-        setShowForm(true);
-      } else {
-        throw new Error("Invalid response from server");
+  const startValuation = async (auction: ValuableAuction) => {
+    if (preparingId !== null) return;
+    setPreparingId(auction.id);
+    let prepared: any = null;
+    try {
+      const [prepareResponse, cornResponse] = await Promise.all([
+        fetch(`/api/auctions/${auction.id}/prepare-valuation`, { method: "POST" }),
+        fetch("/api/corn-price").catch(() => null),
+      ]);
+      if (!prepareResponse.ok) throw new Error("Failed to prepare valuation data");
+      const result = await prepareResponse.json();
+      if (!result.success || !result.data) throw new Error("Invalid response from server");
+      prepared = result.data;
+
+      let cornPrice: number | null = null;
+      if (cornResponse?.ok) {
+        try {
+          const corn = await cornResponse.json();
+          if (corn?.success && corn.price) cornPrice = corn.price;
+        } catch { /* cash-rent prefill is optional */ }
       }
+
+      const county = prepared.county || auction.county || "";
+      const acreage = prepared.acreage || auction.acreage || 0;
+      const coordinates = prepared.coordinates
+        || (auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null);
+
+      // The valuation request requires county + acreage; without them, let
+      // the user fill in the gaps.
+      if (!county || acreage < 0.1) {
+        openPrefilledForm(auction, prepared);
+        return;
+      }
+
+      const csr2Mean = prepared.csr2Mean ?? auction.csr2Mean ?? undefined;
+      const texture = prepared.soilData?.texture;
+      const payload = {
+        address: prepared.address || auction.address || "",
+        county,
+        state: prepared.state || "Iowa",
+        landType: (VALUATION_LAND_TYPES as readonly string[]).includes(prepared.landType)
+          ? prepared.landType
+          : "Dryland",
+        acreage,
+        includeImprovements: false,
+        capRate: 0.03,
+        csr2Mean,
+        csr2Min: prepared.csr2Min ?? auction.csr2Min ?? undefined,
+        csr2Max: prepared.csr2Max ?? auction.csr2Max ?? undefined,
+        csr2Count: prepared.csr2Count ?? undefined,
+        cashRentPerAcre: csr2Mean && cornPrice
+          ? Math.round(csr2Mean * cornPrice * 100) / 100
+          : undefined,
+        latitude: coordinates ? coordinates[1] : undefined,
+        longitude: coordinates ? coordinates[0] : undefined,
+        ownerName: prepared.ownerName || "Unknown Owner",
+        parcelNumber: prepared.parcelNumber || `AUCTION-${auction.id}`,
+        mukey: prepared.mukey ?? undefined,
+        soilSeries: prepared.soilData?.series ?? undefined,
+        soilSlope: prepared.soilData?.slope ?? undefined,
+        soilDrainage: prepared.soilData?.drainage ?? undefined,
+        soilHydrologicGroup: prepared.soilData?.hydrologicGroup ?? undefined,
+        soilFarmlandClass: prepared.soilData?.farmlandClass ?? undefined,
+        soilTexture: texture
+          ? `${texture.sand?.toFixed(0)}% sand, ${texture.silt?.toFixed(0)}% silt, ${texture.clay?.toFixed(0)}% clay`
+          : undefined,
+        soilSandPct: texture?.sand ?? undefined,
+        soilSiltPct: texture?.silt ?? undefined,
+        soilClayPct: texture?.clay ?? undefined,
+        soilPH: texture?.ph ?? undefined,
+        soilOrganicMatter: texture?.organicMatter ?? undefined,
+        soilComponents: prepared.soilData?.components ?? undefined,
+      };
+
+      const createResponse = await apiRequest("POST", "/api/valuations", payload);
+      const created = await createResponse.json();
+      if (!created.success || !created.valuationId) {
+        throw new Error(created.message || "Failed to start valuation");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/valuations"] });
+      handleValuationCreated(created.valuationId);
     } catch (error) {
-      console.error("Failed to prepare auction valuation:", error);
-      // Fallback to basic auction data so the user can still value it.
-      setParcelData({
-        owner_name: "Unknown Owner",
-        address: auction.address || "",
-        acres: auction.acreage || 0,
-        coordinates: auction.latitude && auction.longitude ? [auction.longitude, auction.latitude] : null,
-        parcel_number: `AUCTION-${auction.id}`,
-        parcel_class: "Agricultural",
-        county: auction.county || "",
-        landType: "Dryland",
-        sourceAuctionId: auction.id,
-        sourceAuctionTitle: auction.title,
-        csr2Mean: auction.csr2Mean,
-        csr2Min: auction.csr2Min,
-        csr2Max: auction.csr2Max,
-      });
-      setShowForm(true);
+      console.error("Failed to start auction valuation:", error);
+      // Fall back to the form so the user can still value it.
+      openPrefilledForm(auction, prepared);
     } finally {
-      setIsPreparing(false);
+      setPreparingId(null);
     }
   };
 
@@ -142,5 +210,5 @@ export function useAuctionValuation() {
     </Suspense>
   );
 
-  return { startValuation, isPreparing, overlays };
+  return { startValuation, preparingId, overlays };
 }

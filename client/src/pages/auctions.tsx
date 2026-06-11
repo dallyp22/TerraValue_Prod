@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Gavel, Search, MapPin, Ruler, Sprout, ExternalLink, CalendarClock, Settings, Layers, Calculator,
+  Gavel, Search, MapPin, Ruler, Sprout, ExternalLink, CalendarClock, Settings, Layers, Calculator, Loader2,
 } from "lucide-react";
 import { useAuctionValuation } from "@/hooks/use-auction-valuation";
 
@@ -64,7 +64,7 @@ function countdownLabel(days: number | null): { text: string; tone: string } {
 }
 
 export default function AuctionsBrowser() {
-  const { startValuation, isPreparing, overlays } = useAuctionValuation();
+  const { startValuation, preparingId, overlays } = useAuctionValuation();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("Iowa");
   const [county, setCounty] = useState("all");
@@ -247,11 +247,15 @@ export default function AuctionsBrowser() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={isPreparing}
+                        disabled={preparingId === a.id}
                         className="w-full bg-field hover:bg-field-spring text-wheat-cream gap-1.5"
                         onClick={() => startValuation(a)}
                       >
-                        <Calculator className="h-3.5 w-3.5" /> {isPreparing ? "Preparing…" : "Value this auction"}
+                        {preparingId === a.id ? (
+                          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Valuing…</>
+                        ) : (
+                          <><Calculator className="h-3.5 w-3.5" /> Value this auction</>
+                        )}
                       </Button>
                       <div className="text-[11px] text-slate-400 truncate">{a.sourceWebsite}</div>
                     </div>
