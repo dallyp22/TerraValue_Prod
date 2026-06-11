@@ -24,6 +24,23 @@ export interface ValuableAuction {
 
 const VALUATION_LAND_TYPES = ["Irrigated", "Dryland", "Pasture", "CRP"] as const;
 
+// Build a MULTIPOLYGON WKT from a GeoJSON Polygon/MultiPolygon (outer rings
+// only — same fidelity the property form uses for its CSR2 request).
+function geojsonToMultipolygonWkt(geom: any): string | null {
+  if (!geom?.coordinates) return null;
+  const polys: number[][][][] =
+    geom.type === "Polygon" ? [geom.coordinates]
+    : geom.type === "MultiPolygon" ? geom.coordinates
+    : [];
+  const rings = polys
+    .map((p) => p[0])
+    .filter((r): r is number[][] => Array.isArray(r) && r.length >= 3);
+  if (!rings.length) return null;
+  const ringToWkt = (coords: number[][]) =>
+    "((" + coords.map((c) => `${c[0]} ${c[1]}`).join(", ") + "))";
+  return "MULTIPOLYGON(" + rings.map(ringToWkt).join(", ") + ")";
+}
+
 /**
  * Runs the auction-valuation flow in-place as overlays. Clicking "Value this
  * auction" prepares the data and creates the valuation directly (pipeline →
@@ -135,8 +152,69 @@ export function useAuctionValuation() {
         return;
       }
 
-      const csr2Mean = prepared.csr2Mean ?? auction.csr2Mean ?? undefined;
-      const texture = prepared.soilData?.texture;
+      // Backfill CSR2 and soil data the same way the property form does —
+      // without csr2Mean the pipeline skips the comparables engine and both
+      // the CSR2-quantitative and income approaches come back $0.
+      let csr2 = (prepared.csr2Mean ?? auction.csr2Mean) != null
+        ? {
+            mean: prepared.csr2Mean ?? auction.csr2Mean,
+            min: prepared.csr2Min ?? auction.csr2Min ?? undefined,
+            max: prepared.csr2Max ?? auction.csr2Max ?? undefined,
+            count: prepared.csr2Count ?? undefined,
+          }
+        : null;
+      let mukey: string | undefined = prepared.mukey ?? undefined;
+      let soil: any = prepared.soilData ?? null;
+
+      const fetchCsr2 = async () => {
+        const wkt = geojsonToMultipolygonWkt(prepared.fieldWkt)
+          || (coordinates ? `POINT(${coordinates[0]} ${coordinates[1]})` : null);
+        if (!wkt) return null;
+        try {
+          const res = await apiRequest("POST", "/api/csr2/polygon", { wkt });
+          const data = await res.json();
+          if (data.success && data.mean != null) {
+            return {
+              mean: Math.round(data.mean * 10) / 10,
+              min: Math.round(data.min),
+              max: Math.round(data.max),
+              count: data.count,
+            };
+          }
+        } catch (e) {
+          console.error("Auction CSR2 backfill failed:", e);
+        }
+        return null;
+      };
+
+      const fetchSoil = async () => {
+        if (!coordinates) return null;
+        try {
+          const mukeyRes = await fetch(`/api/mukey/point?lon=${coordinates[0]}&lat=${coordinates[1]}`);
+          if (!mukeyRes.ok) return null;
+          const mukeyData = await mukeyRes.json();
+          if (!mukeyData.mukey) return null;
+          const soilRes = await fetch(`/api/soil/mukey/${mukeyData.mukey}`);
+          const soilData = soilRes.ok ? await soilRes.json() : null;
+          return { mukey: mukeyData.mukey as string, soil: soilData?.data ?? null };
+        } catch (e) {
+          console.error("Auction soil backfill failed:", e);
+          return null;
+        }
+      };
+
+      const [csr2Fetched, soilFetched] = await Promise.all([
+        csr2 ? Promise.resolve(null) : fetchCsr2(),
+        mukey && soil ? Promise.resolve(null) : fetchSoil(),
+      ]);
+      if (!csr2 && csr2Fetched) csr2 = csr2Fetched;
+      if (soilFetched) {
+        mukey = mukey ?? soilFetched.mukey;
+        soil = soil ?? soilFetched.soil;
+      }
+
+      const csr2Mean = csr2?.mean ?? undefined;
+      const texture = soil?.texture;
       const payload = {
         address: prepared.address || auction.address || "",
         county,
@@ -148,9 +226,9 @@ export function useAuctionValuation() {
         includeImprovements: false,
         capRate: 0.03,
         csr2Mean,
-        csr2Min: prepared.csr2Min ?? auction.csr2Min ?? undefined,
-        csr2Max: prepared.csr2Max ?? auction.csr2Max ?? undefined,
-        csr2Count: prepared.csr2Count ?? undefined,
+        csr2Min: csr2?.min ?? undefined,
+        csr2Max: csr2?.max ?? undefined,
+        csr2Count: csr2?.count ?? undefined,
         cashRentPerAcre: csr2Mean && cornPrice
           ? Math.round(csr2Mean * cornPrice * 100) / 100
           : undefined,
@@ -158,12 +236,13 @@ export function useAuctionValuation() {
         longitude: coordinates ? coordinates[0] : undefined,
         ownerName: prepared.ownerName || "Unknown Owner",
         parcelNumber: prepared.parcelNumber || `AUCTION-${auction.id}`,
-        mukey: prepared.mukey ?? undefined,
-        soilSeries: prepared.soilData?.series ?? undefined,
-        soilSlope: prepared.soilData?.slope ?? undefined,
-        soilDrainage: prepared.soilData?.drainage ?? undefined,
-        soilHydrologicGroup: prepared.soilData?.hydrologicGroup ?? undefined,
-        soilFarmlandClass: prepared.soilData?.farmlandClass ?? undefined,
+        mukey,
+        // prepare-valuation returns `series`; /api/soil/mukey returns `soilSeries`
+        soilSeries: soil?.soilSeries ?? soil?.series ?? undefined,
+        soilSlope: soil?.slope ?? undefined,
+        soilDrainage: soil?.drainage ?? undefined,
+        soilHydrologicGroup: soil?.hydrologicGroup ?? undefined,
+        soilFarmlandClass: soil?.farmlandClass ?? undefined,
         soilTexture: texture
           ? `${texture.sand?.toFixed(0)}% sand, ${texture.silt?.toFixed(0)}% silt, ${texture.clay?.toFixed(0)}% clay`
           : undefined,
@@ -172,7 +251,7 @@ export function useAuctionValuation() {
         soilClayPct: texture?.clay ?? undefined,
         soilPH: texture?.ph ?? undefined,
         soilOrganicMatter: texture?.organicMatter ?? undefined,
-        soilComponents: prepared.soilData?.components ?? undefined,
+        soilComponents: soil?.components ?? undefined,
       };
 
       const createResponse = await apiRequest("POST", "/api/valuations", payload);
