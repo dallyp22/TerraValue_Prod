@@ -74,6 +74,14 @@ export interface MapOverlays {
   showHighways: boolean;
   showStreetLabels: boolean;
   showPortfolioPins: boolean;
+  showHeistandFarms: boolean;
+  // Match confidence from scripts/build-heistand-portfolio.mts. Medium/low are
+  // best-effort guesses against stale assessor ownership, so they filter separately.
+  heistandConfidence: {
+    high: boolean;
+    medium: boolean;
+    low: boolean;
+  };
 }
 
 export interface MapInfo {
@@ -726,7 +734,7 @@ export default function LeftSidebar({
               {/* Master Toggle for All Overlays */}
               <label className="flex items-center gap-2 cursor-pointer py-2 border-b border-slate-200 pb-3 mb-1">
                 <Checkbox
-                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showTransmissionLines && mapOverlays.showCityLabels && mapOverlays.showHighways && mapOverlays.showStreetLabels && mapOverlays.showPortfolioPins}
+                  checked={mapOverlays.showAuctions && mapOverlays.showSubstations && mapOverlays.showDatacenters && mapOverlays.showLakes && mapOverlays.showTransmissionLines && mapOverlays.showCityLabels && mapOverlays.showHighways && mapOverlays.showStreetLabels && mapOverlays.showPortfolioPins && mapOverlays.showHeistandFarms}
                   onCheckedChange={(checked) => {
                     const allEnabled = checked as boolean;
                     onMapOverlaysChange({
@@ -766,7 +774,13 @@ export default function LeftSidebar({
                       showCityLabels: allEnabled,
                       showHighways: allEnabled,
                       showStreetLabels: allEnabled,
-                      showPortfolioPins: allEnabled
+                      showPortfolioPins: allEnabled,
+                      showHeistandFarms: allEnabled,
+                      heistandConfidence: {
+                        high: allEnabled,
+                        medium: allEnabled,
+                        low: allEnabled
+                      }
                     });
                   }}
                 />
@@ -819,6 +833,49 @@ export default function LeftSidebar({
                 />
                 <span className="text-sm text-slate-700">Pinned Farms</span>
               </label>
+              {/* Heistand Portfolio with match-confidence filters */}
+              <div className="pl-4 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer py-2">
+                  <Checkbox
+                    checked={mapOverlays.showHeistandFarms}
+                    onCheckedChange={(checked) =>
+                      onMapOverlaysChange({ ...mapOverlays, showHeistandFarms: checked as boolean })
+                    }
+                  />
+                  <span className="text-sm text-slate-700">Heistand Portfolio</span>
+                </label>
+
+                {/* Confidence filters - only show when the portfolio is enabled */}
+                {mapOverlays.showHeistandFarms && (
+                  <div className="pl-6 space-y-1">
+                    <p className="text-xs text-slate-500 pb-1">
+                      Match confidence vs. assessor records
+                    </p>
+                    {([
+                      ['high', 'Confirmed', 'bg-emerald-500'],
+                      ['medium', 'Likely', 'bg-amber-500'],
+                      ['low', 'Needs review', 'bg-rose-500'],
+                    ] as const).map(([key, label, swatch]) => (
+                      <label key={key} className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={mapOverlays.heistandConfidence[key]}
+                          onCheckedChange={(checked) =>
+                            onMapOverlaysChange({
+                              ...mapOverlays,
+                              heistandConfidence: {
+                                ...mapOverlays.heistandConfidence,
+                                [key]: checked as boolean,
+                              },
+                            })
+                          }
+                        />
+                        <span className={`w-2 h-2 rounded-full ${swatch}`} />
+                        <span className="text-xs text-slate-600">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
               <label className="flex items-center gap-2 cursor-pointer py-2 pl-4">
                 <Checkbox
                   checked={mapOverlays.showSubstations}

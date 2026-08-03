@@ -52,6 +52,18 @@ const auctionSchema = {
   required: ["auctions"]
 };
 
+/**
+ * Language that means a sale has already happened.
+ *
+ * Deliberately narrow. Iowa sale bills are written in the future tense — "374.59
+ * taxable acres m/l ... TO BE SOLD in 3 parcels at PUBLIC AUCTION" — so the bare
+ * token `sold` marks live auctions as closed. Every phrase here is past-tense or
+ * a terminal state, and `\b` boundaries keep it off substrings. Anything
+ * ambiguous ("selling", "will be sold", "for sale") belongs to an active auction.
+ */
+export const SOLD_PHRASES =
+  /\b(?:has\s+been\s+sold|have\s+been\s+sold|was\s+sold|were\s+sold|sold\s+for|sold\s+on|now\s+sold|already\s+sold|auction\s+(?:has\s+)?(?:closed|ended|concluded)|sale\s+(?:has\s+)?(?:closed|ended|concluded)|bidding\s+(?:has\s+)?closed|no\s+longer\s+available)\b/i;
+
 export class AuctionScraperService {
   // Stats from last scrape run
   private lastScrapeStats: ScraperStats[] = [];
@@ -588,7 +600,13 @@ export class AuctionScraperService {
       }
     }
     
-    // Check if listing is sold/closed
+    // Check if listing is sold/closed.
+    //
+    // NOTE: this used to test `title/description.includes('sold')`, which fires on
+    // the standard Iowa sale-bill phrase "…to be sold at public auction" — i.e. on
+    // the auctions we most want to keep. That one substring archived 2,584 auctions
+    // whose sale date was still in the future. Only definite past-tense/closing
+    // language counts now, and the future-date guard below is the backstop.
     let auctionStatus = 'active';
     const soldStatus = auctionData.sold_status?.toLowerCase();
     
@@ -596,14 +614,11 @@ export class AuctionScraperService {
       auctionStatus = 'sold';
       console.log(`      ⚠️ Listing marked as SOLD - will not appear on map`);
     } else if (
-      auctionData.title?.toLowerCase().includes('sold') ||
-      auctionData.description?.toLowerCase().includes('sold') ||
-      auctionData.title?.toLowerCase().includes('closed') ||
-      auctionData.description?.toLowerCase().includes('sale closed') ||
-      auctionData.description?.toLowerCase().includes('auction closed')
+      SOLD_PHRASES.test(auctionData.title ?? '') ||
+      SOLD_PHRASES.test(auctionData.description ?? '')
     ) {
       auctionStatus = 'sold';
-      console.log(`      ⚠️ "Sold" detected in text - marking as sold`);
+      console.log(`      ⚠️ Past-tense sale language detected - marking as sold`);
     }
     
     // Parse/extract auction date
@@ -657,7 +672,17 @@ export class AuctionScraperService {
         needsDateReview = true;
       }
     }
-    
+
+    // Backstop: an auction whose sale date is still in the future has not been
+    // sold, whatever the page text says. Text heuristics and the LLM's
+    // `sold_status` both misread future-tense sale-bill language; the date does
+    // not. This is what stops a live listing from being hidden and then deleted
+    // by the archiver's `marked_sold` pass.
+    if (auctionStatus === 'sold' && auctionDate && auctionDate.getTime() > Date.now()) {
+      auctionStatus = 'active';
+      console.log(`      ↩ Sale date ${auctionDate.toLocaleDateString()} is in the future - keeping active`);
+    }
+
     // Classify the property kind (so non-land listings can be filtered out).
     const classification = classifyAuction({
       title: auctionData.title,
