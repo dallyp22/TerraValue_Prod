@@ -1,6 +1,8 @@
 # Plan — Capture every Iowa farmland auction
 
-> 2026-08-03. Triggered by Todd Heistand reporting missing auctions (4 examples).
+> 2026-08-03, revised end of day. Triggered by Todd Heistand reporting missing
+> auctions (4 examples).
+>
 > Synthesis of three parallel investigations, each of which wrote its own report:
 > - `docs/scrape-gap-diagnosis.md` — why individual listings die in the pipeline
 > - `docs/scrape-source-expansion.md` — which new sources to onboard, live-probed
@@ -8,6 +10,13 @@
 >
 > Every number here was measured against production Neon (`terravalue-db`) or the live
 > API. Claims inherited from earlier research without verification are labelled ASSUMED.
+>
+> **STATUS — end of 2026-08-03.** Root causes 1, 2 and 3 are fixed and deployed to both
+> runtimes. The scrape now runs on Cloudflare Queues (§3, Fix C) and reports per-source
+> coverage (§3, Fix D). Railway was found still running — it was never decommissioned —
+> and runs in parallel until the queue path is proven at full scale. Root causes 4-7
+> remain open, and the queue path has been verified on 2-3 sources only. **Next gate:
+> read `GET /api/scrape/coverage?days=1` after the first overnight run of both runtimes.**
 
 ---
 
@@ -32,14 +41,14 @@ about. The measured gap is far larger.
 
 | Rank | Cause | Measured scale | Status |
 |---|---|---|---|
-| 1 | **Scrape truncates.** Worker cron dies partway through the 51 sources | Production writes touch **2–8 distinct sources on most days** vs 51 configured. Worker runs save ~10 auctions; a full Node run saves ~1,290 | Open — biggest item |
+| 1 | **Scrape truncates.** Worker cron blew its subrequest budget inside the first 1-2 sources | Production writes touched **2–8 distinct sources on most days** vs 51 configured. Worker runs saved ~10 auctions; a full Node run saves ~1,290 | **FIXED** — moved to Queues (§3) |
 | 2 | **`sold` matched as a bare substring.** Fires on "to be **sold** at public auction" | **2,584** auctions archived while their sale date was still in the future | **FIXED** |
 | 3 | **Map returned only 200 rows, ordered `auction_date ASC`.** 414 expired rows exhausted the window | Production returned **0 upcoming auctions** for Todd's viewport; 300 upcoming+geocoded rows unreachable | **FIXED** |
 | 4 | **Archiver hard-deletes on `title.includes('estate auction')`** — matches "Real **Estate Auction**" | **2,189** archived rows match | Open |
 | 5 | **`parseFlexibleDate` has no sanity range.** `new Date("April 24")` → year 2001 | 58,680 archived as `past_auction_date`; a live row dated **1955** | Open |
 | 6 | **`.pdf` dropped by the JUNK regex** (`auctionScraper.ts:348`, added 6/07) | 3,631 archived rows have `.pdf` URLs — that ingestion path is now closed | Open |
 | 7 | **Blocklist documented as enforced in `saveAuction()`; it is not** | Blocked URLs are deleted once, then re-added by the next scrape | Open |
-| 8 | **`scraperDiagnostics.ts:16` disables itself on Workers** | No anomaly alert has ever fired in production | Open |
+| 8 | **`scraperDiagnostics.ts:16` disables itself on Workers** | No anomaly alert has ever fired in production | **SUPERSEDED** by DB telemetry (§3); the old file-based path is still dead code |
 
 Note the shape: **items 2–7 are all the same failure mode** — an over-broad heuristic
 wired directly to an irreversible `DELETE`, with no guard and no alarm.
@@ -76,15 +85,100 @@ complaint we are answering. Item 5 (the date parser) is what actually cleans thi
 
 ---
 
-## 4. Wave 1 — stop the bleeding (this week)
+
+**Fix C — the scrape moved to Cloudflare Queues** (`worker/src/queues.ts`,
+`worker/wrangler.jsonc`, `worker/src/index.ts`)
+
+The scrape ran as one sequential 51-source crawl inside a single cron invocation.
+Measured runs take 57 minutes (June) and 206 minutes (July 31, 1,363 detail
+fetches) against a **15-minute** cron wall-clock ceiling. It exhausted the
+subrequest budget inside the first one or two sources; every later source logged
+"0 URLs found"; and because the terminal `updateSettings({nextRun})` write was
+itself over budget and threw, `nextRun` never advanced and the hourly cron
+re-fired the whole thing **every 2 hours indefinitely**, burning Firecrawl
+credits on the same two sources each time.
+
+No limit is large enough to fix that shape, so the work fans out instead:
+
+```
+cron 06:00 UTC --produce--> tv-scrape-sources   one message per source
+                                  | discovery only
+                                  v
+                            tv-scrape-details   one message per listing URL
+                                  | scrape + save one listing
+                                  v
+                            tv-enrich           OpenAI enrichment + CSR2
+                                  \--> tv-dlq   after 3 failed attempts
+```
+
+Each message is its own invocation with its own subrequest and CPU budget, plus
+retries and a dead-letter queue. Enrichment gets a queue because
+`enrichmentQueue.startProcessing()` was fire-and-forget — the Worker invocation
+ended and the work was silently dropped.
+
+- The hourly `0 * * * *` cron is **deleted**.
+- `POST /api/auctions/refresh` enqueues instead of scraping inline (`?limit=N`
+  for cheap verification). That button previously reported success while
+  capturing almost nothing.
+- Per-source URL cap **60 → 250** on the queue path, with overflow logged rather
+  than dropped silently — the old cap is why DreamDirt's budget filled with push
+  mowers while the actual land tracts never landed.
+- Discovery was split into `discoverUrlsForSource()` **alongside** the existing
+  `scrapeSingleSource()` rather than replacing it, so the Node path keeps working
+  unchanged during the parallel run. Both call the same Firecrawl strategies, so
+  behaviour cannot drift between runtimes.
+
+Verified: a clean 2-source run recorded Farmers National 11 discovered / 11
+queued / 10 saved and Midwest Ag 11 / 11 / 11. Under the old path the second
+source always returned zero. **Not yet verified at full 54-source scale.**
+
+**Fix D — coverage telemetry** (`migrations/0029`, `worker/src/routes/api.ts`,
+`server/services/scrapeContext.ts`)
+
+Nobody could answer "are we missing anything?" until a client emailed.
+`scraperDiagnostics` writes a local JSONL file and disables itself when there is
+no filesystem, so the Cloudflare runtime recorded nothing — which is why a scrape
+capturing 0.8% of its target showed 3,048 requests and zero errors on every
+Cloudflare dashboard.
+
+- `scrape_source_runs` — one row per (run, source, runtime): discovered, queued,
+  dropped, saved, failed, timing, error. Upserted, so a retried message corrects
+  its row rather than double-counting.
+- `auctions.first_captured_by` / `last_captured_by` / `last_captured_run` —
+  per-listing attribution. Both runtimes upsert the same rows, so without this the
+  parallel run can only be eyeballed. `first_captured_by` is never overwritten;
+  the 1,444 pre-existing rows stay NULL rather than being retroactively credited
+  to whoever touches them next.
+- `GET /api/scrape/coverage?days=N` — per-source/per-runtime funnel, capture
+  attribution, and **the sources whose most recent run saved nothing**. That last
+  list is the alarm that has never existed: a silently broken source used to be
+  indistinguishable from a source with no auctions.
+
+Applied as targeted DDL. **Never `npm run db:push`** — it drops the soil/PostGIS layer.
+
+**Also established: Railway was never actually decommissioned.** The Cloudflare
+migration was believed complete; it was not. `web-production-51e54.up.railway.app`
+answers, runs `server/index.ts` (which starts both the scraper and the archiver),
+and was serving pre-fix code against the same database. It is now on the fixed
+build and runs in parallel until the queue path is proven.
+
+---
+
+## 4. Wave 1 — stop the bleeding (in progress)
 
 Ordered by auctions recovered per hour of work.
 
-1. **Get the scrape off the Worker's per-invocation budget.** `worker/src/index.ts:57-59`.
-   This is the single highest-leverage change and it is a ~3-line deletion, *provided* the
-   Railway Node scraper is confirmed alive first — the two schedulers currently share one
-   `scraper_settings` row and race, and the Worker's partial run corrupts `nextRun` in a way
-   that can suppress the real one. **Confirm Railway, then cut the Worker branch.**
+1. ~~**Get the scrape off the Worker's per-invocation budget.**~~ ✅ **DONE, but not the
+   way this plan originally proposed.** The earlier recommendation was to delete the
+   Worker's scraper branch and let the Node process do the work. That was written while
+   Railway's status was unverified; deleting the branch would have been safe only if
+   something else was scraping. Railway turned out to be alive, but the right fix was not
+   to lean on it — it was to make the Worker capable of finishing the job. See Fix C in §3.
+
+   **Next gate:** read `GET /api/scrape/coverage?days=1` after the first overnight run of
+   both runtimes (Railway 05:00 UTC as `node`, Cloudflare 06:00 UTC as `cloudflare-queue`).
+   The queue path has only been verified on 2-3 sources. Do not retire Railway until the
+   per-source funnel shows it holding across all 54.
 2. **Restore the falsely-archived auctions.** ✅ **38 live rows reactivated 2026-08-03**
    (`status='sold' AND auction_date > now()` → `active`; ids saved for rollback). Todd's
    Kenkel auction is live again.
@@ -110,7 +204,26 @@ Ordered by auctions recovered per hour of work.
 4. **Give `parseFlexibleDate` the same ±1yr/+2yr sanity range the regex path already has**
    (`dateExtractor.ts:143-149` has it; `:19-72` does not).
 5. **Make archiving reversible.** Archive should set a flag, not `DELETE`. Everything above
-   is only expensive because the failure mode is destructive.
+   is only expensive because the failure mode is destructive. **Highest-value item on this
+   list now** — it converts every future heuristic bug from data loss into a visible mistake.
+6. **`server/routes.ts:1003` is a second, unfixed copy of `/api/auctions`** — still
+   `orderBy asc(auctionDate)`, still `limit: 200`, no past-date filter. Only the Worker's
+   copy was fixed. It currently *looks* healthy because the archiver cleared the stale
+   backlog, so the 200-row window happens to reach upcoming auctions; the bug is masked,
+   not gone. Either it dies with Railway (§4a) or every fix has to be written twice forever.
+7. **Two silent losses still in the Worker path:** `enrichmentQueue.setPool()` is never
+   called there, so legal-description geocoding has never run on Cloudflare at all.
+8. **The classifier lets equipment onto the land map** — "2015 JOHN DEERE 2720" and
+   "1971 JOHN DEERE 4020" are live right now. They were always in the data; the 200-row
+   window was hiding them.
+
+### 4a. Retire Railway (gated on the coverage read above)
+
+- Strip `automaticScraperService.start()` and `archiverService.start()` from
+  `server/index.ts:127-131`.
+- Delete or fix `server/routes.ts` (see item 6).
+- Decommission the Railway service; keep Express for local dev only.
+- Goal state: exactly one runtime, one API implementation, one scheduler.
 
 ## 5. Wave 2 — close the coverage gaps (next 2 weeks)
 
@@ -141,16 +254,18 @@ So: onboard the genuinely-free wins now, but budget Firecrawl for the high-volum
   yield, and **whether Firecrawl stealth defeats Turnstile** — the entire Wave 2 cost model
   rests on that last one. Probe it before committing to the HiBid work.
 
-## 6. Wave 3 — make coverage measurable (next month)
+## 6. Wave 3 — cost, dedupe, and recall (next month)
+
+Coverage measurement itself shipped today (Fix D in §3); what remains here is cost,
+dedupe, and turning the scorecard into an alert rather than a query.
 
 1. **Cheapest-first routing.** We currently spend ~178 Firecrawl credits per *newly captured*
    auction, because we re-run LLM extraction on ~1,363 detail pages daily, almost all
    unchanged. Route free-API → plain HTML → Firecrawl → stealth, and only run detail
    extraction on new or changed URLs. Estimated ~10× reduction, which is what makes 120
    sources affordable.
-2. **Cloudflare Queues + consumer Worker.** Cron becomes a producer only; one message per
-   source, each with its own subrequest and CPU budget, plus retry and DLQ. Retire the
-   Railway Node scraper afterwards so there is exactly one runtime.
+2. ~~**Cloudflare Queues + consumer Worker.**~~ ✅ **DONE** — see Fix C in §3. Retiring the
+   Railway scraper is now §4a, gated on the coverage read.
 3. **Split `listing_observations` from `auction_events`** — grow the existing `auctions`
    table in place, add `auction_events` above it. Do **not** rename. Measured cross-source
    duplication is low today (6 clusters), so this is prep work — but it must land *before*
@@ -160,16 +275,37 @@ So: onboard the genuinely-free wins now, but budget Firecrawl for the high-volum
    **DDL only — never `npm run db:push`, it drops the soil/PostGIS layer.**
 4. **A recall harness.** Store known-good auction URLs — starting with Todd's four — and
    re-run them through the pipeline on every change, so a regression is caught in CI instead
-   of by a client email. Add a per-source zero-yield alert, and re-enable
-   `scraperDiagnostics` on the new runtime.
+   of by a client email. The per-source zero-yield alert now exists
+   (`GET /api/scrape/coverage` → `silentSources`); what is still missing is something that
+   *notifies* rather than waiting to be queried, and the fixed known-good URL set.
 
 ---
 
-## 7. The lesson worth encoding
+## 7. Heistand portfolio (separate track, shipped today)
+
+Not part of the auction pipeline, but it landed the same day and shares the
+`parcels` table. The overlay was rebuilt on explicit parcel numbers instead of
+seller-surname guessing: 25 farms drawn (was 23), 13 full confidence (was 8),
+0 unmatched (was 4), 5,344 acres drawn against 5,406 sheet acres. Detail and
+open items in `docs/heistand-match-report.md`; the short version is that six
+farms remain weak (the three Barry farms over-cover via spatial fallback,
+Grell 100 has one parcel in the source for a 98-acre farm, Red Oak 128 and
+Glennwood Exit have unresolved parcels), **Bolten 500 West** has no parcel data,
+and **Red oak 304** is in the sheet with no county or acreage and needs a
+human decision on whether it is real.
+
+## 8. The lesson worth encoding
 
 Every one of the top failures is the same: a cheap string heuristic wired to an
 irreversible delete, with no date sanity check and no alarm when a source goes quiet. The
 durable fix is not better heuristics — it is (a) archive as a flag, never a `DELETE`,
 (b) the sale date outranks page text, and (c) a source that yields zero this week when it
-yielded ten last week should page someone. Ship those three and the next class of this bug
-gets caught by us instead of by Todd.
+yielded ten last week should page someone.
+
+(b) shipped today as the future-date backstop, and (c) is half-shipped — the data and the
+query exist (`silentSources`), but nothing pages anyone yet; you still have to ask. (a) is
+untouched and is now the highest-value item on the list, because it is what converts every
+future heuristic bug from silent data loss into a visible mistake.
+
+The measure of success is not that today's bugs are fixed. It is that the next one gets
+caught by us instead of by Todd.
