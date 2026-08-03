@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { auctions, archivedAuctions } from "@shared/schema";
 import { and, lt, eq, inArray, or, isNull } from "drizzle-orm";
+import { SOLD_PHRASES } from "./auctionScraper.js";
 
 export class AuctionArchiverService {
   private intervalId: NodeJS.Timeout | null = null;
@@ -130,12 +131,12 @@ export class AuctionArchiverService {
         // Category 2: Explicitly marked as sold by scraper
         const isMarkedSold = auction.status === 'sold';
         
-        // Category 3: AI-enriched data indicates sold
+        // Category 3: AI-enriched data indicates sold.
+        // Uses the same narrow past-tense matcher as the scraper — the old
+        // `.includes('sold')` fired on enriched prose describing a sale that
+        // had not been held yet.
         const aiDetectedSold = auction.enrichmentStatus === 'completed' && (
-          // Check enriched description for sold indicators
-          auction.enrichedDescription?.toLowerCase().includes('sold') ||
-          auction.enrichedDescription?.toLowerCase().includes('sale closed') ||
-          auction.enrichedDescription?.toLowerCase().includes('auction closed') ||
+          SOLD_PHRASES.test(auction.enrichedDescription ?? '') ||
           auction.enrichedDescription?.toLowerCase().includes('contract pending') ||
           // Check if possession date is in the past (property already transferred)
           (auction.possession?.toLowerCase().includes('immediate') && isPastDate)
@@ -144,6 +145,14 @@ export class AuctionArchiverService {
         // Category 4: Non-farm properties
         const isNonFarmProperty = isNonFarm(auction);
         
+        // A sale that has not been held yet cannot be archived as sold. Categories
+        // 2 and 3 both trace back to text heuristics, and archiving here is a hard
+        // DELETE — that combination removed 2,584 auctions whose sale date was
+        // still in the future. The date is the authority; the page text is not.
+        const isFutureDated =
+          !!auction.auctionDate && new Date(auction.auctionDate) >= cutoffDate;
+        if ((isMarkedSold || aiDetectedSold) && isFutureDated) return false;
+
         return (isPastDate || isMarkedSold || aiDetectedSold || isNonFarmProperty) && auction.status !== 'archived';
       });
 

@@ -1011,11 +1011,27 @@ api.get("/auctions", async (c) => {
       const futureDate = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
       conditions.push(lte(auctions.auctionDate, futureDate));
     }
+    // Only upcoming auctions belong on the map. Rows whose date never parsed are
+    // kept visible (needsDateReview backfills them); rows with a known past date
+    // are not. Without this, expired rows sort first under `auction_date ASC` and
+    // consume the whole row limit before a single upcoming auction is reached.
+    conditions.push(
+      sql`(${auctions.auctionDate} IS NULL OR ${auctions.auctionDate} >= CURRENT_DATE)`,
+    );
+    // The viewport is filtered in SQL, before the limit. It used to be applied in
+    // JS afterwards, which meant the limit truncated the result set before the
+    // map's bounds were ever considered — so panning could not recover a row.
+    const bbox = sql`(${auctions.latitude} BETWEEN ${parseFloat(minLat)} AND ${parseFloat(maxLat)} AND ${auctions.longitude} BETWEEN ${parseFloat(minLon)} AND ${parseFloat(maxLon)})`;
+    conditions.push(
+      includeWithoutCoords === "true"
+        ? sql`(${auctions.latitude} IS NULL OR ${auctions.longitude} IS NULL OR ${bbox})`
+        : bbox,
+    );
 
     const auctionList = await db.query.auctions.findMany({
       where: and(...conditions),
       orderBy: [asc(auctions.auctionDate)],
-      limit: 200,
+      limit: 2000,
     });
 
     let filteredAuctions = auctionList;
@@ -1039,15 +1055,7 @@ api.get("/auctions", async (c) => {
         (a) => !a.estimatedValue || a.estimatedValue <= parseFloat(maxValue),
       );
     }
-    filteredAuctions = filteredAuctions.filter((a) => {
-      if (!a.latitude || !a.longitude) return includeWithoutCoords === "true";
-      return (
-        a.latitude >= parseFloat(minLat) &&
-        a.latitude <= parseFloat(maxLat) &&
-        a.longitude >= parseFloat(minLon) &&
-        a.longitude <= parseFloat(maxLon)
-      );
-    });
+    // Viewport filtering now happens in SQL above, before the row limit.
     if (landTypes && landTypes.length > 0) {
       filteredAuctions = filteredAuctions.filter(
         (a) => a.landType && landTypes.includes(a.landType),
