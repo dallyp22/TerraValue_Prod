@@ -100,7 +100,13 @@ export default function MapCentricHome() {
     showCityLabels: true,
     showHighways: true,
     showStreetLabels: true,
-    showPortfolioPins: true
+    showPortfolioPins: true,
+    showHeistandFarms: false,
+    heistandConfidence: {
+      high: true,
+      medium: true,
+      low: true
+    }
   });
 
   // Sync auction layer visibility with map overlays
@@ -543,6 +549,8 @@ export default function MapCentricHome() {
           showHighways={mapOverlays.showHighways}
           showStreetLabels={mapOverlays.showStreetLabels}
           showPortfolioPins={mapOverlays.showPortfolioPins}
+          showHeistandFarms={mapOverlays.showHeistandFarms}
+          heistandConfidence={mapOverlays.heistandConfidence}
           pinsGeoJSON={pinsGeoJSON}
           pinDropMode={pinDropMode}
           selectedPinCategory={selectedPinCategory}
