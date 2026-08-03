@@ -9,6 +9,7 @@ import { getCountyCentroid } from './iowaCountyCentroids.js';
 import { scraperDiagnosticsService } from './scraperDiagnostics.js';
 import { DateExtractorService } from './dateExtractor.js';
 import { enrichmentQueue } from './enrichmentQueue.js';
+import { getRuntime, getRunId } from './scrapeContext.js';
 
 // Scraper statistics interface for diagnostics
 export interface ScraperStats {
@@ -779,7 +780,12 @@ export class AuctionScraperService {
 
     // Insert or update auction
     try {
+      const capturedBy = getRuntime();
+      const capturedRun = getRunId();
       const result = await db.insert(auctions).values({
+        lastCapturedBy: capturedBy,
+        lastCapturedRun: capturedRun,
+        firstCapturedBy: capturedBy,
         title: auctionData.title,
         description: auctionData.description,
         url: auctionData.url,
@@ -824,6 +830,11 @@ export class AuctionScraperService {
           classificationConfidence: classification.confidence,
           classificationSource: 'keyword',
           classificationReason: classification.reason,
+          // firstCapturedBy is intentionally NOT updated — it records who found
+          // this listing originally, which is the number that matters when
+          // comparing runtimes.
+          lastCapturedBy: capturedBy,
+          lastCapturedRun: capturedRun,
           updatedAt: new Date()
         }
       }).returning();

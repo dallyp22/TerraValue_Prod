@@ -1164,6 +1164,64 @@ api.post("/auctions/refresh", async (c) => {
   }
 });
 
+/**
+ * Coverage scorecard. Answers "are we missing anything?" as a query instead of
+ * waiting for a client to email — and makes the Node-vs-Queues parallel run
+ * measurable rather than a vibe.
+ */
+api.get("/scrape/coverage", async (c) => {
+  try {
+    const days = Math.min(parseInt(c.req.query("days") ?? "7", 10) || 7, 90);
+
+    // Per-source, per-runtime totals over the window.
+    const bySource = await db.execute(sql`
+      SELECT source_name,
+             runtime,
+             COUNT(DISTINCT run_id)::int          AS runs,
+             SUM(discovered)::int                 AS discovered,
+             SUM(saved)::int                      AS saved,
+             SUM(dropped)::int                    AS dropped,
+             SUM(failed)::int                     AS failed,
+             MAX(finished_at)                     AS last_run
+        FROM scrape_source_runs
+       WHERE started_at > now() - (${days} || ' days')::interval
+       GROUP BY source_name, runtime
+       ORDER BY source_name, runtime
+    `);
+
+    // Who actually found each live listing.
+    const attribution = await db.execute(sql`
+      SELECT COALESCE(first_captured_by, 'unattributed') AS runtime,
+             COUNT(*)::int AS auctions
+        FROM auctions
+       WHERE status = 'active'
+       GROUP BY 1 ORDER BY 2 DESC
+    `);
+
+    // Sources that produced nothing on their most recent run — the signal that
+    // a scraper has silently broken, which nothing used to surface.
+    const silent = await db.execute(sql`
+      SELECT DISTINCT ON (source_name, runtime) source_name, runtime, saved, discovered, finished_at
+        FROM scrape_source_runs
+       WHERE started_at > now() - (${days} || ' days')::interval
+       ORDER BY source_name, runtime, started_at DESC
+    `);
+    const silentRows = (silent.rows as any[]).filter((r) => Number(r.saved) === 0);
+
+    return c.json({
+      success: true,
+      windowDays: days,
+      bySource: bySource.rows,
+      attribution: attribution.rows,
+      silentSources: silentRows,
+      silentCount: silentRows.length,
+    });
+  } catch (error) {
+    console.error("Coverage query error:", error);
+    return c.json({ success: false, message: "Failed to compute coverage" }, 500);
+  }
+});
+
 api.get("/auctions/scrape-progress", async (c) => {
   try {
     const progress = auctionScraperService.getScrapeProgress();

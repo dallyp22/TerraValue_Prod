@@ -27,6 +27,63 @@
  */
 import type { Env } from './env';
 import { auctionScraperService } from '../../server/services/auctionScraper';
+import { setScrapeContext } from '../../server/services/scrapeContext';
+import { db } from '../../server/db';
+import { scrapeSourceRuns } from '@shared/schema';
+import { sql as dsql } from 'drizzle-orm';
+
+/**
+ * Record what a source actually produced. Upserted on (run_id, runtime,
+ * source_name) so a retried message corrects its row instead of double-counting.
+ */
+async function recordSourceRun(row: {
+  runId: string;
+  sourceName: string;
+  discovered?: number;
+  queued?: number;
+  dropped?: number;
+  saved?: number;
+  failed?: number;
+  error?: string;
+}): Promise<void> {
+  try {
+    await db
+      .insert(scrapeSourceRuns)
+      .values({
+        runId: row.runId,
+        runtime: 'cloudflare-queue',
+        sourceName: row.sourceName,
+        discovered: row.discovered ?? 0,
+        queued: row.queued ?? 0,
+        dropped: row.dropped ?? 0,
+        saved: row.saved ?? 0,
+        failed: row.failed ?? 0,
+        finishedAt: new Date(),
+        error: row.error,
+      })
+      .onConflictDoUpdate({
+        target: [scrapeSourceRuns.runId, scrapeSourceRuns.runtime, scrapeSourceRuns.sourceName],
+        set: {
+          // Discovery counts are written once by the source consumer; the detail
+          // consumer then upserts the same row carrying zeros for them. Taking
+          // the max keeps those zeros from erasing the real figures — plain
+          // assignment here reported "discovered 0, saved 9", which reads as a
+          // broken source.
+          discovered: dsql`GREATEST(${scrapeSourceRuns.discovered}, excluded.discovered)`,
+          queued: dsql`GREATEST(${scrapeSourceRuns.queued}, excluded.queued)`,
+          dropped: dsql`GREATEST(${scrapeSourceRuns.dropped}, excluded.dropped)`,
+          // Saves and failures genuinely accumulate across detail batches.
+          saved: dsql`${scrapeSourceRuns.saved} + excluded.saved`,
+          failed: dsql`${scrapeSourceRuns.failed} + excluded.failed`,
+          finishedAt: new Date(),
+          error: dsql`COALESCE(excluded.error, ${scrapeSourceRuns.error})`,
+        },
+      });
+  } catch (err) {
+    // Telemetry must never break a scrape.
+    console.error('⚠️  telemetry write failed:', err instanceof Error ? err.message : err);
+  }
+}
 
 export type SourceMessage = { kind: 'source'; name: string; url: string; searchPath?: string; runId: string };
 export type DetailMessage = { kind: 'detail'; url: string; sourceName: string; runId: string };
@@ -77,6 +134,7 @@ export async function handleSourceBatch(
 ): Promise<void> {
   for (const msg of batch.messages) {
     const { name, url, searchPath, runId } = msg.body;
+    setScrapeContext({ runtime: 'cloudflare-queue', runId });
     try {
       const { urls, discovered, dropped } = await auctionScraperService.discoverUrlsForSource(
         { name, url, searchPath },
@@ -87,6 +145,7 @@ export async function handleSourceBatch(
       }
       if (urls.length === 0) {
         console.log(`   ${name}: no URLs discovered`);
+        await recordSourceRun({ runId, sourceName: name, discovered, dropped });
         msg.ack();
         continue;
       }
@@ -95,9 +154,12 @@ export async function handleSourceBatch(
         urls.map((u) => ({ kind: 'detail', url: u, sourceName: name, runId })),
       );
       console.log(`   ${name}: discovered ${discovered}, queued ${urls.length}`);
+      await recordSourceRun({ runId, sourceName: name, discovered, queued: urls.length, dropped });
       msg.ack();
     } catch (err) {
-      console.error(`❌ discovery failed for ${name}:`, err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`❌ discovery failed for ${name}:`, message);
+      await recordSourceRun({ runId, sourceName: name, error: message });
       msg.retry();
     }
   }
@@ -114,15 +176,28 @@ export async function handleDetailBatch(
   batch: MessageBatch<DetailMessage>,
   env: Env,
 ): Promise<void> {
+  // Tally per source so one telemetry write covers the whole batch.
+  const tally = new Map<string, { runId: string; saved: number; failed: number }>();
+
   for (const msg of batch.messages) {
-    const { url, sourceName } = msg.body;
+    const { url, sourceName, runId } = msg.body;
+    setScrapeContext({ runtime: 'cloudflare-queue', runId });
+    const t = tally.get(sourceName) ?? { runId, saved: 0, failed: 0 };
     try {
-      await auctionScraperService.scrapeSpecificUrl(url, sourceName);
+      const result = await auctionScraperService.scrapeSpecificUrl(url, sourceName);
+      if (result) t.saved++;
       msg.ack();
     } catch (err) {
+      t.failed++;
       console.error(`❌ detail failed ${url}:`, err instanceof Error ? err.message : err);
       msg.retry();
     }
+    tally.set(sourceName, t);
+  }
+
+  for (const sourceName of Array.from(tally.keys())) {
+    const t = tally.get(sourceName)!;
+    await recordSourceRun({ runId: t.runId, sourceName, saved: t.saved, failed: t.failed });
   }
 }
 
@@ -137,7 +212,8 @@ export async function handleEnrichBatch(
   env: Env,
 ): Promise<void> {
   for (const msg of batch.messages) {
-    const { auctionId } = msg.body;
+    const { auctionId, runId } = msg.body;
+    setScrapeContext({ runtime: 'cloudflare-queue', runId });
     try {
       await auctionScraperService.calculateValuation(auctionId);
       msg.ack();

@@ -144,8 +144,42 @@ export const auctions = pgTable("auctions", {
   enrichmentStatus: text("enrichment_status").default("pending"), // "pending", "processing", "completed", "failed"
   enrichedAt: timestamp("enriched_at"),
   enrichmentVersion: text("enrichment_version").default("v1"), // Track enrichment algorithm version
-  enrichmentError: text("enrichment_error")
+  enrichmentError: text("enrichment_error"),
+
+  // Capture attribution — which runtime found this listing. Both the Node
+  // process and the Cloudflare queue pipeline upsert the same rows, so without
+  // this a parallel run cannot be measured, only guessed at.
+  lastCapturedBy: text("last_captured_by"),   // "cloudflare-queue" | "node"
+  lastCapturedRun: text("last_captured_run"), // run id
+  firstCapturedBy: text("first_captured_by")  // set once, never overwritten
 });
+
+/**
+ * Per-(run, source) scrape telemetry.
+ *
+ * The pre-existing scraperDiagnostics writes a local JSONL file and disables
+ * itself when there is no filesystem, so the Cloudflare runtime recorded
+ * nothing at all — which is why a scrape capturing 0.8% of its target looked
+ * healthy on every dashboard. This lives in the database so both runtimes
+ * report, and so "which source went quiet this week" is a query.
+ */
+export const scrapeSourceRuns = pgTable("scrape_source_runs", {
+  id: serial("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  runtime: text("runtime").notNull(), // "cloudflare-queue" | "node"
+  sourceName: text("source_name").notNull(),
+  discovered: integer("discovered").notNull().default(0),
+  queued: integer("queued").notNull().default(0),
+  dropped: integer("dropped").notNull().default(0),
+  saved: integer("saved").notNull().default(0),
+  failed: integer("failed").notNull().default(0),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  error: text("error"),
+});
+
+export type ScrapeSourceRun = typeof scrapeSourceRuns.$inferSelect;
+export type InsertScrapeSourceRun = typeof scrapeSourceRuns.$inferInsert;
 
 // Scraper Schedule Settings - Configure automatic scraping
 export const scraperSettings = pgTable("scraper_settings", {

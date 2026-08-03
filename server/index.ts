@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { cleanupOpenAI, openaiService } from "./services/openai";
 import { AuctionArchiverService } from "./services/auctionArchiver";
 import { automaticScraperService } from "./services/automaticScraper";
+import { setScrapeContext } from "./services/scrapeContext";
 import { warmupServices } from "./warmup";
 
 const app = express();
@@ -126,6 +127,11 @@ app.use((req, res, next) => {
   // Start auction archiver service (runs daily to clean up past auctions)
   const archiverService = new AuctionArchiverService();
   archiverService.start();
+
+  // Tag everything this process captures as 'node', so the Cloudflare-vs-Node
+  // parallel run is measurable rather than inferred. Both runtimes upsert the
+  // same `auctions` rows; without this you cannot tell which one found what.
+  setScrapeContext({ runtime: 'node', runId: `node_${Date.now()}` });
 
   // Start automatic scraper service (runs on schedule if enabled)
   automaticScraperService.start();
