@@ -8,9 +8,48 @@
     "enabled": true
   },
   "triggers": {
-    "crons": [
-      "0 9 * * *",
-      "0 * * * *"
+    // 09:00 UTC — daily archiver.
+    // 06:00 UTC (~01:00 CST) — enqueue a scrape run. Producer only; the work
+    // itself happens in the queue consumers below, each with its own budget.
+    // The old hourly "0 * * * *" scraper check is gone — see src/index.ts for why.
+    "crons": ["0 9 * * *", "0 6 * * *"]
+  },
+  "queues": {
+    "producers": [
+      { "binding": "SCRAPE_SOURCES", "queue": "tv-scrape-sources" },
+      { "binding": "SCRAPE_DETAILS", "queue": "tv-scrape-details" },
+      { "binding": "ENRICH", "queue": "tv-enrich" }
+    ],
+    "consumers": [
+      {
+        // One source per message: discovery is a handful of Firecrawl calls.
+        // Small batches keep each invocation well inside its subrequest budget.
+        "queue": "tv-scrape-sources",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "max_concurrency": 4,
+        "dead_letter_queue": "tv-dlq"
+      },
+      {
+        // One listing per message. Concurrency is capped well below Firecrawl's
+        // rate limit — the point is steady throughput, not a thundering herd.
+        "queue": "tv-scrape-details",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "max_concurrency": 8,
+        "dead_letter_queue": "tv-dlq"
+      },
+      {
+        // Enrichment is OpenAI-bound and slower; keep batches small.
+        "queue": "tv-enrich",
+        "max_batch_size": 3,
+        "max_batch_timeout": 60,
+        "max_retries": 2,
+        "max_concurrency": 4,
+        "dead_letter_queue": "tv-dlq"
+      }
     ]
   }
 }

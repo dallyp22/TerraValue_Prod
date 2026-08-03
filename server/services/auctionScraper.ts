@@ -64,6 +64,17 @@ const auctionSchema = {
 export const SOLD_PHRASES =
   /\b(?:has\s+been\s+sold|have\s+been\s+sold|was\s+sold|were\s+sold|sold\s+for|sold\s+on|now\s+sold|already\s+sold|auction\s+(?:has\s+)?(?:closed|ended|concluded)|sale\s+(?:has\s+)?(?:closed|ended|concluded)|bidding\s+(?:has\s+)?closed|no\s+longer\s+available)\b/i;
 
+/**
+ * Non-listing junk to drop during URL discovery: nav, social, assets.
+ *
+ * Deliberately does NOT filter on "iowa" tokens — Iowa-ness is decided later
+ * from the parsed listing state, not by guessing at the URL string.
+ */
+export const JUNK_URL = /(facebook|twitter|instagram|linkedin|youtube|mailto:|tel:|\.(?:jpg|jpeg|png|gif|svg|pdf|css|js)(?:$|\?)|\/(?:about|contact|privacy|terms|login|cart|wp-admin|wp-login)\b)/i;
+
+/** URLs that look Iowa-ish get ordered first. Cheap heuristic; never drops. */
+const looksIowaUrl = (url: string) => /(-ia\b|_ia_|\biowa\b)/i.test(url);
+
 export class AuctionScraperService {
   // Stats from last scrape run
   private lastScrapeStats: ScraperStats[] = [];
@@ -231,6 +242,81 @@ export class AuctionScraperService {
   }
 
   // Manually scrape a specific auction URL (useful for adding missed auctions)
+  /**
+   * The configured sources, for the queue producer to fan out over.
+   *
+   * Includes the LandWatch listing pages as synthetic sources so they get their
+   * own queue message instead of riding along inside one giant invocation.
+   */
+  getSourceList(): Array<{ name: string; url: string; searchPath?: string }> {
+    return [
+      ...this.sources,
+      ...this.landWatchPages.map((url, i) => ({ name: `LandWatch Page ${i + 1}`, url })),
+    ];
+  }
+
+  /**
+   * Discovery half of a source scrape: find candidate listing URLs, no detail
+   * fetching and no DB writes.
+   *
+   * Split out so the queue path can run discovery for ONE source per
+   * invocation, then fan the URLs out as individual messages. `scrapeSingleSource`
+   * still does discovery inline for the long-running Node path; both call the
+   * same Firecrawl strategies, so behaviour cannot drift between runtimes.
+   *
+   * @param cap Max URLs to return. The in-process path uses 60 because every
+   *   extra URL costs it subrequests inside one invocation. The queue path can
+   *   afford far more, since each URL becomes its own invocation with its own
+   *   budget — this cap is the single biggest coverage lever we have.
+   */
+  async discoverUrlsForSource(
+    source: { name: string; url: string; searchPath?: string },
+    cap = 250,
+  ): Promise<{ urls: string[]; discovered: number; dropped: number }> {
+    const searchUrl = source.searchPath ? `${source.url}${source.searchPath}` : source.url;
+    const candidates = new Set<string>();
+
+    // Strategy 1: Map API (static link discovery).
+    try {
+      const mapResult = await firecrawlService.map(searchUrl, 'auction');
+      for (const item of (mapResult.links || mapResult.urls || [])) {
+        const u = typeof item === 'string' ? item : (item && item.url);
+        if (u) candidates.add(u);
+      }
+    } catch (error) {
+      console.log(`    ⚠️  Map failed: ${error instanceof Error ? error.message : 'unknown'}`);
+    }
+
+    // Strategy 2: render-aware listing extraction — always merged, because many
+    // auctioneer sites render their listing grid via JS and Map sees only the shell.
+    try {
+      const listingResult = await firecrawlService.scrapeListingUrls(searchUrl);
+      for (const u of (listingResult.listing_urls || [])) {
+        if (typeof u === 'string' && u) candidates.add(u);
+      }
+    } catch {
+      console.log(`    ⚠️  Listing extraction failed`);
+    }
+
+    // Strategy 3: web search, only if the first two found nothing.
+    if (candidates.size === 0) {
+      try {
+        const searchResult = await firecrawlService.search(`${source.name} land auction Iowa`);
+        for (const r of (searchResult.data || [])) if (r?.url) candidates.add(r.url);
+      } catch {
+        console.log(`    ⚠️  Search also failed`);
+      }
+    }
+
+    const clean = Array.from(candidates).filter(
+      (u) => /^https?:\/\//i.test(u) && !JUNK_URL.test(u),
+    );
+    const prioritized = [...clean.filter(looksIowaUrl), ...clean.filter((u) => !looksIowaUrl(u))];
+    const urls = prioritized.slice(0, cap);
+
+    return { urls, discovered: clean.length, dropped: Math.max(0, prioritized.length - urls.length) };
+  }
+
   async scrapeSpecificUrl(url: string, sourceName?: string) {
     console.log(`\n🔍 Manually scraping auction: ${url}\n`);
     

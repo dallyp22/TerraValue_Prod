@@ -23,6 +23,7 @@ import { comparablesService } from "../../../server/services/comparables";
 import { cornPriceService } from "../../../server/services/cornPrice";
 import { soilPropertiesService } from "../../../server/services/soilProperties";
 import { mukeyLookupService } from "../../../server/services/mukeyLookup";
+import { enqueueScrapeRun } from "../queues";
 import { parcelAggregationService } from "../../../server/services/parcelAggregation";
 import { auctionParcelExtractor } from "../../../server/services/auctionParcelExtractor";
 import { getCountyCentroid } from "../../../server/services/iowaCountyCentroids";
@@ -1141,21 +1142,21 @@ api.get("/auctions/count", async (c) => {
 
 api.post("/auctions/refresh", async (c) => {
   try {
-    // Long-running task — let it complete in the background after we respond.
-    c.executionCtx.waitUntil(
-      auctionScraperService
-        .scrapeAllSources()
-        .then((results) =>
-          console.log(`✅ Background scraping completed: ${results.length} auctions`),
-        )
-        .catch((error) =>
-          console.error("❌ Background scraping failed:", error),
-        ),
-    );
+    // Enqueue rather than scrape inline. Calling scrapeAllSources() here ran the
+    // whole 51-source crawl inside one invocation, which exhausted the subrequest
+    // budget after one or two sources and then failed silently — so this button
+    // reported success while capturing almost nothing. Now it fans the run out
+    // across the queue pipeline, where each source and listing gets its own budget.
+    const runId = `manual_${Date.now()}`;
+    // ?limit=N enqueues only the first N sources — for verifying the pipeline
+    // without paying for a full ~1,400-page crawl.
+    const limit = parseInt(c.req.query("limit") ?? "", 10);
+    const queued = await enqueueScrapeRun(c.env, runId, Number.isFinite(limit) ? limit : undefined);
     return c.json({
       success: true,
-      message:
-        "Auction scraping started in background. This may take several minutes.",
+      runId,
+      sourcesQueued: queued,
+      message: `Scrape run ${runId} queued across ${queued} sources. Progress appears in the queue consumers.`,
     });
   } catch (error) {
     console.error("Auction scraping trigger error:", error);
