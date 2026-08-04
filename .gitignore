@@ -31,3 +31,7 @@ logs/
 
 # OS
 Thumbs.db/api/index.js
+
+# Claude Code — machine-local permissions (deploy rights are per-machine and
+# per-Cloudflare-account; committing them would grant them to anyone who clones)
+.claude/settings.local.json

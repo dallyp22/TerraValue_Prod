@@ -66,6 +66,17 @@ const NON_LAND = [
   "auto auction", "car auction", "truck auction", "machinery auction", "consignment",
   "tools", "furniture", "liquidation sale", "moving sale", "benefit auction",
   "livestock", "cattle sale", "feeder cattle", "hog sale", "sheep sale", "poultry",
+
+  // Bare implement and vehicle titles. Individual lots from item-level pages
+  // (bid.dreamdirt.com/auction/{id}/item/..., HiBid catalogues) arrive titled
+  // "2022 John Deere S780 2WD Combine" with no auction-level wording, so none of
+  // the phrases above catch them and they landed on the land map as `unknown`.
+  // Safe to list bare terms here because this rule only fires when there is NO
+  // land signal — a combined land-and-equipment sale still classifies as land.
+  "combine", "tractor", "skid steer", "skidloader", "planter", "ripper", "rippers",
+  "disk", "disks", "disc mower", "mower", "baler", "sprayer", "grain cart", "auger",
+  "hay rake", "manure spreader", "atv", "utv", "four wheeler", "semi trailer",
+  "pickup", "flatbed", "backhoe", "excavator", "forklift", "snowblower",
 ];
 
 // Strong land signals (this IS real property).
@@ -79,8 +90,37 @@ const RESIDENTIAL = ["residential lot", "single family", "home on", "house and",
 const COMMERCIAL = ["commercial building", "commercial lot", "commercial property", "retail", "warehouse", "office building"];
 const DEVELOPMENT = ["development ground", "development land", "subdivision", "building lots"];
 
+/**
+ * Keyword matching with word boundaries.
+ *
+ * This used to be a bare `text.includes(k)`, which put farm equipment on the
+ * land map: "deer" in the recreational list matched "John **Deer**e", so a
+ * 2022 John Deere S780 combine classified as recreational land with 0.7
+ * confidence. Every listing titled after a Deere implement went the same way.
+ *
+ * Boundaries are applied only where the keyword actually starts/ends on a word
+ * character, so entries like " ac." and "m/l" still match — a trailing \b after
+ * "." can never match and would silently kill those rules.
+ */
+const KEYWORD_PATTERNS = new Map<string, RegExp>();
+
+function keywordPattern(keyword: string): RegExp {
+  let re = KEYWORD_PATTERNS.get(keyword);
+  if (!re) {
+    const body = keyword
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // escape regex metacharacters
+      .replace(/\s+/g, "\\s+");               // tolerate variable whitespace
+    const lead = /^\w/.test(keyword.trim()) ? "\\b" : "";
+    const tail = /\w$/.test(keyword.trim()) ? "\\b" : "";
+    re = new RegExp(`${lead}${body}${tail}`, "i");
+    KEYWORD_PATTERNS.set(keyword, re);
+  }
+  return re;
+}
+
 function hasAny(text: string, kws: string[]): boolean {
-  return kws.some((k) => text.includes(k));
+  return kws.some((k) => keywordPattern(k).test(text));
 }
 
 export function classifyAuction(a: ClassifiableAuction): ClassificationResult {

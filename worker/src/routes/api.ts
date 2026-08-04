@@ -971,6 +971,39 @@ api.get("/auctions/all", async (c) => {
   }
 });
 
+/**
+ * Iowa-only predicate for map-facing queries.
+ *
+ * Mirrors `isIowaListing()` in auctionScraper.ts; keep them in step.
+ *
+ * `state` alone is NOT sufficient — the extractor fills it with nonsense often
+ * enough to hide real auctions. Production holds "227.88+/- Acres Winneshiek
+ * County, IA" marked Texas, "701 N 12TH ST, CLARINDA, IA" marked Pennsylvania,
+ * and a Pacific Junction farm marked Massachusetts. So an explicit Iowa token in
+ * the title or URL overrides a wrong state field.
+ *
+ * County name is deliberately NOT a signal. It looks helpful and is a trap:
+ * Benton, Union, Henry, Hancock, Crawford, Greene, Lincoln, Marshall and Mercer
+ * all exist in Iowa AND elsewhere, so matching on county kept "Benton County, MN
+ * Land Auction" and three Missouri listings. Every genuinely-Iowa row with a
+ * wrong state field was verified to also carry an Iowa token in its URL
+ * (/land/iowa/, -ia-50213, pacific-junction-ia), so dropping the county clause
+ * costs nothing and removes 98 false keeps.
+ *
+ * A NULL state is kept. Unknown is not the same as elsewhere.
+ */
+function iowaOnly() {
+  return sql`(
+       lower(trim(coalesce(${auctions.state}, ''))) IN ('ia','iowa','ia.')
+    OR lower(coalesce(${auctions.state}, '')) LIKE '%iowa%'
+    OR ${auctions.state} IS NULL
+    OR ${auctions.title} ILIKE '%iowa%'
+    OR ${auctions.url} ILIKE '%iowa%'
+    OR ${auctions.title} ~* ',\\s*IA\\M'
+    OR ${auctions.url} ~* '-ia[-/]'
+  )`;
+}
+
 api.get("/auctions", async (c) => {
   try {
     const minLat = c.req.query("minLat");
@@ -1019,6 +1052,7 @@ api.get("/auctions", async (c) => {
     conditions.push(
       sql`(${auctions.auctionDate} IS NULL OR ${auctions.auctionDate} >= CURRENT_DATE)`,
     );
+    conditions.push(iowaOnly());
     // The viewport is filtered in SQL, before the limit. It used to be applied in
     // JS afterwards, which meant the limit truncated the result set before the
     // map's bounds were ever considered — so panning could not recover a row.
@@ -1099,6 +1133,9 @@ api.get("/auctions/count", async (c) => {
     // Exclude non-land listings (equipment/personal-property/etc.); keep nulls
     // (un-backfilled rows) visible.
     conditions.push(sql`(${auctions.propertyCategory} IS NULL OR ${auctions.propertyCategory} <> 'non_land')`);
+    // Iowa only — same helper as GET /auctions, or the count disagrees with the
+    // map and every filter reads as broken.
+    conditions.push(iowaOnly());
     if (minAcreage)
       conditions.push(gte(auctions.acreage, parseFloat(minAcreage)));
     if (maxAcreage)

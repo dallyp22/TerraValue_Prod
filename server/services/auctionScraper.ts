@@ -70,11 +70,83 @@ export const SOLD_PHRASES =
  *
  * Deliberately does NOT filter on "iowa" tokens — Iowa-ness is decided later
  * from the parsed listing state, not by guessing at the URL string.
+ *
+ * `.pdf` is NOT in the asset list, deliberately. It was added on 2026-06-07 and
+ * closed a real ingestion path: many Iowa auctioneers publish the sale bill as a
+ * PDF with no HTML detail page, and 3,631 rows in `archived_auctions` have .pdf
+ * URLs from before that change. Two of the four auctions a client reported
+ * missing were PDF sale bills (Osborn's Wilwerding bill, Denison's Kenkel bill).
+ * Firecrawl extracts PDFs fine; a PDF that yields no title simply is not saved,
+ * which is the same outcome the filter was reaching for but without the
+ * collateral damage.
  */
-export const JUNK_URL = /(facebook|twitter|instagram|linkedin|youtube|mailto:|tel:|\.(?:jpg|jpeg|png|gif|svg|pdf|css|js)(?:$|\?)|\/(?:about|contact|privacy|terms|login|cart|wp-admin|wp-login)\b)/i;
+export const JUNK_URL = /(facebook|twitter|instagram|linkedin|youtube|mailto:|tel:|\.(?:jpg|jpeg|png|gif|svg|css|js)(?:$|\?)|\/(?:about|contact|privacy|terms|login|cart|wp-admin|wp-login)\b)/i;
 
 /** URLs that look Iowa-ish get ordered first. Cheap heuristic; never drops. */
 const looksIowaUrl = (url: string) => /(-ia\b|_ia_|\biowa\b)/i.test(url);
+
+/**
+ * Is this listing's state Iowa?
+ *
+ * Returns `null` for "cannot tell" — that case is deliberately distinct from
+ * `false`. Several of our sources are national aggregators (Land.com, LandWatch,
+ * BigIron) whose Iowa search pages return listings from everywhere: the live
+ * table holds active auctions in Texas, Alabama, New York and Saskatchewan.
+ * Those cost us enrichment, geocoding and CSR2 lookups, and CSR2 is an Iowa
+ * soil rating that means nothing outside the state.
+ *
+ * Unknown must NOT be treated as non-Iowa. Dropping rows we merely failed to
+ * parse is the exact failure mode that hid auctions from clients all day — a
+ * confident "Texas" is a reason to skip; a blank is a reason to keep and flag.
+ */
+export function isIowaState(raw: string | null | undefined): boolean | null {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (s === 'ia' || s === 'iowa' || s === 'ia.' || s === 'us-ia') return true;
+  // A multi-state listing that includes Iowa still counts (e.g. "Iowa/Missouri").
+  if (/\biowa\b/.test(s)) return true;
+  return false;
+}
+
+/**
+ * Is this listing in Iowa, judged on every signal we have?
+ *
+ * `state` ALONE IS NOT TRUSTWORTHY and must never be the sole test. The LLM
+ * extractor fills it with nonsense on a regular basis — production currently
+ * holds "227.88+/- Acres Winneshiek County, IA" marked Texas, an Appanoose
+ * County farm marked Washington, and a Pacific Junction (Mills County) farm
+ * marked Massachusetts. Filtering on `state` by itself would hide dozens of
+ * genuine Iowa auctions, which is the same class of bug as the `sold` substring
+ * and the map's row window: a confident-looking rule quietly deleting real work.
+ *
+ * So: drop a listing only when its state is confidently some other state AND
+ * nothing else points at Iowa. County name, title and URL are all cheaper to
+ * extract than `state` and in practice far more reliable.
+ *
+ * Returns null when nothing is decisive — keep those and let a human look.
+ */
+export function isIowaListing(a: {
+  state?: string | null;
+  county?: string | null;
+  title?: string | null;
+  url?: string | null;
+}): boolean | null {
+  if (isIowaState(a.state) === true) return true;
+
+  // County name is deliberately NOT a signal. It looks helpful and is a trap:
+  // Benton, Union, Henry, Hancock, Crawford, Greene, Lincoln, Marshall and
+  // Mercer all exist in Iowa AND elsewhere. Matching on county kept "Benton
+  // County, MN Land Auction" and three Missouri listings, and every genuinely
+  // Iowa row with a wrong state field was verified to also carry an Iowa token
+  // in its URL — so the county clause cost 98 false keeps and saved nothing.
+
+  const text = `${a.title ?? ''} ${a.url ?? ''}`;
+  if (/\biowa\b/i.test(text) || /,\s*ia\b/i.test(text) || /-ia[-/]/i.test(text) || /\bia\s+\d{5}\b/i.test(text)) {
+    return true;
+  }
+
+  return isIowaState(a.state) === false ? false : null;
+}
 
 export class AuctionScraperService {
   // Stats from last scrape run
@@ -358,9 +430,15 @@ export class AuctionScraperService {
         console.log(`     Acreage: ${auctionData.acreage || 'N/A'}`);
         console.log(`     Date: ${auctionData.auction_date || 'N/A'}\n`);
         
-        await this.saveAuction(auctionData);
+        const saved = await this.saveAuction(auctionData);
+        if (!saved) {
+          // Skipped (out of state). Return null so the queue consumer's `saved`
+          // tally stays honest — a skip is not a save, and the coverage
+          // scorecard is only useful if its numbers mean what they say.
+          return null;
+        }
         console.log(`  ✅ Auction saved to database!\n`);
-        
+
         return auctionData;
       } else {
         console.log(`  ❌ No data could be extracted from this URL\n`);
@@ -618,8 +696,25 @@ export class AuctionScraperService {
     
     // Extract county and state from address or use provided values
     county = auctionData.county;
+
+    // Out-of-state listings stop here, BEFORE we spend anything on them.
+    // Everything below this line costs money — geocoding calls, then enrichment
+    // and a CSR2 valuation on save. The national aggregators in our source list
+    // return listings from every state, and CSR2 is an Iowa soil rating that is
+    // meaningless elsewhere, so a Texas farm can never produce a usable number.
+    //
+    // Note this tests the RAW extracted value, not the defaulted one below:
+    // `state || 'Iowa'` turns "unknown" into "Iowa", and unknown must stay in.
+    // Only a confidently-parsed other state is skipped.
+    // Judged on state + county + title + URL together — `state` alone is wrong
+    // often enough to hide real Iowa auctions (see isIowaListing).
+    if (isIowaListing(auctionData) === false) {
+      console.log(`      ⤫ Skipping non-Iowa listing (${auctionData.state}): ${(auctionData.title || '').slice(0, 60)}`);
+      return null;
+    }
+
     state = auctionData.state || 'Iowa';
-    
+
     // Strategy 1: Try to geocode specific address
     if (auctionData.address) {
       try {
