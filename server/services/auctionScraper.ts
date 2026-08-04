@@ -167,6 +167,89 @@ export function isIowaState(raw: string | null | undefined): boolean | null {
 }
 
 /**
+ * Every US state except Iowa, for detecting an explicit contrary signal.
+ *
+ * Full names only. Two-letter codes are matched separately and ONLY in the
+ * ", XX" form, because bare abbreviations are ordinary English words — IN, OR,
+ * ME, OK, LA, MS, DE, PA and MT would all fire constantly on listing prose.
+ */
+const OTHER_STATE_NAMES = [
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut',
+  'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'kansas',
+  'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota',
+  'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey',
+  'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon',
+  'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas',
+  'utah', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming',
+];
+const OTHER_STATE_CODES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','KS','KY','LA',
+  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH',
+  'OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
+
+/**
+ * Does this text explicitly place the listing in a state that is not Iowa?
+ *
+ * ONLY matches a state in PLACE-NAME POSITION — "…County, Wisconsin", ", MN",
+ * "Rochester, MN". A bare mention of a state word is never enough, and that
+ * restriction is the whole design:
+ *
+ *   - "Missouri Valley" is a TOWN IN HARRISON COUNTY, IOWA — 18 active rows
+ *     mention it, in the county where the client's own farms are.
+ *   - "Missouri River" and "Mississippi River" are Iowa's borders and appear
+ *     constantly in Iowa sale bills ("Missouri River bottom ground").
+ *   - WASHINGTON COUNTY and DELAWARE COUNTY are real Iowa counties named after
+ *     states, as are Louisa, Union and Monroe elsewhere.
+ *
+ * A bare-word match dropped 43 rows currently judged Iowa, including those.
+ * Requiring the comma form costs a few genuine catches — "Central Washington
+ * Orchard" slips through — and that trade is deliberate: an out-of-state row on
+ * the map is visible and cheap, a hidden Iowa auction is neither.
+ */
+export function namesOtherState(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const names = OTHER_STATE_NAMES.join('|');
+  // ", Wisconsin" / "County, Missouri" — the place-name form.
+  if (new RegExp(`,\\s*(?:${names})\\b(?!\\s+(?:river|valley))`, 'i').test(text)) return true;
+  // "Nebraska Farmland" / "Wisconsin Land" — a state directly qualifying the
+  // property. Excludes the four names that collide with Iowa places, so
+  // "Washington County farmland" and "Missouri Valley acreage" stay put.
+  const IOWA_COLLIDING = new Set(['washington', 'delaware', 'missouri', 'mississippi']);
+  const safeNames = OTHER_STATE_NAMES.filter((n) => !IOWA_COLLIDING.has(n)).join('|');
+  if (new RegExp(`\\b(?:${safeNames})\\s+(?:farm|farmland|land|acres|acreage|cropland|timber|ranch)\\b`, 'i').test(text)) {
+    return true;
+  }
+  // ", WI" / ", MN" — the abbreviated place-name form.
+  //
+  // CASE-SENSITIVE, and English-word codes are excluded outright. Matched
+  // case-insensitively this fired on ordinary prose: "149.96 Taxable Acres,
+  // m/l, in Sec's 7 and 12" matched ", in" as Indiana and would have dropped
+  // three McCall Auctions listings in Monona County, Iowa. IN, OR, ME, OK, LA,
+  // MS, DE, PA, AL, HI, MA, ID, CO, NE, MT, OH and MO are all common words or
+  // abbreviations ("Mt.", "Co.", "Ms."); those states are still caught by name.
+  const AMBIGUOUS = new Set(['IN','OR','ME','OK','LA','MS','DE','PA','AL','HI','MA','ID','CO','NE','MT','OH','MO','AR','AK']);
+  const safeCodes = OTHER_STATE_CODES.filter((c) => !AMBIGUOUS.has(c)).join('|');
+  return new RegExp(`,\\s*(${safeCodes})\\b`).test(text);
+}
+
+/**
+ * A URL slug naming a non-Iowa state in a scoping position, e.g.
+ * /land-auction-waupaca-county-wisconsin-18764 or /minnesota-land-for-sale/.
+ *
+ * Same discipline as above: the state must be adjacent to a geographic marker,
+ * not merely present. `kiloterra.com/property/15-acres-of-prime-timber` must
+ * never match on an incidental word.
+ */
+export function urlNamesOtherState(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const path = decodeURIComponent(url).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  if (/-iowa-|-ia-/.test(`-${path}-`)) return false;
+  const names = OTHER_STATE_NAMES.map((n) => n.replace(/\s+/g, '-')).join('|');
+  return new RegExp(`-county-(?:${names})-|-(?:${names})-land-|/(?:${names})-|-(?:${names})-auctions?-`).test(`-${path}-`);
+}
+
+/**
  * Is this listing in Iowa, judged on every signal we have?
  *
  * `state` ALONE IS NOT TRUSTWORTHY and must never be the sole test. The LLM
@@ -461,7 +544,15 @@ export class AuctionScraperService {
     // credit and yields a phantom auction carrying the index page's acreage.
     const entryUrls = this.sourceEntryUrls();
     const clean = Array.from(candidates).filter(
-      (u) => /^https?:\/\//i.test(u) && !JUNK_URL.test(u) && !isIndexPageUrl(u, entryUrls),
+      (u) =>
+        /^https?:\/\//i.test(u) &&
+        !JUNK_URL.test(u) &&
+        !isIndexPageUrl(u, entryUrls) &&
+        // Slug names another state — drop before spending a Firecrawl credit.
+        // Peoples Company alone returns dozens of these per run
+        // (/land-auction-waupaca-county-wisconsin-18764), and we were paying to
+        // fetch each one only to discard it at save.
+        !urlNamesOtherState(u),
     );
     const prioritized = [...clean.filter(looksIowaUrl), ...clean.filter((u) => !looksIowaUrl(u))];
     const urls = prioritized.slice(0, cap);
@@ -794,8 +885,21 @@ export class AuctionScraperService {
 
     // Judged on state + county + title + URL together — `state` alone is wrong
     // often enough to hide real Iowa auctions (see isIowaListing).
-    if (isIowaListing(auctionData) === false) {
+    const iowaVerdict = isIowaListing(auctionData);
+    if (iowaVerdict === false) {
       console.log(`      ⤫ Skipping non-Iowa listing (${auctionData.state}): ${(auctionData.title || '').slice(0, 60)}`);
+      return null;
+    }
+    // Verdict is null — nothing said Iowa, but nothing said otherwise either,
+    // usually because the extractor returned no state at all. Before keeping it
+    // on the "unknown is not elsewhere" rule, check whether the prose names a
+    // different state outright. A 3,536-acre Los Angeles County, California
+    // listing reached the table this way.
+    if (
+      iowaVerdict === null &&
+      (namesOtherState(auctionData.title) || namesOtherState(auctionData.description))
+    ) {
+      console.log(`      ⤫ Skipping — text names another state: ${(auctionData.title || '').slice(0, 60)}`);
       return null;
     }
 
