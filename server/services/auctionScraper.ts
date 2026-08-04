@@ -509,16 +509,16 @@ export class AuctionScraperService {
         console.log(`     Acreage: ${auctionData.acreage || 'N/A'}`);
         console.log(`     Date: ${auctionData.auction_date || 'N/A'}\n`);
         
-        const saved = await this.saveAuction(auctionData);
-        if (!saved) {
-          // Skipped (out of state). Return null so the queue consumer's `saved`
-          // tally stays honest — a skip is not a save, and the coverage
-          // scorecard is only useful if its numbers mean what they say.
+        const savedId = await this.saveAuction(auctionData);
+        if (savedId == null) {
+          // Skipped (out of state, or a listing index). Null keeps the queue
+          // consumer's `saved` tally honest — a skip is not a save, and the
+          // coverage scorecard is only useful if its numbers mean what they say.
           return null;
         }
-        console.log(`  ✅ Auction saved to database!\n`);
+        console.log(`  ✅ Auction saved to database! (id ${savedId})\n`);
 
-        return auctionData;
+        return { ...auctionData, id: savedId };
       } else {
         console.log(`  ❌ No data could be extracted from this URL\n`);
         return null;
@@ -1036,12 +1036,19 @@ export class AuctionScraperService {
         }
       }).returning();
       
-      // Add to enrichment queue for AI processing (non-blocking)
+      // Hand off for enrichment. The in-memory queue only works in a
+      // long-running process; in a Worker the invocation ends and the work is
+      // dropped. Returning the id lets the queue consumer enqueue a durable
+      // message instead — see worker/src/queues.ts.
       if (result && result.length > 0) {
         const auctionId = result[0].id;
-        enrichmentQueue.add(auctionId, 'normal');
-        console.log(`      📋 Added to enrichment queue: ID ${auctionId}`);
+        if (getRuntime() === 'node') {
+          enrichmentQueue.add(auctionId, 'normal');
+          console.log(`      📋 Added to enrichment queue: ID ${auctionId}`);
+        }
+        return auctionId;
       }
+      return null;
     } catch (dbError) {
       // If onConflictDoUpdate doesn't work, just log and continue
       console.log(`    DB insert failed for: ${auctionData.title}`);

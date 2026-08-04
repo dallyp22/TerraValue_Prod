@@ -28,6 +28,7 @@
 import type { Env } from './env';
 import { auctionScraperService } from '../../server/services/auctionScraper';
 import { setScrapeContext } from '../../server/services/scrapeContext';
+import { auctionEnrichmentService } from '../../server/services/auctionEnrichment';
 import { db } from '../../server/db';
 import { scrapeSourceRuns, auctions } from '@shared/schema';
 import { sql as dsql, inArray } from 'drizzle-orm';
@@ -243,13 +244,20 @@ export async function handleDetailBatch(
   // Tally per source so one telemetry write covers the whole batch.
   const tally = new Map<string, { runId: string; saved: number; failed: number }>();
 
+  // Ids of rows we actually saved, to hand to the enrichment queue below.
+  const savedIds: Array<{ id: number; runId: string }> = [];
+
   for (const msg of batch.messages) {
     const { url, sourceName, runId } = msg.body;
     setScrapeContext({ runtime: 'cloudflare-queue', runId });
     const t = tally.get(sourceName) ?? { runId, saved: 0, failed: 0 };
     try {
       const result = await auctionScraperService.scrapeSpecificUrl(url, sourceName);
-      if (result) t.saved++;
+      if (result) {
+        t.saved++;
+        const id = (result as { id?: number }).id;
+        if (typeof id === 'number') savedIds.push({ id, runId });
+      }
       msg.ack();
     } catch (err) {
       t.failed++;
@@ -262,6 +270,19 @@ export async function handleDetailBatch(
   for (const sourceName of Array.from(tally.keys())) {
     const t = tally.get(sourceName)!;
     await recordSourceRun({ runId: t.runId, sourceName, saved: t.saved, failed: t.failed });
+  }
+
+  // Hand every saved listing to the enrichment queue. This is the step that was
+  // missing: the queue existed, its consumer existed, and nothing ever produced
+  // to it — so on the Cloudflare path auctions were captured but never
+  // enriched or CSR2-valued, leaving the Node process as the only thing doing
+  // that work and blocking its retirement.
+  if (savedIds.length > 0) {
+    await sendAll<EnrichMessage>(
+      env.ENRICH,
+      savedIds.map(({ id, runId }) => ({ kind: 'enrich', auctionId: id, runId })),
+    );
+    console.log(`   → queued ${savedIds.length} for enrichment`);
   }
 }
 
@@ -279,6 +300,12 @@ export async function handleEnrichBatch(
     const { auctionId, runId } = msg.body;
     setScrapeContext({ runtime: 'cloudflare-queue', runId });
     try {
+      // Both halves, in order. Enrichment standardises the title, identifies the
+      // auction house and extracts the legal description; the valuation then
+      // uses the coordinates that enrichment may have improved. Previously this
+      // consumer ran only the valuation, so even once wired it would have left
+      // every listing un-enriched.
+      await auctionEnrichmentService.enrichAuction(auctionId);
       await auctionScraperService.calculateValuation(auctionId);
       msg.ack();
     } catch (err) {
