@@ -86,6 +86,64 @@ export const JUNK_URL = /(facebook|twitter|instagram|linkedin|youtube|mailto:|te
 const looksIowaUrl = (url: string) => /(-ia\b|_ia_|\biowa\b)/i.test(url);
 
 /**
+ * Does this URL point at a listing INDEX rather than a single auction?
+ *
+ * Discovery was feeding search pages back in as auctions. Production held an
+ * "event" of ten rows all titled "Multi-Use Acreage For Sale in Missouri" —
+ * ucloesshills.com/results/, /results/iowa/, and the bare domain — each saved
+ * as a 98-acre auction, and six arrowheadrealtycompany.com/towns/ category
+ * pages saved as an 11.5-acre one. Several sources were also re-ingesting their
+ * OWN search page: foxauctioncompany.com/current-auctions became a listing.
+ *
+ * This is deliberately broader than `isAggregatorIndexUrl` in dedupe.ts, and
+ * the two should not be merged. There, a false positive loses a correct merge,
+ * so it demands a geographic segment AND an index terminal. Here a false
+ * NEGATIVE invents an auction that does not exist, which is worse — and the
+ * cost of a false positive is only that one page is not scraped, while any
+ * genuine listing it links to is still discovered on its own URL.
+ */
+const INDEX_TERMINAL = new Set([
+  'auctions', 'auction', 'current-auctions', 'upcoming-auctions', 'past-auctions',
+  'live-auctions', 'online-auctions', 'results', 'search', 'listings', 'properties',
+  'land', 'land-for-sale', 'real-estate', 'farms', 'calendar', 'index',
+  'at-auction', 'for-sale', 'all-land',
+]);
+/** A path segment that only ever appears on a browse page. */
+const INDEX_SEGMENT =
+  /^(category|categories|tag|tags|towns|town|page|archive|browse|filter|results|search)$/;
+
+export function isIndexPageUrl(url: string | null | undefined, sourceEntryUrls?: Set<string>): boolean {
+  if (!url) return false;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+
+  // A source's own entry/search page is never one of its listings.
+  if (sourceEntryUrls) {
+    const canon = `${u.origin}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    if (sourceEntryUrls.has(canon)) return true;
+  }
+
+  const segments = u.pathname.split('/').filter(Boolean).map((x) => x.toLowerCase());
+
+  // Bare domain — a homepage is not a listing.
+  if (segments.length === 0) return true;
+
+  if (segments.some((seg) => INDEX_SEGMENT.test(seg))) return true;
+  if (INDEX_TERMINAL.has(segments[segments.length - 1])) return true;
+
+  // Trailing pagination, e.g. /auctions/page-2 or /land/2.
+  if (/^(page-?\d+|\d+)$/.test(segments[segments.length - 1]) && segments.length > 1) {
+    if (INDEX_TERMINAL.has(segments[segments.length - 2])) return true;
+  }
+
+  return false;
+}
+
+/**
  * Is this listing's state Iowa?
  *
  * Returns `null` for "cannot tell" — that case is deliberately distinct from
@@ -321,6 +379,24 @@ export class AuctionScraperService {
    * Includes the LandWatch listing pages as synthetic sources so they get their
    * own queue message instead of riding along inside one giant invocation.
    */
+  /** Canonical entry/search URLs, so a source never ingests its own index. */
+  private sourceEntryUrls(): Set<string> {
+    const out = new Set<string>();
+    for (const s of this.getSourceList()) {
+      const canon = (u: string) => {
+        try {
+          const p = new URL(u);
+          return `${p.origin}${p.pathname.replace(/\/+$/, '')}`.toLowerCase();
+        } catch {
+          return u.toLowerCase().replace(/\/+$/, '');
+        }
+      };
+      out.add(canon(s.url));
+      if (s.searchPath) out.add(canon(`${s.url}${s.searchPath}`));
+    }
+    return out;
+  }
+
   getSourceList(): Array<{ name: string; url: string; searchPath?: string }> {
     return [
       ...this.sources,
@@ -381,8 +457,11 @@ export class AuctionScraperService {
       }
     }
 
+    // Drop listing indexes here, not later: scraping one costs a Firecrawl
+    // credit and yields a phantom auction carrying the index page's acreage.
+    const entryUrls = this.sourceEntryUrls();
     const clean = Array.from(candidates).filter(
-      (u) => /^https?:\/\//i.test(u) && !JUNK_URL.test(u),
+      (u) => /^https?:\/\//i.test(u) && !JUNK_URL.test(u) && !isIndexPageUrl(u, entryUrls),
     );
     const prioritized = [...clean.filter(looksIowaUrl), ...clean.filter((u) => !looksIowaUrl(u))];
     const urls = prioritized.slice(0, cap);
@@ -706,6 +785,13 @@ export class AuctionScraperService {
     // Note this tests the RAW extracted value, not the defaulted one below:
     // `state || 'Iowa'` turns "unknown" into "Iowa", and unknown must stay in.
     // Only a confidently-parsed other state is skipped.
+    // A listing index is not an auction. Discovery filters these too; this is the
+    // backstop for URLs that arrive by another path (scrapeSpecificUrl, retries).
+    if (isIndexPageUrl(auctionData.url, this.sourceEntryUrls())) {
+      console.log(`      ⤫ Skipping listing index, not an auction: ${auctionData.url}`);
+      return null;
+    }
+
     // Judged on state + county + title + URL together — `state` alone is wrong
     // often enough to hide real Iowa auctions (see isIowaListing).
     if (isIowaListing(auctionData) === false) {
