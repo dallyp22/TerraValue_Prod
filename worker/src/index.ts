@@ -49,7 +49,8 @@ app.onError((err, c) => {
 
 // Cron handlers — registered in wrangler.jsonc via triggers.crons:
 //   "0 9 * * *" → daily 09:00 UTC (~03:00 CST) → auction archiver
-//   "0 6 * * *" → daily 06:00 UTC (~01:00 CST) → enqueue a scrape run
+//   "0 6 */2 * *" → 06:00 UTC every other day → enqueue a scrape run
+//                    (halved for the Railway parallel run; see wrangler.jsonc)
 //
 // The hourly "0 * * * *" scraper check is GONE, and deliberately so. It called
 // automaticScraperService.checkAndRun(), which runs the whole 51-source crawl
@@ -69,7 +70,7 @@ async function handleScheduled(
     console.log("⏰ Cron: running daily auction archiver");
     const archiver = new AuctionArchiverService();
     ctx.waitUntil(archiver.archivePastAuctions());
-  } else if (controller.cron === "0 6 * * *") {
+  } else if (controller.cron === "0 6 */2 * *") {
     // Producer only — this must stay cheap regardless of source count.
     const runId = `run_${controller.scheduledTime}`;
     console.log(`⏰ Cron: enqueueing scrape run ${runId}`);

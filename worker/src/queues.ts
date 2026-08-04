@@ -29,8 +29,8 @@ import type { Env } from './env';
 import { auctionScraperService } from '../../server/services/auctionScraper';
 import { setScrapeContext } from '../../server/services/scrapeContext';
 import { db } from '../../server/db';
-import { scrapeSourceRuns } from '@shared/schema';
-import { sql as dsql } from 'drizzle-orm';
+import { scrapeSourceRuns, auctions } from '@shared/schema';
+import { sql as dsql, inArray } from 'drizzle-orm';
 
 /**
  * Record what a source actually produced. Upserted on (run_id, runtime,
@@ -44,6 +44,7 @@ async function recordSourceRun(row: {
   dropped?: number;
   saved?: number;
   failed?: number;
+  skippedFresh?: number;
   error?: string;
 }): Promise<void> {
   try {
@@ -58,6 +59,7 @@ async function recordSourceRun(row: {
         dropped: row.dropped ?? 0,
         saved: row.saved ?? 0,
         failed: row.failed ?? 0,
+        skippedFresh: row.skippedFresh ?? 0,
         finishedAt: new Date(),
         error: row.error,
       })
@@ -72,6 +74,7 @@ async function recordSourceRun(row: {
           discovered: dsql`GREATEST(${scrapeSourceRuns.discovered}, excluded.discovered)`,
           queued: dsql`GREATEST(${scrapeSourceRuns.queued}, excluded.queued)`,
           dropped: dsql`GREATEST(${scrapeSourceRuns.dropped}, excluded.dropped)`,
+          skippedFresh: dsql`GREATEST(${scrapeSourceRuns.skippedFresh}, excluded.skipped_fresh)`,
           // Saves and failures genuinely accumulate across detail batches.
           saved: dsql`${scrapeSourceRuns.saved} + excluded.saved`,
           failed: dsql`${scrapeSourceRuns.failed} + excluded.failed`,
@@ -97,6 +100,61 @@ async function sendAll<T>(queue: Queue<T>, messages: T[]): Promise<void> {
     await queue.sendBatch(
       messages.slice(i, i + SEND_BATCH_MAX).map((body) => ({ body })),
     );
+  }
+}
+
+/**
+ * Drop URLs we already hold and have no reason to re-fetch.
+ *
+ * ~45% of every run's detail scrapes were re-fetching listings already in the
+ * table — 500 of the last 1,099. At ~1,900 Firecrawl calls per run across two
+ * runtimes that is the single largest source of waste, and it is what makes the
+ * jump to 120 sources unaffordable.
+ *
+ * Deliberately lifecycle-aware rather than a flat TTL, because a listing is not
+ * equally likely to change over its life:
+ *   - never seen            -> always fetch
+ *   - sale within 7 days    -> always fetch; date corrections, added tracts and
+ *                              sold status all land in the final week, and this
+ *                              is exactly the window a client notices
+ *   - sale already past     -> skip; the archiver owns these
+ *   - otherwise             -> skip if we refreshed it within STALE_AFTER_DAYS
+ *
+ * A skipped URL is NOT lost coverage — we already have the row. It is recorded
+ * separately from `dropped` (cap overflow) so the scorecard cannot confuse a
+ * saved call with a missed auction.
+ */
+const STALE_AFTER_DAYS = 3;
+const IMMINENT_DAYS = 7;
+
+async function filterFreshlyScraped(urls: string[]): Promise<{ toFetch: string[]; skipped: number }> {
+  if (urls.length === 0) return { toFetch: [], skipped: 0 };
+  try {
+    const known = await db
+      .select({ url: auctions.url, updatedAt: auctions.updatedAt, auctionDate: auctions.auctionDate })
+      .from(auctions)
+      .where(inArray(auctions.url, urls));
+
+    const now = Date.now();
+    const staleMs = STALE_AFTER_DAYS * 86_400_000;
+    const imminentMs = IMMINENT_DAYS * 86_400_000;
+    const skip = new Set<string>();
+
+    for (const row of known) {
+      const date = row.auctionDate ? new Date(row.auctionDate).getTime() : null;
+      // Imminent sales keep getting re-checked, whatever their refresh age.
+      if (date !== null && date >= now && date - now <= imminentMs) continue;
+      // Past sales are the archiver's problem, not ours.
+      const refreshed = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+      if (date !== null && date < now) { skip.add(row.url); continue; }
+      if (now - refreshed < staleMs) skip.add(row.url);
+    }
+
+    return { toFetch: urls.filter((u) => !skip.has(u)), skipped: skip.size };
+  } catch (err) {
+    // Never let this optimisation cost us coverage — on error, fetch everything.
+    console.error('⚠️  freshness check failed, fetching all:', err instanceof Error ? err.message : err);
+    return { toFetch: urls, skipped: 0 };
   }
 }
 
@@ -149,12 +207,18 @@ export async function handleSourceBatch(
         msg.ack();
         continue;
       }
+      const { toFetch, skipped } = await filterFreshlyScraped(urls);
       await sendAll<DetailMessage>(
         env.SCRAPE_DETAILS,
-        urls.map((u) => ({ kind: 'detail', url: u, sourceName: name, runId })),
+        toFetch.map((u) => ({ kind: 'detail', url: u, sourceName: name, runId })),
       );
-      console.log(`   ${name}: discovered ${discovered}, queued ${urls.length}`);
-      await recordSourceRun({ runId, sourceName: name, discovered, queued: urls.length, dropped });
+      console.log(
+        `   ${name}: discovered ${discovered}, queued ${toFetch.length}` +
+          (skipped ? `, skipped ${skipped} already-fresh` : ''),
+      );
+      await recordSourceRun({
+        runId, sourceName: name, discovered, queued: toFetch.length, dropped, skippedFresh: skipped,
+      });
       msg.ack();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -9,10 +9,16 @@
   },
   "triggers": {
     // 09:00 UTC — daily archiver.
-    // 06:00 UTC (~01:00 CST) — enqueue a scrape run. Producer only; the work
-    // itself happens in the queue consumers below, each with its own budget.
-    // The old hourly "0 * * * *" scraper check is gone — see src/index.ts for why.
-    "crons": ["0 9 * * *", "0 6 * * *"]
+    // 06:00 UTC every OTHER day — enqueue a scrape run. Producer only; the work
+    // happens in the queue consumers below, each with its own budget.
+    //
+    // Every other day, not daily, for the duration of the Railway parallel run:
+    // both runtimes scrape the same ~54 sources, and the queue path costs MORE
+    // than the Node one because its per-source URL cap is 250 rather than 60
+    // (~1,925 Firecrawl calls vs ~1,510). Alternating days keeps the comparison
+    // meaningful while holding the combined bill near single-runtime cost.
+    // Restore to "0 6 * * *" when Railway is decommissioned.
+    "crons": ["0 9 * * *", "0 6 */2 * *"]
   },
   "queues": {
     "producers": [

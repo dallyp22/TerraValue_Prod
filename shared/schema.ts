@@ -274,6 +274,10 @@ export const scrapeSourceRuns = pgTable("scrape_source_runs", {
   dropped: integer("dropped").notNull().default(0),
   saved: integer("saved").notNull().default(0),
   failed: integer("failed").notNull().default(0),
+  /** Discovered URLs not re-fetched because we already hold a fresh copy.
+   *  Cost avoided — deliberately NOT folded into `dropped`, which means
+   *  coverage lost to the per-source cap. */
+  skippedFresh: integer("skipped_fresh").notNull().default(0),
   startedAt: timestamp("started_at", { withTimezone: true }).defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   error: text("error"),
