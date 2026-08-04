@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp, json, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, json, jsonb, index, boolean, bigserial, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -151,8 +151,109 @@ export const auctions = pgTable("auctions", {
   // this a parallel run cannot be measured, only guessed at.
   lastCapturedBy: text("last_captured_by"),   // "cloudflare-queue" | "node"
   lastCapturedRun: text("last_captured_run"), // run id
-  firstCapturedBy: text("first_captured_by")  // set once, never overwritten
+  firstCapturedBy: text("first_captured_by"), // set once, never overwritten
+
+  // Entity resolution (migration 0030). This table is an *observation* table —
+  // one row per source-sighting, keyed on `url` — so the canonical sale lives in
+  // `auction_events` and each row points at it. NULL means "not yet resolved",
+  // which is every row until the resolver has run.
+  eventId: integer("event_id"),
+  eventMatchScore: real("event_match_score"),
+  eventMatchMethod: text("event_match_method"),
+
+  // Blocking-key cache, written by the resolver's fingerprint pass. See
+  // server/services/dedupe.ts for how each is derived and why raw county/
+  // acreage/date columns cannot be used directly.
+  dedupeCountyKeys: text("dedupe_county_keys").array(),
+  dedupeState: text("dedupe_state"),
+  dedupeAcreage: real("dedupe_acreage"),
+  dedupeTrsKeys: text("dedupe_trs_keys").array(),
+  dedupeNameTokens: text("dedupe_name_tokens").array(),
+  dedupeFingerprintAt: timestamp("dedupe_fingerprint_at", { withTimezone: true })
 });
+
+/**
+ * Canonical sale event — one row per physical auction, however many listings
+ * advertise it.
+ *
+ * Sits *above* `auctions` rather than replacing it: `auctions` keeps its name,
+ * its columns and its `url` unique key, so the map, the tile route, the archiver
+ * and the Heistand overlay all keep working untouched while the pipeline gains
+ * an entity layer underneath them.
+ *
+ * `review_status = 'needs_review'` is load-bearing. A wrong merge removes an
+ * auction from the map, which is worse than showing a duplicate pin, so the
+ * resolver parks anything it is not sure about here instead of guessing.
+ */
+export const auctionEvents = pgTable("auction_events", {
+  id: serial("id").primaryKey(),
+
+  // Deliberately not an FK: archiving an observation must never cascade into
+  // deleting the sale event it represents.
+  primaryAuctionId: integer("primary_auction_id"),
+
+  title: text("title"),
+  county: text("county"),                        // display form, e.g. "Shelby and Crawford"
+  countyKeys: text("county_keys").array(),       // normalised set, e.g. {crawford,shelby}
+  state: text("state"),                          // 2-letter, normalised
+  acreage: real("acreage"),
+  auctionDate: timestamp("auction_date", { withTimezone: true }),
+  auctioneer: text("auctioneer"),
+  landType: text("land_type"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+
+  memberCount: integer("member_count").notNull().default(1),
+
+  // "singleton" | "url" | "trs" | "acreage+county" | "name+county" | ...
+  // "singleton" is the majority case and must not be read as a confident merge.
+  matchMethod: text("match_method").notNull().default("singleton"),
+  // Weakest accepted edge in the cluster — a cluster is only as good as that.
+  matchConfidence: real("match_confidence"),
+  // "auto" | "needs_review" | "confirmed" | "rejected"
+  reviewStatus: text("review_status").notNull().default("auto"),
+  matcherVersion: text("matcher_version").notNull().default("v1"),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  reviewIdx: index("auction_events_review_idx").on(table.reviewStatus, table.updatedAt),
+  dateIdx: index("auction_events_date_idx").on(table.auctionDate)
+}));
+
+/**
+ * Every scored pair, whatever the verdict — including the ones we refused to
+ * merge and why.
+ *
+ * Two jobs: it makes the thresholds tunable against real outcomes rather than
+ * intuition, and it is the un-merge path — a bad cluster is fixed by deleting
+ * one edge and re-clustering the component, not by hand-editing rows.
+ */
+export const auctionMatchAudit = pgTable("auction_match_audit", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  // Ordered (lower id first) so a pair has exactly one row.
+  auctionAId: integer("auction_a_id").notNull(),
+  auctionBId: integer("auction_b_id").notNull(),
+  score: real("score").notNull(),
+  disposition: text("disposition").notNull(),   // "merge" | "review" | "distinct"
+  blockKey: text("block_key"),                  // which blocking key produced the pair
+  features: jsonb("features"),                  // per-signal contributions
+  holdReason: text("hold_reason"),              // why a high scorer was still not merged
+  decidedBy: text("decided_by").notNull().default("rules_v1"),
+  matcherVersion: text("matcher_version").notNull().default("v1"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  dispositionIdx: index("auction_match_audit_disposition_idx").on(table.disposition, table.score),
+  aIdx: index("auction_match_audit_a_idx").on(table.auctionAId),
+  bIdx: index("auction_match_audit_b_idx").on(table.auctionBId),
+  pairUnique: unique("auction_match_audit_auction_a_id_auction_b_id_matcher_versi_key")
+    .on(table.auctionAId, table.auctionBId, table.matcherVersion)
+}));
+
+export type AuctionEvent = typeof auctionEvents.$inferSelect;
+export type InsertAuctionEvent = typeof auctionEvents.$inferInsert;
+export type AuctionMatchAudit = typeof auctionMatchAudit.$inferSelect;
+export type InsertAuctionMatchAudit = typeof auctionMatchAudit.$inferInsert;
 
 /**
  * Per-(run, source) scrape telemetry.

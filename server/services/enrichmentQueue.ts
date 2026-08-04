@@ -2,7 +2,8 @@ import { auctionEnrichmentService } from './auctionEnrichment.js';
 import { legalDescriptionGeocoderService } from './legalDescriptionGeocoder.js';
 import { db } from '../db.js';
 import { auctions } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { NOT_ARCHIVED } from './auctionStatus.js';
 import { Pool } from '@neondatabase/serverless';
 
 interface QueueItem {
@@ -262,9 +263,11 @@ export const enrichmentQueue = new EnrichmentQueue();
  */
 export async function enrichAllPendingAuctions(pool?: Pool): Promise<ProcessingStats> {
   console.log('\n🔍 Finding all pending auctions...');
-  
+
+  // Live rows only — a retired listing keeps enrichment_status='pending'
+  // forever, and enriching it costs a GPT-4o call for a row no user can reach.
   const pendingAuctions = await db.query.auctions.findMany({
-    where: eq(auctions.enrichmentStatus, 'pending')
+    where: and(eq(auctions.enrichmentStatus, 'pending'), NOT_ARCHIVED)
   });
 
   console.log(`📊 Found ${pendingAuctions.length} pending auctions`);
@@ -298,17 +301,19 @@ export async function enrichAllPendingAuctions(pool?: Pool): Promise<ProcessingS
  * Helper function to re-enrich all auctions
  */
 export async function reEnrichAllAuctions(pool?: Pool): Promise<ProcessingStats> {
-  console.log('\n🔄 Re-enriching ALL auctions...');
-  
-  // Get all auctions
-  const allAuctions = await db.query.auctions.findMany();
-  console.log(`📊 Found ${allAuctions.length} total auctions`);
+  console.log('\n🔄 Re-enriching ALL live auctions...');
 
-  // Reset all to pending
-  await db.update(auctions).set({ 
+  // "ALL" means all LIVE auctions. The reset below had no WHERE clause at all,
+  // which only worked while retired rows were being deleted. Against the
+  // post-soft-delete table it would queue the whole archive for GPT-4o.
+  const allAuctions = await db.query.auctions.findMany({ where: NOT_ARCHIVED });
+  console.log(`📊 Found ${allAuctions.length} live auctions`);
+
+  // Reset to pending — scoped to exactly the rows queued below.
+  await db.update(auctions).set({
     enrichmentStatus: 'pending',
-    enrichmentError: null 
-  });
+    enrichmentError: null
+  }).where(NOT_ARCHIVED);
 
   // Set pool if provided
   if (pool) {

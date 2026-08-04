@@ -11,31 +11,61 @@ export interface DateExtractionResult {
   rawText?: string;
 }
 
+/**
+ * Is this a date an auction could plausibly be held on?
+ *
+ * An auction listing is only ever about the recent past or the near future, so
+ * anything outside roughly -1y..+2y is a parse artefact rather than a date.
+ * The regex path has always applied this window; the flexible parser did not,
+ * and that asymmetry was expensive:
+ *
+ *   new Date("April 24")           -> 2001-04-24
+ *   new Date("Thursday, April 24") -> 2001-04-24
+ *   new Date("Sept 9")             -> 2001-09-09
+ *
+ * V8 fills in a missing year with 2001. A yearless date on a sale bill —
+ * extremely common — therefore parsed clean, sorted to the front of the map's
+ * `auction_date ASC` window, and was then deleted by the archiver as a past
+ * auction. 58,680 rows were archived as `past_auction_date`, and a live row
+ * carrying 1955-01-15 was still being served. Returning null instead lets the
+ * caller fall through to AI extraction and, failing that, flag the row for
+ * human review — visibly unknown beats confidently wrong.
+ */
+export function isPlausibleAuctionDate(date: Date, now: Date = new Date()): boolean {
+  if (isNaN(date.getTime())) return false;
+  const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  const twoYearsAhead = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
+  return date >= oneYearAgo && date <= twoYearsAhead;
+}
+
 export class DateExtractorService {
   /**
    * Parse date string with flexible format support
    * Handles: MM/DD/YYYY, DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, "Month DD, YYYY"
+   *
+   * Every branch validates through `isPlausibleAuctionDate` before returning —
+   * a parse that succeeds is not the same as a date that means anything.
    */
-  private parseFlexibleDate(dateStr: string): Date | null {
+  parseFlexibleDate(dateStr: string): Date | null {
     if (!dateStr || typeof dateStr !== 'string') return null;
-    
+
     const trimmed = dateStr.trim();
-    
+
     // Try standard new Date() first (handles ISO, "Month DD, YYYY", etc.)
     let date = new Date(trimmed);
-    if (!isNaN(date.getTime())) {
+    if (isPlausibleAuctionDate(date)) {
       return date;
     }
-    
+
     // Try DD-MM-YYYY format (European with dashes)
     const ddmmyyyyDash = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
     if (ddmmyyyyDash) {
       const [_, day, month, year] = ddmmyyyyDash;
       // Use local date constructor to avoid timezone issues
       date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      if (!isNaN(date.getTime())) return date;
+      if (isPlausibleAuctionDate(date)) return date;
     }
-    
+
     // Try DD/MM/YYYY format (European with slashes)
     const ddmmyyyySlash = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (ddmmyyyySlash) {
@@ -56,16 +86,16 @@ export class DateExtractorService {
       else {
         date = new Date(trimmed); // Let JavaScript parse it
       }
-      
-      if (!isNaN(date.getTime())) return date;
+
+      if (isPlausibleAuctionDate(date)) return date;
     }
-    
+
     // Try YYYY-MM-DD (ISO format) - use local constructor to avoid timezone
     const yyyymmdd = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (yyyymmdd) {
       const [_, year, month, day] = yyyymmdd;
       date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      if (!isNaN(date.getTime())) return date;
+      if (isPlausibleAuctionDate(date)) return date;
     }
     
     return null;
@@ -138,13 +168,10 @@ export class DateExtractorService {
           }
           
           const date = new Date(dateStr);
-          
-          // Validate date is reasonable (not in distant past, not too far future)
-          const now = new Date();
-          const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-          const twoYearsAhead = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
-          
-          if (date >= oneYearAgo && date <= twoYearsAhead && !isNaN(date.getTime())) {
+
+          // Same plausibility window the flexible parser uses — one definition,
+          // so the two paths cannot drift apart again.
+          if (isPlausibleAuctionDate(date)) {
             return date;
           }
         } catch (error) {
@@ -199,7 +226,7 @@ Remember: Return ONLY the date in YYYY-MM-DD format, or the word "null" if no da
 
       // Parse the AI response
       const date = new Date(result);
-      
+
       // Validate date
       if (isNaN(date.getTime())) {
         console.warn(`AI returned invalid date: ${result}`);
@@ -210,12 +237,8 @@ Remember: Return ONLY the date in YYYY-MM-DD format, or the word "null" if no da
         };
       }
 
-      // Check if date is reasonable
-      const now = new Date();
-      const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-      const twoYearsAhead = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
-      
-      if (date < oneYearAgo || date > twoYearsAhead) {
+      // Same window as the other two paths.
+      if (!isPlausibleAuctionDate(date)) {
         console.warn(`AI returned unreasonable date: ${result}`);
         return {
           date: null,
@@ -225,7 +248,7 @@ Remember: Return ONLY the date in YYYY-MM-DD format, or the word "null" if no da
       }
 
       // Determine confidence based on how recent the date is
-      const confidence = date > now ? 'high' : 'medium';
+      const confidence = date > new Date() ? 'high' : 'medium';
 
       return {
         date,

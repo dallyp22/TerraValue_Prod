@@ -24,6 +24,7 @@ import { cornPriceService } from "../../../server/services/cornPrice";
 import { soilPropertiesService } from "../../../server/services/soilProperties";
 import { mukeyLookupService } from "../../../server/services/mukeyLookup";
 import { enqueueScrapeRun } from "../queues";
+import { NOT_ARCHIVED } from "../../../server/services/auctionStatus";
 import { parcelAggregationService } from "../../../server/services/parcelAggregation";
 import { auctionParcelExtractor } from "../../../server/services/auctionParcelExtractor";
 import { getCountyCentroid } from "../../../server/services/iowaCountyCentroids";
@@ -379,7 +380,8 @@ api.post("/geocode/reverse", async (c) => {
 api.post("/auctions/validate-counties", async (c) => {
   try {
     const allAuctions = await db.query.auctions.findMany({
-      where: sql`latitude IS NOT NULL AND longitude IS NOT NULL`,
+      // Retired rows would each cost a paid reverse-geocode call on every run.
+      where: and(sql`latitude IS NOT NULL AND longitude IS NOT NULL`, NOT_ARCHIVED),
     });
     let validated = 0;
     let fixed = 0;
@@ -432,7 +434,8 @@ api.post("/auctions/validate-counties", async (c) => {
 api.get("/auctions/needs-review", async (c) => {
   try {
     const needsReview = await db.query.auctions.findMany({
-      where: eq(auctions.needsDateReview, true),
+      // Retired rows would flood the human date-review queue.
+      where: and(eq(auctions.needsDateReview, true), NOT_ARCHIVED),
       orderBy: [desc(auctions.scrapedAt)],
       limit: 100,
     });
@@ -944,6 +947,9 @@ api.get("/parcels", async (c) => {
 api.get("/auctions/all", async (c) => {
   try {
     const allAuctions = await db.query.auctions.findMany({
+      // Retired rows keep their scraped_at and the scraper keeps re-touching
+      // them, so without this the admin view fills with retired listings.
+      where: NOT_ARCHIVED,
       orderBy: [desc(auctions.scrapedAt)],
       limit: 500,
     });
@@ -1290,10 +1296,13 @@ api.get("/auctions/scrape-progress", async (c) => {
 api.post("/auctions/archive-non-farm", async (c) => {
   try {
     const archiverService = new AuctionArchiverService();
-    const beforeCount = await db.query.auctions.findMany();
+    // Count LIVE rows either side. Archiving no longer deletes, so a raw
+    // findMany() count is identical before and after and this endpoint would
+    // report "0 archived" forever while quietly retiring hundreds.
+    const beforeCount = await db.query.auctions.findMany({ where: NOT_ARCHIVED });
     const totalBefore = beforeCount.length;
     await archiverService.archivePastAuctions();
-    const afterCount = await db.query.auctions.findMany();
+    const afterCount = await db.query.auctions.findMany({ where: NOT_ARCHIVED });
     const totalAfter = afterCount.length;
     const archived = totalBefore - totalAfter;
     return c.json({
@@ -1339,7 +1348,7 @@ api.get("/auctions/enrichment-stats", async (c) => {
 api.get("/auctions/enrichment-errors", async (c) => {
   try {
     const failedAuctions = await db.query.auctions.findMany({
-      where: eq(auctions.enrichmentStatus, "failed"),
+      where: and(eq(auctions.enrichmentStatus, "failed"), NOT_ARCHIVED),
       limit: 50,
     });
     return c.json({
@@ -1390,7 +1399,10 @@ api.post("/auctions/retry-failed-enrichments", async (c) => {
     await db
       .update(auctions)
       .set({ enrichmentStatus: "pending", enrichmentError: null })
-      .where(eq(auctions.enrichmentStatus, "failed"));
+      // Live rows only. Unscoped, this re-queues every retired listing with a
+      // failed enrichment and bills a GPT-4o call for each — the archive is
+      // ~90k rows and nobody will ever see any of them.
+      .where(and(eq(auctions.enrichmentStatus, "failed"), NOT_ARCHIVED));
     c.executionCtx.waitUntil(
       (async () => {
         const { enrichAllPendingAuctions } = await import(

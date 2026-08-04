@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import { db } from '../db.js';
 import { auctions } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { NOT_ARCHIVED } from './auctionStatus.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY2 || process.env.OPENAI_API_KEY || ''
@@ -325,9 +326,12 @@ export class AuctionEnrichmentService {
   }> {
     console.log('\n🚀 Starting enrichment of all pending auctions...');
 
-    // Get all auctions with pending enrichment status
+    // Get all auctions with pending enrichment status.
+    // Retired rows keep whatever enrichment_status they had, so without
+    // NOT_ARCHIVED this picks the archive up and bills a GPT-4o call for every
+    // listing the archiver already decided nobody will ever see.
     const pendingAuctions = await db.query.auctions.findMany({
-      where: eq(auctions.enrichmentStatus, 'pending'),
+      where: and(eq(auctions.enrichmentStatus, 'pending'), NOT_ARCHIVED),
       limit: limit || undefined
     });
 
@@ -350,15 +354,19 @@ export class AuctionEnrichmentService {
     failed: number;
     errors: { id: number; error: string }[];
   }> {
-    console.log('\n🔄 Re-enriching ALL auctions (including previously enriched)...');
+    console.log('\n🔄 Re-enriching ALL live auctions (including previously enriched)...');
 
-    // Get all auctions
-    const allAuctions = await db.query.auctions.findMany();
-    console.log(`📊 Found ${allAuctions.length} total auctions`);
+    // "ALL" means all LIVE auctions. The UPDATE below used to carry no WHERE
+    // clause whatsoever, which was survivable only because retired rows were
+    // deleted — the table was ~2k rows. It is now the archive too, so an
+    // unscoped reset would push ~90k retired listings through GPT-4o.
+    const allAuctions = await db.query.auctions.findMany({ where: NOT_ARCHIVED });
+    console.log(`📊 Found ${allAuctions.length} live auctions`);
 
-    // Reset all to pending
+    // Reset to pending — scoped to the same rows we are about to enrich.
     await db.update(auctions)
-      .set({ enrichmentStatus: 'pending' });
+      .set({ enrichmentStatus: 'pending' })
+      .where(NOT_ARCHIVED);
 
     const auctionIds = allAuctions.map(a => a.id);
     return await this.enrichBatch(auctionIds);
@@ -376,8 +384,11 @@ export class AuctionEnrichmentService {
     pendingIds: number[];
     failedIds: number[];
   }> {
-    const allAuctions = await db.query.auctions.findMany();
-    
+    // Live rows only. Counting the archive here would report tens of thousands
+    // of "pending" enrichments that nobody intends to run, and `pendingIds` is
+    // fed straight back into enrichBatch by callers.
+    const allAuctions = await db.query.auctions.findMany({ where: NOT_ARCHIVED });
+
     const stats = {
       total: allAuctions.length,
       pending: 0,

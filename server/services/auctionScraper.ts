@@ -3,7 +3,7 @@ import { csr2Service } from './csr2.js';
 import { countyCsr2RateService } from './countyCsr2Rates.js';
 import { db } from '../db.js';
 import { auctions } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { classifyAuction } from './auctionClassifier.js';
 import { getCountyCentroid } from './iowaCountyCentroids.js';
 import { scraperDiagnosticsService } from './scraperDiagnostics.js';
@@ -913,7 +913,23 @@ export class AuctionScraperService {
           title: auctionData.title,
           description: auctionData.description,
           auctionDate: auctionDate,
-          status: auctionStatus,
+          // Don't resurrect a listing the archiver retired unless this scrape
+          // actually found it a future sale date.
+          //
+          // Archiving no longer deletes, so a retired row keeps its URL, the
+          // nightly scrape conflicts on it, and a plain assignment flips it
+          // straight back to 'active' — a stale listing that never comes down
+          // would flap active/archived every single night. Deliberately still
+          // ALLOWS resurrection: a genuinely relisted farm with a new future
+          // date must come back.
+          status: sql`CASE
+            WHEN ${auctions.status} = 'archived'
+             AND ${auctionDate ?? null}::timestamp IS NOT NULL
+             AND ${auctionDate ?? null}::timestamp >= CURRENT_DATE
+            THEN ${auctionStatus}
+            WHEN ${auctions.status} = 'archived' THEN 'archived'
+            ELSE ${auctionStatus}
+          END`,
           latitude, // Update coordinates if they were obtained
           longitude,
           county,

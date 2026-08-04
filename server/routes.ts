@@ -8,6 +8,7 @@ import { fieldBoundaryService } from "./services/fieldBoundaries.js";
 import { auctionScraperService } from "./services/auctionScraper.js";
 import { automaticScraperService } from "./services/automaticScraper.js";
 import { AuctionArchiverService } from "./services/auctionArchiver.js";
+import { ARCHIVED_STATUS, NOT_ARCHIVED } from "./services/auctionStatus.js";
 import { cornPriceService } from "./services/cornPrice.js";
 import { soilPropertiesService } from "./services/soilProperties.js";
 import { mukeyLookupService } from "./services/mukeyLookup.js";
@@ -350,9 +351,11 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Validate and fix auction county mismatches
   app.post("/api/auctions/validate-counties", async (req, res) => {
     try {
-      // Get all auctions with coordinates
+      // Get all LIVE auctions with coordinates. Each row here costs an external
+      // reverse-geocode call, so sweeping the archive would bill for rows the
+      // archiver already retired.
       const allAuctions = await db.query.auctions.findMany({
-        where: sql`latitude IS NOT NULL AND longitude IS NOT NULL`
+        where: and(sql`latitude IS NOT NULL AND longitude IS NOT NULL`, NOT_ARCHIVED)
       });
 
       let validated = 0;
@@ -410,8 +413,10 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Get auctions needing date review
   app.get("/api/auctions/needs-review", async (req, res) => {
     try {
+      // This is a human work queue — a retired listing is not worth anyone's
+      // time to date-review.
       const needsReview = await db.query.auctions.findMany({
-        where: eq(auctions.needsDateReview, true),
+        where: and(eq(auctions.needsDateReview, true), NOT_ARCHIVED),
         orderBy: [desc(auctions.scrapedAt)],
         limit: 100
       });
@@ -476,18 +481,24 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Get source-level statistics
   app.get("/api/auctions/source-stats", async (req, res) => {
     try {
+      // Every column below counts LIVE rows only, which is what they all meant
+      // before retired rows started staying in the table. `archived_count` is
+      // reported alongside rather than folded in, so per-source coverage
+      // percentages don't quietly start including listings we retired.
       const stats = await db.execute(sql`
-        SELECT 
+        SELECT
           source_website,
-          COUNT(*) as total_auctions,
+          COUNT(*) FILTER (WHERE ${NOT_ARCHIVED}) as total_auctions,
           COUNT(*) FILTER (WHERE status = 'active') as active_count,
           COUNT(*) FILTER (WHERE status = 'sold') as sold_count,
-          COUNT(*) FILTER (WHERE auction_date IS NOT NULL) as with_dates,
+          COUNT(*) FILTER (WHERE auction_date IS NOT NULL AND ${NOT_ARCHIVED}) as with_dates,
           COUNT(*) FILTER (WHERE auction_date IS NOT NULL AND status = 'active') as active_with_dates,
-          ROUND(100.0 * COUNT(*) FILTER (WHERE auction_date IS NOT NULL) / NULLIF(COUNT(*), 0), 1) as date_percentage,
-          COUNT(*) FILTER (WHERE needs_date_review = true) as needs_review,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE auction_date IS NOT NULL AND ${NOT_ARCHIVED})
+                / NULLIF(COUNT(*) FILTER (WHERE ${NOT_ARCHIVED}), 0), 1) as date_percentage,
+          COUNT(*) FILTER (WHERE needs_date_review = true AND ${NOT_ARCHIVED}) as needs_review,
           COUNT(*) FILTER (WHERE auction_date >= NOW() AND status = 'active') as upcoming_count,
-          MAX(scraped_at) as last_scraped
+          COUNT(*) FILTER (WHERE status = ${ARCHIVED_STATUS}) as archived_count,
+          MAX(scraped_at) FILTER (WHERE ${NOT_ARCHIVED}) as last_scraped
         FROM auctions
         GROUP BY source_website
         ORDER BY total_auctions DESC
@@ -966,7 +977,10 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Get all auctions (for diagnostics)
   app.get("/api/auctions/all", async (req, res) => {
     try {
+      // Retired rows keep their scraped_at and the scraper keeps re-touching
+      // them, so without this the newest-500 window fills with the archive.
       const allAuctions = await db.query.auctions.findMany({
+        where: NOT_ARCHIVED,
         orderBy: [desc(auctions.scrapedAt)],
         limit: 500 // Reasonable limit
       });
@@ -1265,18 +1279,21 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       // 4. Non-farm properties
       const archiverService = new AuctionArchiverService();
       
-      // Get counts before archiving
-      const beforeCount = await db.query.auctions.findMany();
-      const totalBefore = beforeCount.length;
-      
+      // Count LIVE rows either side. This used to subtract two unfiltered row
+      // counts, which worked only because archiving deleted. Archiving is now a
+      // status change, so total row count never moves and this endpoint would
+      // report "0 archived" while retiring hundreds.
+      const countLive = async () =>
+        (await db.query.auctions.findMany({ where: NOT_ARCHIVED })).length;
+
+      const totalBefore = await countLive();
+
       // Run the full archiving process
       await archiverService.archivePastAuctions();
-      
-      // Get counts after archiving
-      const afterCount = await db.query.auctions.findMany();
-      const totalAfter = afterCount.length;
+
+      const totalAfter = await countLive();
       const archived = totalBefore - totalAfter;
-      
+
       console.log(`✅ Archive complete: ${archived} auctions archived, ${totalAfter} remaining`);
 
       res.json({
@@ -1321,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   app.get("/api/auctions/enrichment-errors", async (req, res) => {
     try {
       const failedAuctions = await db.query.auctions.findMany({
-        where: eq(auctions.enrichmentStatus, 'failed'),
+        where: and(eq(auctions.enrichmentStatus, 'failed'), NOT_ARCHIVED),
         limit: 50
       });
       
@@ -1376,13 +1393,15 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Retry failed enrichments
   app.post("/api/auctions/retry-failed-enrichments", async (req, res) => {
     try {
-      // Reset failed auctions to pending
+      // Reset failed auctions to pending — live rows only. This immediately
+      // feeds enrichAllPendingAuctions, so an unscoped reset here bills a
+      // GPT-4o call for every retired listing that ever failed enrichment.
       await db.update(auctions)
-        .set({ 
+        .set({
           enrichmentStatus: 'pending',
           enrichmentError: null
         })
-        .where(eq(auctions.enrichmentStatus, 'failed'));
+        .where(and(eq(auctions.enrichmentStatus, 'failed'), NOT_ARCHIVED));
       
       const { enrichAllPendingAuctions } = await import('./services/enrichmentQueue.js');
       const { Pool } = await import('@neondatabase/serverless');
@@ -2166,6 +2185,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
       const limit = parseInt(req.query.limit as string) || 10;
       
       const recentAuctions = await db.query.auctions.findMany({
+        where: NOT_ARCHIVED,
         orderBy: [desc(auctions.scrapedAt)],
         limit
       });
@@ -2188,8 +2208,11 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
     try {
       const limit = parseInt(req.query.limit as string) || 15;
       
+      // NOT_ARCHIVED matters most here: a retired-but-future-dated row is
+      // exactly the false-positive class this diagnostic exists to catch, and
+      // without the filter it would be listed as "upcoming".
       const upcomingAuctions = await db.query.auctions.findMany({
-        where: sql`auction_date::date >= CURRENT_DATE`,  // Include all of today's auctions
+        where: and(sql`auction_date::date >= CURRENT_DATE`, NOT_ARCHIVED),  // Include all of today's auctions
         orderBy: [asc(auctions.auctionDate)],
         limit
       });
@@ -2210,16 +2233,21 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
   // Investigate auction coordinates status
   app.get("/api/auctions/investigate", async (req, res) => {
     try {
-      const totalCount = await db.select({ count: sql`count(*)` }).from(auctions);
-      
+      // Geocoding-coverage diagnostics. Every count is scoped to live rows —
+      // retired listings are not coverage anyone can act on, and including them
+      // would make the percentages below drift as the archive grows.
+      const totalCount = await db.select({ count: sql`count(*)` })
+        .from(auctions)
+        .where(NOT_ARCHIVED);
+
       const withCoords = await db.select({ count: sql`count(*)` })
         .from(auctions)
-        .where(sql`latitude IS NOT NULL AND longitude IS NOT NULL`);
-      
+        .where(and(sql`latitude IS NOT NULL AND longitude IS NOT NULL`, NOT_ARCHIVED));
+
       const withoutCoords = await db.select({ count: sql`count(*)` })
         .from(auctions)
-        .where(sql`latitude IS NULL OR longitude IS NULL`);
-      
+        .where(and(sql`latitude IS NULL OR longitude IS NULL`, NOT_ARCHIVED));
+
       // Check how many can be fixed with county centroids
       const noCoordButHasCounty = await db.select({
         id: auctions.id,
@@ -2227,7 +2255,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         state: auctions.state
       })
       .from(auctions)
-      .where(sql`(latitude IS NULL OR longitude IS NULL) AND county IS NOT NULL AND state = 'Iowa'`);
+      .where(and(sql`(latitude IS NULL OR longitude IS NULL) AND county IS NOT NULL AND state = 'Iowa'`, NOT_ARCHIVED));
       
       const canBeFixed = noCoordButHasCounty.filter(a => {
         const centroid = getCountyCentroid(a.county || '');
@@ -2241,6 +2269,7 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         withCoords: sql`count(CASE WHEN latitude IS NOT NULL THEN 1 END)`
       })
       .from(auctions)
+      .where(NOT_ARCHIVED)
       .groupBy(auctions.sourceWebsite);
       
       res.json({
@@ -2277,7 +2306,9 @@ export async function registerRoutes(app: Express): Promise<Server | null> {
         rawData: auctions.rawData
       })
       .from(auctions)
-      .where(sql`(latitude IS NULL OR longitude IS NULL) AND county IS NOT NULL AND state = 'Iowa'`);
+      // Live rows only — backfilling coordinates onto retired listings writes
+      // rows nothing reads.
+      .where(and(sql`(latitude IS NULL OR longitude IS NULL) AND county IS NOT NULL AND state = 'Iowa'`, NOT_ARCHIVED));
 
       let updated = 0;
       let failed = 0;
