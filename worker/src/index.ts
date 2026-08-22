@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import type { Env } from "./env";
 import { api } from "./routes/api";
 import { AuctionArchiverService } from "../../server/services/auctionArchiver";
+import { ingestNewLandTalkPdfs } from "../../server/services/landTalkIngest";
 import {
   enqueueScrapeRun,
   handleSourceBatch,
@@ -49,8 +50,8 @@ app.onError((err, c) => {
 
 // Cron handlers — registered in wrangler.jsonc via triggers.crons:
 //   "0 9 * * *" → daily 09:00 UTC (~03:00 CST) → auction archiver
-//   "0 6 */2 * *" → 06:00 UTC every other day → enqueue a scrape run
-//                    (halved for the Railway parallel run; see wrangler.jsonc)
+//   "0 6 * * *" → daily 06:00 UTC → enqueue a scrape run
+//   "0 12 4,8,12 * *" → Land Talk Monthly comps ingest
 //
 // The hourly "0 * * * *" scraper check is GONE, and deliberately so. It called
 // automaticScraperService.checkAndRun(), which runs the whole 51-source crawl
@@ -70,11 +71,31 @@ async function handleScheduled(
     console.log("⏰ Cron: running daily auction archiver");
     const archiver = new AuctionArchiverService();
     ctx.waitUntil(archiver.archivePastAuctions());
-  } else if (controller.cron === "0 6 */2 * *") {
+  } else if (controller.cron === "0 6 * * *") {
     // Producer only — this must stay cheap regardless of source count.
     const runId = `run_${controller.scheduledTime}`;
     console.log(`⏰ Cron: enqueueing scrape run ${runId}`);
     ctx.waitUntil(enqueueScrapeRun(env, runId));
+  } else if (controller.cron === "0 12 4,8,12 * *") {
+    // Iowa Appraisal posts the previous month's newsletter in the first days of
+    // the month, but not on a fixed date — so we check three times rather than
+    // betting on one. A run that finds nothing new costs a single Firecrawl
+    // scrape of the archive page: `ingestNewLandTalkPdfs` skips any month that
+    // already produced comps, so there is nothing to parse and nothing to write.
+    console.log("⏰ Cron: checking for new Land Talk Monthly comps");
+    ctx.waitUntil(
+      ingestNewLandTalkPdfs().then((r) => {
+        if (r.parsed.length === 0 && r.failed.length === 0) {
+          console.log(`📊 Land Talk: up to date (${r.discovered} PDFs on archive)`);
+        } else {
+          console.log(
+            `📊 Land Talk: ingested ${r.totalComps} comps from ${r.parsed
+              .map((p) => p.month)
+              .join(", ")}${r.failed.length ? `; failed: ${r.failed.map((f) => f.month).join(", ")}` : ""}`,
+          );
+        }
+      }),
+    );
   } else {
     console.warn(`⏰ Cron: unrecognized schedule "${controller.cron}"`);
   }

@@ -9,16 +9,25 @@
   },
   "triggers": {
     // 09:00 UTC — daily archiver.
-    // 06:00 UTC every OTHER day — enqueue a scrape run. Producer only; the work
-    // happens in the queue consumers below, each with its own budget.
+    // 06:00 UTC daily — enqueue a scrape run. Producer only; the work happens
+    // in the queue consumers below, each with its own budget.
     //
-    // Every other day, not daily, for the duration of the Railway parallel run:
-    // both runtimes scrape the same ~54 sources, and the queue path costs MORE
-    // than the Node one because its per-source URL cap is 250 rather than 60
-    // (~1,925 Firecrawl calls vs ~1,510). Alternating days keeps the comparison
-    // meaningful while holding the combined bill near single-runtime cost.
-    // Restore to "0 6 * * *" when Railway is decommissioned.
-    "crons": ["0 9 * * *", "0 6 */2 * *"]
+    // This was "0 6 */2 * *" during the Railway parallel run, to hold the
+    // combined Firecrawl bill near single-runtime cost while both stacks
+    // scraped the same ~54 sources. Two traps that cost us coverage, recorded
+    // so nobody reintroduces them: a `*/2` day-of-month step fires on ODD days
+    // (1,3,5,...), silently skipping every even one; and the run cadence was
+    // the only thing standing between us and a full day of missed listings.
+    // Railway is gone — this is the only scraper now, so it runs every day.
+    //
+    // 12:00 UTC on the 4th, 8th and 12th — pull any new Land Talk Monthly
+    // newsletter into `land_sales_comps`. Iowa Appraisal posts the previous
+    // month early in the month but not on a fixed date, hence three attempts.
+    // Runs are idempotent and skip months already held, so the two that find
+    // nothing cost one Firecrawl scrape each. This ingest had NO schedule at
+    // all until 2026-08-21, and June and July 2026 (113 sales) went missing
+    // without any error surfacing — valuations just read stale comps.
+    "crons": ["0 9 * * *", "0 6 * * *", "0 12 4,8,12 * *"]
   },
   "queues": {
     "producers": [

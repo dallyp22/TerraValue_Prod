@@ -3,14 +3,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cleanupOpenAI, openaiService } from "./services/openai";
-import { AuctionArchiverService } from "./services/auctionArchiver";
-import { automaticScraperService } from "./services/automaticScraper";
-import { setScrapeContext } from "./services/scrapeContext";
 import { warmupServices } from "./warmup";
 
 const app = express();
 
-// CORS middleware - allow Vercel frontend to access Railway backend
+// CORS for local development only. Production CORS lives in worker/src/index.ts.
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://terra-value-prod.vercel.app',
@@ -124,31 +121,29 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 
-  // Start auction archiver service (runs daily to clean up past auctions)
-  const archiverService = new AuctionArchiverService();
-  archiverService.start();
-
-  // Tag everything this process captures as 'node', so the Cloudflare-vs-Node
-  // parallel run is measurable rather than inferred. Both runtimes upsert the
-  // same `auctions` rows; without this you cannot tell which one found what.
-  setScrapeContext({ runtime: 'node', runId: `node_${Date.now()}` });
-
-  // Start automatic scraper service (runs on schedule if enabled)
-  automaticScraperService.start();
+  // NO BACKGROUND SERVICES HERE, EVER. This process is a local development
+  // convenience and nothing else — production is Cloudflare (Pages → Worker
+  // service binding → Neon), and the Worker owns both schedules via
+  // wrangler.jsonc `triggers.crons`:
+  //   "0 6 * * *" → enqueue a scrape run   (queues.ts)
+  //   "0 9 * * *" → archive past auctions  (auctionArchiver)
+  //
+  // This file used to call archiverService.start() and
+  // automaticScraperService.start(). On Railway that made a SECOND writer
+  // against the same Neon database as the Worker: two schedulers upserting the
+  // same `auctions` rows, double Firecrawl spend, and no way to attribute a row
+  // to the runtime that found it. If you ever want scheduled work again, add it
+  // to the Worker's cron handler — not here.
 
   // Graceful shutdown handling
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, cleaning up...');
-    automaticScraperService.stop();
-    archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
     console.log('SIGINT received, cleaning up...');
-    automaticScraperService.stop();
-    archiverService.stop();
     await cleanupOpenAI();
     process.exit(0);
   });
